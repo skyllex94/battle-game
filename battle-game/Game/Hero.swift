@@ -38,6 +38,11 @@ final class HeroNode: SKSpriteNode {
     private var armBack = SKShapeNode()
     private var armFront = SKShapeNode()
     private var visor = SKShapeNode()
+    private var gun = SKShapeNode()
+
+    // MARK: - Aim state (written by GameScene while the shoot-touch is down)
+    /// X of the current aim direction. 0 = not aiming (face travel direction).
+    var aimFacingX: CGFloat = 0
 
     // MARK: - Init (no physics body: movement is integrated manually)
     init() {
@@ -132,7 +137,30 @@ final class HeroNode: SKSpriteNode {
         let crest = limb(CGSize(width: 6, height: 6), color: trimBlue)
         crest.position = CGPoint(x: 2, y: 55)
         visual.addChild(crest)
+
+        // Gun (hidden until the first shot; aims at the touch point).
+        gun = limb(CGSize(width: 32, height: 9), color: SKColor(white: 0.2, alpha: 1))
+        gun.position = CGPoint(x: 16, y: 8)
+        gun.isHidden = true
+        visual.addChild(gun)
+        let grip = limb(CGSize(width: 7, height: 12), color: trimBlue)
+        grip.position = CGPoint(x: 8, y: 3)
+        gun.addChild(grip)
     }
+
+    // MARK: - Aiming (called by GameScene while the shoot-touch is down)
+    /// Faces the aim direction and rotates the gun to the world-space angle.
+    /// Handles the flipped visual (xScale = -1) so the barrel truly points at the tap.
+    func aimToward(_ dir: CGVector) {
+        aimFacingX = dir.dx
+        let facingRight = dir.dx >= 0
+        visual.xScale = facingRight ? 1 : -1
+        gun.isHidden = false
+        let worldAngle = atan2(dir.dy, dir.dx)
+        gun.zRotation = facingRight ? worldAngle : .pi - worldAngle
+    }
+
+    func clearAim() { aimFacingX = 0 }
 
     // MARK: - Per-frame movement + animation (manual character controller)
     func step(dt: TimeInterval, now: TimeInterval) {
@@ -226,8 +254,9 @@ final class HeroNode: SKSpriteNode {
         let speed = abs(velocity.dx)
         let moving = speed > 30
 
-        // Face travel direction (flip visuals only; the node itself never rotates).
-        if moving { visual.xScale = velocity.dx < 0 ? -1 : 1 }
+        // Face travel direction — unless aiming, which owns the facing.
+        // (Flip visuals only; the node itself never rotates.)
+        if aimFacingX == 0, moving { visual.xScale = velocity.dx < 0 ? -1 : 1 }
 
         if !isGrounded {
             // Jump pose: legs tucked, front arm raised, slight back lean.

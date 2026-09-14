@@ -4,7 +4,7 @@ import SwiftUI
 
 /// GameView — hosts the Level 1 SpriteKit battlefield + movement HUD.
 /// Joystick (bottom-left) runs the hero; push the stick up to jump.
-/// The right side is reserved for attack buttons in the combat stage.
+/// Tap/drag the right side to aim + shoot (handled in GameScene).
 struct GameView: View {
     let level: LevelDef
     let hero: HeroDef
@@ -14,6 +14,12 @@ struct GameView: View {
     @State private var moveX: CGFloat = 0
     @State private var jumpHeld = false
     @State private var debugText = ""
+    @State private var minimap = MinimapSnapshot(levelWidth: Balance.levelWidth, heroX: Balance.heroSpawnX,
+                                                 cameraX: 0, viewWidth: 1334,
+                                                 playerBaseX: Balance.playerBaseX,
+                                                 playerTowerX: Balance.playerTowerX,
+                                                 enemyTowerX: Balance.enemyTowerX,
+                                                 enemyBaseX: Balance.enemyBaseX)
     private let debugTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -21,21 +27,16 @@ struct GameView: View {
             SpriteView(scene: scene, options: [.ignoresSiblingOrder])
                 .ignoresSafeArea()
 
-            VStack {
-                HStack {
+            VStack(spacing: 6) {
+                HStack(alignment: .top) {
                     Label("Lv \(level.id) · \(level.name)", systemImage: "flag.fill")
                         .font(.caption.bold())
                         .padding(.horizontal, 12).padding(.vertical, 6)
                         .background(.black.opacity(0.55))
                         .foregroundStyle(.white)
                         .clipShape(Capsule())
-                    // Temporary input/physics readout while tuning movement.
-                    Text(debugText)
-                        .font(.caption2.monospaced())
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(.black.opacity(0.55))
-                        .foregroundStyle(.green)
-                        .clipShape(Capsule())
+                    Spacer()
+                    MinimapView(snap: minimap)
                     Spacer()
                     Label(hero.displayName, systemImage: "person.fill")
                         .font(.caption.bold())
@@ -46,6 +47,13 @@ struct GameView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
+                // Temporary input/physics readout while tuning movement.
+                Text(debugText)
+                    .font(.caption2.monospaced())
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(.black.opacity(0.55))
+                    .foregroundStyle(.green)
+                    .clipShape(Capsule())
                 Spacer()
             }
             .allowsHitTesting(false) // tags never steal touches from the controls
@@ -58,11 +66,14 @@ struct GameView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .navigationTitle("Battle")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: moveX) { scene.heroInputX = $0 }
         .onChange(of: jumpHeld) { scene.heroJumpHeld = $0 }
-        .onReceive(debugTimer) { _ in debugText = scene.debugLine }
+        .onReceive(debugTimer) { _ in
+            debugText = scene.debugLine
+            minimap = scene.minimap
+        }
         .onAppear {
             scene.heroInputX = moveX
             scene.heroJumpHeld = jumpHeld

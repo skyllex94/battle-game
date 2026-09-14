@@ -1,9 +1,13 @@
 import SpriteKit
 
-/// Level 1 scene — movement stage: battlefield + parallax + hero + camera.
-/// Hero runs/jumps via joystick input (GameView writes hero.inputX / jumpHeld).
+/// Level 1 scene — movement + shooting + tower combat: battlefield + parallax
+/// + hero + camera + towers that fire team-tinted bolts at enemies in proximity.
+/// Hero runs/jumps via joystick input (GameView writes hero.inputX / jumpHeld);
+/// tap/drag the right half of the screen to aim + fire projectiles at the tap.
+/// Towers acquire the nearest enemy (opposing tower, or the hero for the enemy
+/// tower) within Balance.towerRange and fire toward it on cooldown.
 /// Movement is a manual character controller (no physics bodies), so the sim
-/// is fully deterministic. Combat, army, HUD buttons land in later stages.
+/// is fully deterministic. Enemies, army, HUD buttons land later.
 ///
 /// World: 4000pt lane, ground strip, 3 mid platforms, 2 towers + 2 bases (dressed,
 /// tinted blue/red, no collision yet). Camera follows the hero with lookahead.
@@ -18,6 +22,28 @@ final class GameScene: SKScene {
     private let cam = SKCameraNode()
     private var hero: HeroNode!
     private var lastUpdate: TimeInterval = 0
+
+    // MARK: - Shooting (tap/drag right side to aim + fire)
+    private var aimTouch: UITouch?
+    private var aimDir = CGVector.zero
+    private var fireCooldown: TimeInterval = 0
+    private var projectiles: [Projectile] = []
+    private var aimDots: [SKShapeNode] = []
+    private var shotsFired = 0
+
+    // MARK: - Tower combat (proximity-triggered projectiles toward enemies)
+    private struct Tower {
+        var node: SKSpriteNode
+        var team: Team
+        var hp: CGFloat
+        var maxHP: CGFloat
+        var cooldown: TimeInterval
+        var hpBarBG: SKSpriteNode
+        var hpBarFill: SKSpriteNode
+        var alive: Bool { hp > 0 }
+    }
+    private var towers: [Tower] = []
+    private var heroHP: CGFloat = Balance.heroHP
 
     // MARK: - Setup
     override init(size: CGSize) {
@@ -45,6 +71,7 @@ final class GameScene: SKScene {
         buildPlatforms()
         buildStructures()
         buildHero()
+        buildAimGuide()
         buildForeground()
         snapCamera()
         updateParallax()
@@ -182,13 +209,11 @@ final class GameScene: SKScene {
         }
     }
 
-    // MARK: - Playfield: towers + bases (visual dressing this stage; HP/combat later)
+    // MARK: - Playfield: towers + bases (towers fight; bases are dressing for now)
     private func buildStructures() {
-        // Towers (Tower.png 120x200 -> ~110pt tall)
-        addStructureart(named: "Tower", at: Balance.playerTowerX, height: 190,
-                        tint: SKColor(red: 0.3, green: 0.5, blue: 1.0, alpha: 1), name: "playerTower")
-        addStructureart(named: "Tower", at: Balance.enemyTowerX, height: 190,
-                        tint: SKColor(red: 1.0, green: 0.3, blue: 0.25, alpha: 1), name: "enemyTower")
+        // Towers fight: blue (player) at left, red (enemy) at right.
+        addTower(at: Balance.playerTowerX, team: .player)
+        addTower(at: Balance.enemyTowerX, team: .enemy)
         // Bases (Base.png is huge -> ~170pt tall)
         addStructureart(named: "Base", at: Balance.playerBaseX, height: 170,
                         tint: SKColor(red: 0.3, green: 0.5, blue: 1.0, alpha: 1), name: "playerBase")
@@ -196,7 +221,44 @@ final class GameScene: SKScene {
                         tint: SKColor(red: 1.0, green: 0.3, blue: 0.25, alpha: 1), name: "enemyBase")
     }
 
-    private func addStructureart(named: String, at x: CGFloat, height: CGFloat, tint: SKColor, name: String) {
+    /// Tower sprite + drop shadow + HP bar. Muzzle is at the tower top
+    /// (Balance.towerMuzzleHeight above ground); shots originate there.
+    private func addTower(at x: CGFloat, team: Team) {
+        let tint: SKColor
+        let name: String
+        switch team {
+        case .player:
+            tint = SKColor(red: 0.3, green: 0.5, blue: 1.0, alpha: 1)
+            name = "playerTower"
+        case .enemy:
+            tint = SKColor(red: 1.0, green: 0.3, blue: 0.25, alpha: 1)
+            name = "enemyTower"
+        case .neutral:
+            tint = SKColor(white: 0.8, alpha: 1)
+            name = "tower"
+        }
+        let node = addStructureart(named: "Tower", at: x, height: 190, tint: tint, name: name)
+        // HP bar floats just above the tower.
+        let barW: CGFloat = 110
+        let barBG = SKSpriteNode(color: SKColor(white: 0, alpha: 0.6),
+                                 size: CGSize(width: barW, height: 10))
+        barBG.position = CGPoint(x: x, y: Balance.groundTopY + 205)
+        barBG.zPosition = 6
+        world.addChild(barBG)
+        let barFill = SKSpriteNode(color: team == .player ? .cyan : .red,
+                                   size: CGSize(width: barW, height: 10))
+        barFill.anchorPoint = CGPoint(x: 0, y: 0.5)
+        barFill.position = CGPoint(x: x - barW / 2, y: Balance.groundTopY + 205)
+        barFill.zPosition = 7
+        world.addChild(barFill)
+        // Stagger first shots so both towers don't volley on the same frame.
+        let stagger = team == .player ? 0.0 : Balance.towerFireCooldown / 2
+        towers.append(Tower(node: node, team: team, hp: Balance.towerHP,
+                            maxHP: Balance.towerHP, cooldown: stagger,
+                            hpBarBG: barBG, hpBarFill: barFill))
+    }
+
+    private func addStructureart(named: String, at x: CGFloat, height: CGFloat, tint: SKColor, name: String) -> SKSpriteNode {
         let texture = ImportedArt.skTexture(named: named)
         texture.filteringMode = .linear
         let node = SKSpriteNode(texture: texture)
@@ -214,6 +276,7 @@ final class GameScene: SKScene {
         shadow.position = CGPoint(x: x, y: Balance.groundTopY + 6)
         shadow.zPosition = 4
         world.addChild(shadow)
+        return node
     }
 
     // MARK: - Playfield: hero
@@ -298,8 +361,288 @@ final class GameScene: SKScene {
         let dt = lastUpdate > 0 ? currentTime - lastUpdate : 1.0 / 60
         lastUpdate = currentTime
         hero.step(dt: dt, now: currentTime)
+        updateShooting(dt: dt)
+        updateTowers(dt: dt)
+        stepProjectiles(dt: dt)
         smoothCamera(dt: dt)
         updateParallax()
+    }
+
+    // MARK: - Shooting: aim touch, fire cadence, projectile sim
+    /// Right-half touches aim + fire. Left half belongs to the SwiftUI joystick
+    /// (filtered here too in case a touch leaks through the overlay).
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let view else { return }
+        for touch in touches where aimTouch == nil {
+            let loc = touch.location(in: view)
+            guard loc.x > view.bounds.width / 2 else { continue }
+            aimTouch = touch
+            fireCooldown = 0 // first tap fires instantly
+            trackAim(touch)
+        }
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let aimTouch else { return }
+        if touches.contains(aimTouch) { trackAim(aimTouch) }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        releaseAim(touches)
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        releaseAim(touches)
+    }
+
+    private func releaseAim(_ touches: Set<UITouch>) {
+        guard let aimTouch, touches.contains(aimTouch) else { return }
+        self.aimTouch = nil
+        hero.clearAim()
+        aimDots.forEach { $0.isHidden = true }
+    }
+
+    private func trackAim(_ touch: UITouch) {
+        guard let view else { return }
+        let target = convertPoint(fromView: touch.location(in: view))
+        let muzzle = muzzlePosition(for: provisionalDir(to: target))
+        var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
+        let len = max(1, hypot(dir.dx, dir.dy))
+        dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
+        aimDir = dir
+        hero.aimToward(dir)
+        updateAimDots(muzzle: muzzle, dir: dir)
+    }
+
+    /// Aim direction guess before the muzzle is known (muzzle barely offsets it).
+    private func provisionalDir(to target: CGPoint) -> CGVector {
+        var d = CGVector(dx: target.x - hero.position.x, dy: target.y - hero.position.y)
+        let len = max(1, hypot(d.dx, d.dy))
+        d = CGVector(dx: d.dx / len, dy: d.dy / len)
+        return d
+    }
+
+    private func muzzlePosition(for dir: CGVector) -> CGPoint {
+        CGPoint(x: hero.position.x + dir.dx * 36, y: hero.position.y + 8 + dir.dy * 36)
+    }
+
+    private func buildAimGuide() {
+        for i in 0..<3 {
+            let dot = SKShapeNode(circleOfRadius: 5 - CGFloat(i))
+            dot.fillColor = SKColor(red: 1, green: 0.9, blue: 0.4, alpha: 0.8 - CGFloat(i) * 0.2)
+            dot.strokeColor = .clear
+            dot.zPosition = 14
+            dot.isHidden = true
+            world.addChild(dot)
+            aimDots.append(dot)
+        }
+    }
+
+    private func updateAimDots(muzzle: CGPoint, dir: CGVector) {
+        for (i, dot) in aimDots.enumerated() {
+            let dist: CGFloat = 55 + CGFloat(i) * 42
+            dot.position = CGPoint(x: muzzle.x + dir.dx * dist, y: muzzle.y + dir.dy * dist)
+            dot.isHidden = false
+        }
+    }
+
+    private func updateShooting(dt: TimeInterval) {
+        guard aimTouch != nil else { return }
+        fireCooldown -= dt
+        guard fireCooldown <= 0 else { return }
+        fireCooldown = Balance.fireCooldown
+        fireBullet()
+    }
+
+    private func fireBullet() {
+        let muzzle = muzzlePosition(for: aimDir)
+        let bolt = ProjectileFactory.makeBolt()
+        bolt.position = muzzle
+        bolt.zRotation = atan2(aimDir.dy, aimDir.dx)
+        world.addChild(bolt)
+        projectiles.append(Projectile(node: bolt, dir: aimDir, life: Balance.bulletLife,
+                                      speed: Balance.bulletSpeed, damage: Balance.heroDamage,
+                                      team: .neutral))
+        shotsFired += 1
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.position = muzzle
+        world.addChild(flash)
+    }
+
+    // MARK: - Tower combat: proximity targeting + firing toward enemies
+    /// Each alive tower fires a team-tinted bolt at its nearest enemy within
+    /// Balance.towerRange. Enemy tower targets the hero + player tower;
+    /// player tower targets the enemy tower (friendly fire off vs own hero).
+    /// Towers aim muzzle -> target center so shots arc flat toward each other.
+    private func updateTowers(dt: TimeInterval) {
+        for i in towers.indices {
+            guard towers[i].alive else { continue }
+            towers[i].cooldown -= dt
+            guard towers[i].cooldown <= 0 else { continue }
+            guard let target = acquireTarget(for: towers[i]) else { continue }
+            towers[i].cooldown = Balance.towerFireCooldown
+            fireTowerBolt(from: towers[i], to: target)
+        }
+    }
+
+    /// Nearest enemy point within range, or nil when nothing is in proximity.
+    private func acquireTarget(for tower: Tower) -> CGPoint? {
+        var best: CGPoint?
+        var bestDist = Balance.towerRange
+        // Opposing tower: both towers fire toward each other once in range.
+        for other in towers where other.team != tower.team && other.alive {
+            let d = abs(other.node.position.x - tower.node.position.x)
+            if d <= bestDist {
+                bestDist = d
+                best = CGPoint(x: other.node.position.x,
+                               y: Balance.groundTopY + 100)
+            }
+        }
+        // Enemy tower hunts the hero too — player tower holds fire vs own hero.
+        if tower.team == .enemy && heroHP > 0 {
+            let d = hypot(hero.position.x - tower.node.position.x,
+                          hero.position.y - (Balance.groundTopY + Balance.towerMuzzleHeight))
+            if d <= Balance.towerRange, d < bestDist {
+                bestDist = d
+                best = hero.position
+            }
+        }
+        return best
+    }
+
+    private func towerMuzzle(for tower: Tower) -> CGPoint {
+        CGPoint(x: tower.node.position.x, y: Balance.groundTopY + Balance.towerMuzzleHeight)
+    }
+
+    private func fireTowerBolt(from tower: Tower, to target: CGPoint) {
+        let muzzle = towerMuzzle(for: tower)
+        var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
+        let len = max(1, hypot(dir.dx, dir.dy))
+        dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
+        let bolt = ProjectileFactory.makeTowerBolt(team: tower.team)
+        bolt.position = muzzle
+        bolt.zRotation = atan2(dir.dy, dir.dx)
+        world.addChild(bolt)
+        projectiles.append(Projectile(node: bolt, dir: dir, life: Balance.towerBulletLife,
+                                      speed: Balance.towerBulletSpeed, damage: Balance.towerDamage,
+                                      team: tower.team))
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.position = muzzle
+        world.addChild(flash)
+    }
+
+    private func damageTower(at index: Int, amount: CGFloat) {
+        guard towers[index].alive else { return }
+        towers[index].hp = max(0, towers[index].hp - amount)
+        updateTowerHPBar(at: index)
+        if !towers[index].alive {
+            // Rubble look: grey out + sink the HP bar. Revive/respawn lands later.
+            towers[index].node.color = SKColor(white: 0.3, alpha: 1)
+            towers[index].node.colorBlendFactor = 0.7
+            towers[index].node.alpha = 0.75
+            towers[index].hpBarFill.isHidden = true
+            towers[index].hpBarBG.alpha = 0.25
+        }
+    }
+
+    private func updateTowerHPBar(at index: Int) {
+        let frac = max(0, towers[index].hp / towers[index].maxHP)
+        let fullW: CGFloat = 110
+        towers[index].hpBarFill.size.width = fullW * frac
+    }
+
+    private func damageHero(amount: CGFloat) {
+        guard heroHP > 0 else { return }
+        heroHP = max(0, heroHP - amount)
+        // Hit flash so damage reads instantly.
+        hero.run(.sequence([.fadeAlpha(to: 0.35, duration: 0.06),
+                            .fadeAlpha(to: 1.0, duration: 0.12)]))
+    }
+
+    private func stepProjectiles(dt: TimeInterval) {
+        var alive: [Projectile] = []
+        alive.reserveCapacity(projectiles.count)
+        for var p in projectiles {
+            let step = p.speed * CGFloat(dt)
+            p.node.position.x += p.dir.dx * step
+            p.node.position.y += p.dir.dy * step
+            p.life -= dt
+            if p.life <= 0 {
+                p.node.removeFromParent() // expired mid-air: just fade, no puff
+                continue
+            }
+            if hitsGroundOrPlatform(p.node.position) {
+                impact(at: p.node.position)
+                p.node.removeFromParent()
+                continue
+            }
+            if hitEnemy(p) {
+                impact(at: p.node.position)
+                p.node.removeFromParent()
+                continue
+            }
+            alive.append(p)
+        }
+        projectiles = alive
+    }
+
+    /// Team-aware hit test. Hero (neutral) bolts hit the enemy tower;
+    /// player bolts hit the enemy tower; enemy bolts hit the player tower + hero.
+    /// Returns true when the projectile struck something (caller removes it).
+    private func hitEnemy(_ p: Projectile) -> Bool {
+        let pt = p.node.position
+        switch p.team {
+        case .neutral:
+            if let idx = towerIndex(at: pt, team: .enemy) {
+                damageTower(at: idx, amount: p.damage)
+                return true
+            }
+        case .player:
+            if let idx = towerIndex(at: pt, team: .enemy) {
+                damageTower(at: idx, amount: p.damage)
+                return true
+            }
+        case .enemy:
+            if let idx = towerIndex(at: pt, team: .player) {
+                damageTower(at: idx, amount: p.damage)
+                return true
+            }
+            // Hero body: ~44 wide, Balance.heroHeight tall, centered on position.
+            if heroHP > 0,
+               abs(pt.x - hero.position.x) < 34,
+               abs(pt.y - hero.position.y) < Balance.heroHeight / 2 + 6 {
+                damageHero(amount: p.damage)
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Point-in-tower test for one team's alive towers.
+    /// Towers are ~60pt half-width, 190pt tall sitting on groundTopY.
+    private func towerIndex(at pt: CGPoint, team: Team) -> Int? {
+        for (i, t) in towers.enumerated() where t.team == team && t.alive {
+            let dx = abs(pt.x - t.node.position.x)
+            let inX = dx < 62
+            let inY = pt.y >= Balance.groundTopY && pt.y <= Balance.groundTopY + 195
+            if inX && inY { return i }
+        }
+        return nil
+    }
+
+    private func hitsGroundOrPlatform(_ pt: CGPoint) -> Bool {
+        if pt.y <= Balance.groundTopY + 3 { return true }
+        if pt.x < 0 || pt.x > Balance.levelWidth { return true }
+        for rect in Balance.platforms where rect.insetBy(dx: -4, dy: -4).contains(pt) {
+            return true
+        }
+        return false
+    }
+
+    private func impact(at pt: CGPoint) {
+        let puff = ProjectileFactory.makeImpactPuff()
+        puff.position = pt
+        world.addChild(puff)
     }
 
     // MARK: - Debug (temporary HUD readout)
@@ -308,9 +651,25 @@ final class GameScene: SKScene {
         let v = hero?.velocity ?? .zero
         let g = hero?.isGrounded ?? false
         let p = hero?.position ?? .zero
-        return String(format: "f%d pos %4.0f,%4.0f in %+.2f jmp %@ | v %+4.0f,%+5.0f gnd %@",
+        let ptHP = towers.first(where: { $0.team == .player })?.hp ?? 0
+        let etHP = towers.first(where: { $0.team == .enemy })?.hp ?? 0
+        return String(format: "f%d pos %4.0f,%4.0f in %+.2f jmp %@ | v %+4.0f,%+5.0f gnd %@ shots %d hero %3.0f tw P %3.0f/E %3.0f",
                       frameCount, p.x, p.y, heroInputX, heroJumpHeld ? "Y" : "n",
-                      v.dx, v.dy, g ? "Y" : "n")
+                      v.dx, v.dy, g ? "Y" : "n", shotsFired, heroHP, ptHP, etHP)
+    }
+
+    // MARK: - Minimap snapshot (polled by the SwiftUI MinimapView ~7Hz)
+    var minimap: MinimapSnapshot {
+        MinimapSnapshot(
+            levelWidth: Balance.levelWidth,
+            heroX: hero?.position.x ?? 0,
+            cameraX: cam.position.x,
+            viewWidth: size.width * cam.xScale,
+            playerBaseX: Balance.playerBaseX,
+            playerTowerX: Balance.playerTowerX,
+            enemyTowerX: Balance.enemyTowerX,
+            enemyBaseX: Balance.enemyBaseX
+        )
     }
 
     // MARK: - Helpers

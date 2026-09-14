@@ -36,6 +36,22 @@ enum Balance {
     static let heroCoyoteTime: Double = 0.12
     static let heroJumpBuffer: Double = 0.15  // taps just before landing still jump
 
+    // MARK: - Shooting (tap right side to aim + fire)
+    static let bulletSpeed: CGFloat = 950
+    static let fireCooldown: Double = 0.26 // hold touch = auto-fire at this cadence
+    static let bulletLife: Double = 1.6   // max range ≈ speed × life
+    static let heroDamage: CGFloat = 10
+    static let heroHP: CGFloat = 100
+
+    // MARK: - Tower combat (towers fire at enemies in proximity)
+    static let towerHP: CGFloat = 200
+    static let towerRange: CGFloat = 750       // acquire targets within this distance
+    static let towerFireCooldown: Double = 1.1 // seconds between tower shots
+    static let towerDamage: CGFloat = 12
+    static let towerBulletSpeed: CGFloat = 620
+    static let towerBulletLife: Double = 2.2   // range ≈ speed × life, comfortably covers towerRange
+    static let towerMuzzleHeight: CGFloat = 150 // muzzle above ground (near tower top)
+
     // MARK: - Parallax scroll factors (ported from your Unity Parallaxing.cs idea:
     // background moves slower than the camera; factor 1.0 = locked to world)
     static let parallaxSky: CGFloat = 0.0

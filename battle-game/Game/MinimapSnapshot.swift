@@ -12,4 +12,11 @@ struct MinimapSnapshot {
     var playerTowerX: CGFloat
     var enemyTowerX: CGFloat
     var enemyBaseX: CGFloat
+    // HUD economy/combat state (same polling channel, ~7Hz).
+    var heroHP: CGFloat
+    var heroMaxHP: CGFloat
+    var money: Int
+    // Unit dots: player army (blue) + enemy marchers (red).
+    var allyXs: [CGFloat] = []
+    var enemyXs: [CGFloat] = []
 }

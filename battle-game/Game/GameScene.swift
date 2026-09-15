@@ -1,7 +1,8 @@
 import SpriteKit
 
-/// Level 1 scene — movement + shooting + tower combat: battlefield + parallax
-/// + hero + camera + towers that fire team-tinted bolts at enemies in proximity.
+/// Level 1 scene — movement + shooting + tower/base combat + summoned enemies:
+/// battlefield + parallax + hero + camera + towers that fire team-tinted bolts,
+/// an enemy main base that fans 3 bolts + summons alien marchers toward your base.
 /// Hero runs/jumps via joystick input (GameView writes hero.inputX / jumpHeld);
 /// tap/drag the right half of the screen to aim + fire projectiles at the tap.
 /// Towers acquire the nearest enemy (opposing tower, or the hero for the enemy
@@ -44,6 +45,31 @@ final class GameScene: SKScene {
     }
     private var towers: [Tower] = []
     private var heroHP: CGFloat = Balance.heroHP
+    /// Spendable gold for the army (unit shop lands next). Starts at your Unity value.
+    private var money: Int = Balance.startingGold
+
+    // MARK: - Main bases (enemy base fans bolts + summons marchers)
+    private struct Base {
+        var node: SKSpriteNode
+        var team: Team
+        var hp: CGFloat
+        var maxHP: CGFloat
+        var cooldown: TimeInterval
+        var summonTimer: TimeInterval
+        var hpBarBG: SKSpriteNode
+        var hpBarFill: SKSpriteNode
+        var alive: Bool { hp > 0 }
+    }
+    private var bases: [Base] = []
+
+    // MARK: - Summoned enemies
+    private var enemies: [EnemyNode] = []
+    // MARK: - Player army (summoned from cards, marches toward the enemy base)
+    private var allies: [AllyNode] = []
+    // MARK: - Hero death/respawn
+    private var sceneTime: TimeInterval = 0
+    private var respawnAt: TimeInterval = -1 // <0 = no pending respawn
+    private var graceUntil: TimeInterval = -1
 
     // MARK: - Setup
     override init(size: CGSize) {
@@ -64,6 +90,47 @@ final class GameScene: SKScene {
         camera = cam
         addChild(cam)
 
+        buildSky()
+        buildFar()
+        buildMid()
+        buildGround()
+        buildPlatforms()
+        buildStructures()
+        buildHero()
+        buildAimGuide()
+        buildForeground()
+        snapCamera()
+        updateParallax()
+    }
+
+    // MARK: - Restart (in-place full reset)
+    /// Rebuilds the level from scratch inside the same scene instance.
+    /// (Swapping the SKScene object doesn't reliably update SpriteView, so
+    /// restart tears down and rebuilds all content instead.)
+    func resetLevel() {
+        isPaused = false
+        world.removeAllChildren()
+        skyLayer.removeAllChildren()
+        farLayer.removeAllChildren()
+        midLayer.removeAllChildren()
+        foregroundLayer.removeAllChildren()
+        projectiles = []
+        aimDots = []
+        towers = []
+        bases = []
+        enemies = []
+        allies = []
+        heroHP = Balance.heroHP
+        money = Balance.startingGold
+        sceneTime = 0
+        lastUpdate = 0
+        respawnAt = -1
+        graceUntil = -1
+        aimTouch = nil
+        aimDir = .zero
+        fireCooldown = 0
+        shotsFired = 0
+        frameCount = 0
         buildSky()
         buildFar()
         buildMid()
@@ -209,16 +276,58 @@ final class GameScene: SKScene {
         }
     }
 
-    // MARK: - Playfield: towers + bases (towers fight; bases are dressing for now)
+    // MARK: - Playfield: towers + bases (towers fight; enemy base fans + summons)
     private func buildStructures() {
         // Towers fight: blue (player) at left, red (enemy) at right.
         addTower(at: Balance.playerTowerX, team: .player)
         addTower(at: Balance.enemyTowerX, team: .enemy)
-        // Bases (Base.png is huge -> ~170pt tall)
-        addStructureart(named: "Base", at: Balance.playerBaseX, height: 170,
-                        tint: SKColor(red: 0.3, green: 0.5, blue: 1.0, alpha: 1), name: "playerBase")
-        addStructureart(named: "Base", at: Balance.enemyBaseX, height: 170,
-                        tint: SKColor(red: 1.0, green: 0.3, blue: 0.25, alpha: 1), name: "enemyBase")
+        // Main bases (Base.png is huge -> ~170pt tall). Enemy base is the
+        // encounter: HP bar, 3-bolt fan, summoner. Player base tracks HP for
+        // enemy attacks; no shooting (lose screen lands later).
+        addBase(at: Balance.playerBaseX, team: .player)
+        addBase(at: Balance.enemyBaseX, team: .enemy)
+    }
+
+    /// Base sprite + drop shadow + wide HP bar. Enemy muzzle sits toward mid
+    /// (Balance.baseMuzzleForward); shots originate there.
+    private func addBase(at x: CGFloat, team: Team) {
+        let tint: SKColor
+        let name: String
+        switch team {
+        case .player:
+            tint = SKColor(red: 0.3, green: 0.5, blue: 1.0, alpha: 1)
+            name = "playerBase"
+        case .enemy:
+            tint = SKColor(red: 1.0, green: 0.3, blue: 0.25, alpha: 1)
+            name = "enemyBase"
+        case .neutral:
+            tint = SKColor(white: 0.8, alpha: 1)
+            name = "base"
+        }
+        let node = addStructureart(named: "Base", at: x, height: 170, tint: tint, name: name)
+        let barW: CGFloat = 140
+        let barBG = SKSpriteNode(color: SKColor(white: 0, alpha: 0.6),
+                                 size: CGSize(width: barW, height: 10))
+        barBG.position = CGPoint(x: x, y: Balance.groundTopY + 185)
+        barBG.zPosition = 6
+        world.addChild(barBG)
+        let barFill = SKSpriteNode(color: team == .player ? .cyan : .red,
+                                   size: CGSize(width: barW, height: 10))
+        barFill.anchorPoint = CGPoint(x: 0, y: 0.5)
+        barFill.position = CGPoint(x: x - barW / 2, y: Balance.groundTopY + 185)
+        barFill.zPosition = 7
+        world.addChild(barFill)
+        bases.append(Base(node: node, team: team, hp: Balance.baseHP,
+                          maxHP: Balance.baseHP, cooldown: Balance.baseFireCooldown,
+                          summonTimer: Balance.firstSummonDelay,
+                          hpBarBG: barBG, hpBarFill: barFill))
+    }
+
+    private func baseMuzzle(for base: Base) -> CGPoint {
+        // Enemy base fires toward mid (left); player base never fires.
+        let forward: CGFloat = base.team == .enemy ? -Balance.baseMuzzleForward : Balance.baseMuzzleForward
+        return CGPoint(x: base.node.position.x + forward,
+                       y: Balance.groundTopY + Balance.baseMuzzleHeight)
     }
 
     /// Tower sprite + drop shadow + HP bar. Muzzle is at the tower top
@@ -360,12 +469,45 @@ final class GameScene: SKScene {
         frameCount += 1
         let dt = lastUpdate > 0 ? currentTime - lastUpdate : 1.0 / 60
         lastUpdate = currentTime
+        sceneTime += dt
         hero.step(dt: dt, now: currentTime)
+        updateRespawn()
         updateShooting(dt: dt)
         updateTowers(dt: dt)
+        updateBases(dt: dt)
+        updateEnemies(dt: dt)
+        updateAllies(dt: dt)
         stepProjectiles(dt: dt)
+        updateGraceBlink()
         smoothCamera(dt: dt)
         updateParallax()
+    }
+
+    /// Death → wait → drop from above in front of the player base → land → grace.
+    private func updateRespawn() {
+        guard respawnAt >= 0, sceneTime >= respawnAt else { return }
+        respawnAt = -1
+        hero.respawn(at: CGPoint(x: Balance.playerBaseX + Balance.respawnOffsetX,
+                                 y: Balance.groundTopY + Balance.respawnDropHeight))
+        heroHP = Balance.heroHP
+        graceUntil = sceneTime + Balance.respawnGrace
+        let puff = ProjectileFactory.makeImpactPuff()
+        puff.position = hero.position
+        world.addChild(puff)
+    }
+
+    /// Blink while invulnerable after respawn so the grace reads clearly.
+    private func updateGraceBlink() {
+        guard hero.alive else { return }
+        if sceneTime < graceUntil {
+            hero.alpha = sin(sceneTime * 20) > 0 ? 0.45 : 1.0
+        } else {
+            hero.alpha = 1.0
+        }
+    }
+
+    private var heroProtected: Bool {
+        !hero.alive || sceneTime < graceUntil
     }
 
     // MARK: - Shooting: aim touch, fire cadence, projectile sim
@@ -397,9 +539,7 @@ final class GameScene: SKScene {
 
     private func releaseAim(_ touches: Set<UITouch>) {
         guard let aimTouch, touches.contains(aimTouch) else { return }
-        self.aimTouch = nil
-        hero.clearAim()
-        aimDots.forEach { $0.isHidden = true }
+        releaseAimTouch()
     }
 
     private func trackAim(_ touch: UITouch) {
@@ -486,9 +626,31 @@ final class GameScene: SKScene {
     }
 
     /// Nearest enemy point within range, or nil when nothing is in proximity.
+    /// Player tower hunts enemy marchers first, then the enemy tower.
+    /// Enemy tower hunts player allies first, then the hero, then the player tower.
     private func acquireTarget(for tower: Tower) -> CGPoint? {
         var best: CGPoint?
         var bestDist = Balance.towerRange
+        let muzzleY = Balance.groundTopY + Balance.towerMuzzleHeight
+        if tower.team == .player {
+            for e in enemies where e.alive {
+                let d = hypot(e.position.x - tower.node.position.x,
+                              e.position.y - muzzleY)
+                if d <= bestDist {
+                    bestDist = d
+                    best = e.position
+                }
+            }
+        } else {
+            for a in allies where a.alive {
+                let d = hypot(a.position.x - tower.node.position.x,
+                              a.position.y - muzzleY)
+                if d <= bestDist {
+                    bestDist = d
+                    best = a.position
+                }
+            }
+        }
         // Opposing tower: both towers fire toward each other once in range.
         for other in towers where other.team != tower.team && other.alive {
             let d = abs(other.node.position.x - tower.node.position.x)
@@ -551,12 +713,333 @@ final class GameScene: SKScene {
         towers[index].hpBarFill.size.width = fullW * frac
     }
 
+    // MARK: - Main base: 3-bolt fan + summoning (enemy base only)
+    private func updateBases(dt: TimeInterval) {
+        for i in bases.indices {
+            guard bases[i].alive, bases[i].team == .enemy else { continue }
+            // Fan: fires at the hero or the closest ally pushing into base range.
+            bases[i].cooldown -= dt
+            if bases[i].cooldown <= 0, let fanTarget = baseFanTarget(for: bases[i]) {
+                bases[i].cooldown = Balance.baseFireCooldown
+                fireBaseFan(from: bases[i], at: fanTarget)
+            }
+            // Summon marchers toward the player base, capped.
+            bases[i].summonTimer -= dt
+            if bases[i].summonTimer <= 0 {
+                bases[i].summonTimer = Balance.summonInterval
+                if enemies.count < Balance.maxEnemies { summonEnemy(from: bases[i]) }
+            }
+        }
+    }
+
+    /// Base fan target: exposed hero in range, else nearest ally in range.
+    private func baseFanTarget(for base: Base) -> CGPoint? {
+        let muzzleY = Balance.groundTopY + Balance.baseMuzzleHeight
+        if hero.alive, !heroProtected,
+           hypot(hero.position.x - base.node.position.x,
+                 hero.position.y - muzzleY) <= Balance.baseRange {
+            return hero.position
+        }
+        var best: CGPoint?
+        var bestDist = Balance.baseRange
+        for a in allies where a.alive {
+            let d = hypot(a.position.x - base.node.position.x, a.position.y - muzzleY)
+            if d < bestDist {
+                bestDist = d
+                best = a.position
+            }
+        }
+        return best
+    }
+
+    /// 3 blasts from the same muzzle, spread out around the target direction.
+    private func fireBaseFan(from base: Base, at target: CGPoint) {
+        let muzzle = baseMuzzle(for: base)
+        var baseDir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
+        let len = max(1, hypot(baseDir.dx, baseDir.dy))
+        baseDir = CGVector(dx: baseDir.dx / len, dy: baseDir.dy / len)
+        let baseAngle = atan2(baseDir.dy, baseDir.dx)
+        let count = Balance.baseFanCount
+        for k in 0..<count {
+            // Symmetric fan: e.g. 3 bolts at -spread, 0, +spread.
+            let offset = (CGFloat(k) - CGFloat(count - 1) / 2) * Balance.baseFanSpread
+            let a = baseAngle + offset
+            let dir = CGVector(dx: cos(a), dy: sin(a))
+            let bolt = ProjectileFactory.makeTowerBolt(team: .enemy)
+            bolt.position = muzzle
+            bolt.zRotation = a
+            world.addChild(bolt)
+            projectiles.append(Projectile(node: bolt, dir: dir, life: Balance.towerBulletLife,
+                                          speed: Balance.towerBulletSpeed, damage: Balance.baseBoltDamage,
+                                          team: .enemy))
+        }
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.position = muzzle
+        world.addChild(flash)
+    }
+
+    private func summonEnemy(from base: Base) {
+        let e = EnemyNode()
+        e.position = CGPoint(x: base.node.position.x - 120,
+                             y: Balance.groundTopY + e.size.height / 2)
+        world.addChild(e)
+        enemies.append(e)
+        let puff = ProjectileFactory.makeImpactPuff()
+        puff.position = e.position
+        world.addChild(puff)
+    }
+
+    // MARK: - Summoned enemies: advance, stop at range, shoot bolts
+    private func updateEnemies(dt: TimeInterval) {
+        let playerTower = towers.first(where: { $0.team == .player })
+        let playerBase = bases.first(where: { $0.team == .player })
+        for e in enemies {
+            guard e.alive else { continue }
+            e.fireCooldown -= dt
+
+            // Target priority: exposed hero in sight > nearest ally in sight
+            // > player tower > player base.
+            var target: CGPoint? = nil
+            if hero.alive, !heroProtected,
+               hypot(hero.position.x - e.position.x,
+                     hero.position.y - e.position.y) < Balance.enemySightRange {
+                target = hero.position
+            } else {
+                var bestAlly: CGPoint?
+                var bestDist = Balance.enemySightRange
+                for a in allies where a.alive {
+                    let d = hypot(a.position.x - e.position.x, a.position.y - e.position.y)
+                    if d < bestDist {
+                        bestDist = d
+                        bestAlly = a.position
+                    }
+                }
+                if let bestAlly {
+                    target = bestAlly
+                } else if let tower = playerTower, tower.alive {
+                    target = CGPoint(x: tower.node.position.x,
+                                     y: Balance.groundTopY + 100)
+                } else if let base = playerBase, base.alive {
+                    target = CGPoint(x: base.node.position.x,
+                                     y: Balance.groundTopY + 100)
+                }
+            }
+            guard let aim = target else {
+                // Nothing left to fight: hold position.
+                e.animateMarch(dt: dt, advancing: false)
+                e.position.y = Balance.groundTopY + e.size.height / 2
+                continue
+            }
+
+            let dist = hypot(aim.x - e.position.x, aim.y - e.position.y)
+            e.face(aim.x - e.position.x)
+            if dist > Balance.enemyShootRange {
+                // Advance on the target (never past the lane edge).
+                let dir: CGFloat = aim.x > e.position.x ? 1 : -1
+                e.position.x = max(40, e.position.x + dir * Balance.enemySpeed * CGFloat(dt))
+                e.animateMarch(dt: dt, advancing: true)
+            } else {
+                // In range: stop and shoot.
+                e.animateMarch(dt: dt, advancing: false)
+                if e.fireCooldown <= 0 {
+                    e.fireCooldown = Balance.enemyFireCooldown
+                    fireEnemyBolt(from: e, to: aim)
+                }
+            }
+            e.position.y = Balance.groundTopY + e.size.height / 2 + e.yBob
+        }
+        // Sweep the dead (gold was already paid at kill time).
+        enemies.removeAll { !$0.alive }
+    }
+
+    /// Enemy trooper bolt: from the rifle tip toward the target, enemy team.
+    private func fireEnemyBolt(from e: EnemyNode, to target: CGPoint) {
+        let muzzle = e.muzzle()
+        var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
+        let len = max(1, hypot(dir.dx, dir.dy))
+        dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
+        let bolt = ProjectileFactory.makeTowerBolt(team: .enemy)
+        bolt.setScale(0.8)
+        bolt.position = muzzle
+        bolt.zRotation = atan2(dir.dy, dir.dx)
+        world.addChild(bolt)
+        projectiles.append(Projectile(node: bolt, dir: dir, life: Balance.enemyBoltLife,
+                                      speed: Balance.enemyBoltSpeed, damage: Balance.enemyBoltDamage,
+                                      team: .enemy))
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.setScale(0.7)
+        flash.position = muzzle
+        world.addChild(flash)
+    }
+
+    // MARK: - Player army: summon + march toward the enemy base
+    /// Called by the SwiftUI cards. Returns false when broke or capped.
+    @discardableResult
+    func summonAlly(kind: ArmyKind) -> Bool {
+        guard money >= kind.cost, allies.count < Balance.maxAllies else { return false }
+        guard bases.first(where: { $0.team == .player })?.alive ?? false else { return false }
+        money -= kind.cost
+        let a = AllyNode(kind: kind)
+        // Stagger spawn positions so stacked summons don't overlap.
+        let offset = CGFloat(allies.count % 4) * 46
+        a.position = CGPoint(x: Balance.playerBaseX + 120 + offset,
+                             y: Balance.groundTopY + a.size.height / 2)
+        world.addChild(a)
+        allies.append(a)
+        let puff = ProjectileFactory.makeImpactPuff()
+        puff.position = a.position
+        world.addChild(puff)
+        return true
+    }
+
+    private func updateAllies(dt: TimeInterval) {
+        let enemyTower = towers.first(where: { $0.team == .enemy })
+        let enemyBase = bases.first(where: { $0.team == .enemy })
+        for a in allies {
+            guard a.alive else { continue }
+            a.fireCooldown -= dt
+
+            // Target priority: nearest enemy marcher in sight > enemy tower
+            // > enemy base. Marches right toward the enemy base.
+            var target: CGPoint? = nil
+            var bestEnemy: CGPoint?
+            var bestDist = a.kind.sightRange
+            for e in enemies where e.alive {
+                let d = hypot(e.position.x - a.position.x, e.position.y - a.position.y)
+                if d < bestDist {
+                    bestDist = d
+                    bestEnemy = e.position
+                }
+            }
+            if let bestEnemy {
+                target = bestEnemy
+            } else if let tower = enemyTower, tower.alive {
+                target = CGPoint(x: tower.node.position.x, y: Balance.groundTopY + 100)
+            } else if let base = enemyBase, base.alive {
+                target = CGPoint(x: base.node.position.x, y: Balance.groundTopY + 100)
+            }
+            guard let aim = target else {
+                a.animateMarch(dt: dt, advancing: false)
+                a.position.y = Balance.groundTopY + a.size.height / 2
+                continue
+            }
+
+            let dist = hypot(aim.x - a.position.x, aim.y - a.position.y)
+            a.face(aim.x - a.position.x)
+            if dist > a.kind.shootRange {
+                let dir: CGFloat = aim.x > a.position.x ? 1 : -1
+                a.position.x = min(Balance.levelWidth - 40,
+                                   a.position.x + dir * a.kind.speed * CGFloat(dt))
+                a.animateMarch(dt: dt, advancing: true)
+            } else {
+                a.animateMarch(dt: dt, advancing: false)
+                if a.fireCooldown <= 0 {
+                    a.fireCooldown = a.kind.fireCooldown
+                    fireAllyBolt(from: a, to: aim)
+                }
+            }
+            a.position.y = Balance.groundTopY + a.size.height / 2 + a.yBob
+        }
+        allies.removeAll { !$0.alive }
+    }
+
+    /// Friendly bolt: player team so it hurts marchers + enemy structures.
+    private func fireAllyBolt(from a: AllyNode, to target: CGPoint) {
+        let muzzle = a.muzzle()
+        var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
+        let len = max(1, hypot(dir.dx, dir.dy))
+        dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
+        let bolt = ProjectileFactory.makeTowerBolt(team: .player)
+        bolt.setScale(a.kind == .heavy ? 1.0 : 0.8)
+        bolt.position = muzzle
+        bolt.zRotation = atan2(dir.dy, dir.dx)
+        world.addChild(bolt)
+        projectiles.append(Projectile(node: bolt, dir: dir, life: Balance.enemyBoltLife,
+                                      speed: Balance.enemyBoltSpeed + 60, damage: a.kind.damage,
+                                      team: .player))
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.setScale(0.7)
+        flash.position = muzzle
+        world.addChild(flash)
+    }
+
+    /// Enemy-bolt vs player army. Returns true when it struck an ally.
+    private func hitAlly(at pt: CGPoint, amount: CGFloat) -> Bool {
+        for a in allies where a.alive {
+            if abs(pt.x - a.position.x) < a.size.width / 2 + 12,
+               abs(pt.y - a.position.y) < a.size.height / 2 + 8 {
+                a.hp = max(0, a.hp - amount)
+                a.refreshHPBar()
+                if !a.alive {
+                    let puff = ProjectileFactory.makeImpactPuff()
+                    puff.position = a.position
+                    puff.setScale(1.4)
+                    world.addChild(puff)
+                    a.removeFromParent()
+                }
+                return true
+            }
+        }
+        return false
+    }
+
+    private func damageBase(at index: Int, amount: CGFloat) {
+        guard bases[index].alive else { return }
+        bases[index].hp = max(0, bases[index].hp - amount)
+        let frac = max(0, bases[index].hp / bases[index].maxHP)
+        bases[index].hpBarFill.size.width = 140 * frac
+        if !bases[index].alive {
+            // Rubble look, same language as dead towers. Win/lose screens land later.
+            bases[index].node.color = SKColor(white: 0.3, alpha: 1)
+            bases[index].node.colorBlendFactor = 0.7
+            bases[index].node.alpha = 0.75
+            bases[index].hpBarFill.isHidden = true
+            bases[index].hpBarBG.alpha = 0.25
+        }
+    }
+
+    /// Point-in-base test for one team's alive bases. Base is wide (~170 tall).
+    private func baseIndex(at pt: CGPoint, team: Team) -> Int? {
+        for (i, b) in bases.enumerated() where b.team == team && b.alive {
+            let dx = abs(pt.x - b.node.position.x)
+            let inX = dx < 85
+            let inY = pt.y >= Balance.groundTopY && pt.y <= Balance.groundTopY + 175
+            if inX && inY { return i }
+        }
+        return nil
+    }
+
     private func damageHero(amount: CGFloat) {
-        guard heroHP > 0 else { return }
+        guard hero.alive, heroHP > 0 else { return }
         heroHP = max(0, heroHP - amount)
+        if heroHP <= 0 {
+            killHero()
+            return
+        }
         // Hit flash so damage reads instantly.
         hero.run(.sequence([.fadeAlpha(to: 0.35, duration: 0.06),
                             .fadeAlpha(to: 1.0, duration: 0.12)]))
+    }
+
+    private func killHero() {
+        let deathSpot = hero.position
+        hero.die()
+        hero.isHidden = true
+        releaseAimTouch()
+        respawnAt = sceneTime + Balance.respawnDelay
+        // Death poof.
+        for i in 0..<2 {
+            let puff = ProjectileFactory.makeImpactPuff()
+            puff.position = CGPoint(x: deathSpot.x + CGFloat(i * 10 - 5), y: deathSpot.y)
+            world.addChild(puff)
+        }
+    }
+
+    /// Shared cleanup when the aim touch ends (release or death).
+    private func releaseAimTouch() {
+        aimTouch = nil
+        hero.clearAim()
+        aimDots.forEach { $0.isHidden = true }
     }
 
     private func stepProjectiles(dt: TimeInterval) {
@@ -586,32 +1069,70 @@ final class GameScene: SKScene {
         projectiles = alive
     }
 
-    /// Team-aware hit test. Hero (neutral) bolts hit the enemy tower;
-    /// player bolts hit the enemy tower; enemy bolts hit the player tower + hero.
+    /// Team-aware hit test. Hero (neutral) + ally (player) bolts hit marchers,
+    /// the enemy tower and the enemy base; enemy bolts hit the player tower,
+    /// player base, player army + hero.
     /// Returns true when the projectile struck something (caller removes it).
     private func hitEnemy(_ p: Projectile) -> Bool {
         let pt = p.node.position
         switch p.team {
         case .neutral:
+            if hitMarcher(at: pt, amount: p.damage) { return true }
             if let idx = towerIndex(at: pt, team: .enemy) {
                 damageTower(at: idx, amount: p.damage)
+                return true
+            }
+            if let idx = baseIndex(at: pt, team: .enemy) {
+                damageBase(at: idx, amount: p.damage)
                 return true
             }
         case .player:
+            if hitMarcher(at: pt, amount: p.damage) { return true }
             if let idx = towerIndex(at: pt, team: .enemy) {
                 damageTower(at: idx, amount: p.damage)
                 return true
             }
+            if let idx = baseIndex(at: pt, team: .enemy) {
+                damageBase(at: idx, amount: p.damage)
+                return true
+            }
         case .enemy:
+            if hitAlly(at: pt, amount: p.damage) { return true }
             if let idx = towerIndex(at: pt, team: .player) {
                 damageTower(at: idx, amount: p.damage)
                 return true
             }
+            if let idx = baseIndex(at: pt, team: .player) {
+                damageBase(at: idx, amount: p.damage)
+                return true
+            }
             // Hero body: ~44 wide, Balance.heroHeight tall, centered on position.
-            if heroHP > 0,
+            // Skipped while dead or grace-blinking after respawn.
+            if !heroProtected,
                abs(pt.x - hero.position.x) < 34,
                abs(pt.y - hero.position.y) < Balance.heroHeight / 2 + 6 {
                 damageHero(amount: p.damage)
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Hero-bolt vs summoned marchers. Kills pay Unity's +100 gold.
+    private func hitMarcher(at pt: CGPoint, amount: CGFloat) -> Bool {
+        for e in enemies where e.alive {
+            if abs(pt.x - e.position.x) < 42,
+               abs(pt.y - e.position.y) < e.size.height / 2 + 8 {
+                e.hp = max(0, e.hp - amount)
+                e.refreshHPBar()
+                if !e.alive {
+                    money += Balance.killReward
+                    let puff = ProjectileFactory.makeImpactPuff()
+                    puff.position = e.position
+                    puff.setScale(1.6)
+                    world.addChild(puff)
+                    e.removeFromParent()
+                }
                 return true
             }
         }
@@ -653,9 +1174,10 @@ final class GameScene: SKScene {
         let p = hero?.position ?? .zero
         let ptHP = towers.first(where: { $0.team == .player })?.hp ?? 0
         let etHP = towers.first(where: { $0.team == .enemy })?.hp ?? 0
-        return String(format: "f%d pos %4.0f,%4.0f in %+.2f jmp %@ | v %+4.0f,%+5.0f gnd %@ shots %d hero %3.0f tw P %3.0f/E %3.0f",
+        let ebHP = bases.first(where: { $0.team == .enemy })?.hp ?? 0
+        return String(format: "f%d pos %4.0f,%4.0f in %+.2f jmp %@ | v %+4.0f,%+5.0f gnd %@ shots %d hero %3.0f tw P %3.0f/E %3.0f ebase %3.0f en %d al %d $%d",
                       frameCount, p.x, p.y, heroInputX, heroJumpHeld ? "Y" : "n",
-                      v.dx, v.dy, g ? "Y" : "n", shotsFired, heroHP, ptHP, etHP)
+                      v.dx, v.dy, g ? "Y" : "n", shotsFired, heroHP, ptHP, etHP, ebHP, enemies.count, allies.count, money)
     }
 
     // MARK: - Minimap snapshot (polled by the SwiftUI MinimapView ~7Hz)
@@ -668,7 +1190,12 @@ final class GameScene: SKScene {
             playerBaseX: Balance.playerBaseX,
             playerTowerX: Balance.playerTowerX,
             enemyTowerX: Balance.enemyTowerX,
-            enemyBaseX: Balance.enemyBaseX
+            enemyBaseX: Balance.enemyBaseX,
+            heroHP: heroHP,
+            heroMaxHP: Balance.heroHP,
+            money: money,
+            allyXs: allies.filter { $0.alive }.map { $0.position.x },
+            enemyXs: enemies.filter { $0.alive }.map { $0.position.x }
         )
     }
 

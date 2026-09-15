@@ -25,7 +25,7 @@ enum Balance {
 
     // MARK: - Hero (visual only this stage; movement stats used next stage)
     static let heroSpawnX: CGFloat = 420
-    static let heroHeight: CGFloat = 96
+    static let heroHeight: CGFloat = 78
 
     // MARK: - Hero movement feel
     static let heroRunSpeed: CGFloat = 520
@@ -42,6 +42,12 @@ enum Balance {
     static let bulletLife: Double = 1.6   // max range ≈ speed × life
     static let heroDamage: CGFloat = 10
     static let heroHP: CGFloat = 100
+    static let startingGold: Int = 500 // Unity PlayerMoney.startingMoney
+    // MARK: - Hero respawn (dropped from above, in front of the player base)
+    static let respawnDelay: Double = 2.0      // seconds dead before the drop
+    static let respawnOffsetX: CGFloat = 150   // in front of the player base, toward mid
+    static let respawnDropHeight: CGFloat = 520 // spawn this high above ground, then fall
+    static let respawnGrace: Double = 1.0      // invulnerable seconds after landing
 
     // MARK: - Tower combat (towers fire at enemies in proximity)
     static let towerHP: CGFloat = 200
@@ -51,6 +57,49 @@ enum Balance {
     static let towerBulletSpeed: CGFloat = 620
     static let towerBulletLife: Double = 2.2   // range ≈ speed × life, comfortably covers towerRange
     static let towerMuzzleHeight: CGFloat = 150 // muzzle above ground (near tower top)
+
+    // MARK: - Main base (enemy base fans 3 bolts + summons marchers)
+    static let baseHP: CGFloat = 500           // your Unity Base value
+    static let baseRange: CGFloat = 900        // fan fires when the hero closes in
+    static let baseFireCooldown: Double = 2.4
+    static let baseFanCount: Int = 3           // 3 blasts, same muzzle, spread out
+    static let baseFanSpread: CGFloat = 0.16   // radians between fan bolts (~9°)
+    static let baseBoltDamage: CGFloat = 10
+    static let baseMuzzleHeight: CGFloat = 140
+    static let baseMuzzleForward: CGFloat = 60 // muzzle sits toward the enemy side
+
+    // MARK: - Summoned enemies (march on the enemy base's side toward your base)
+    static let summonInterval: Double = 8.0
+    static let firstSummonDelay: Double = 5.0
+    static let maxEnemies: Int = 6
+    static let enemyHP: CGFloat = 40
+    static let enemySpeed: CGFloat = 120
+    static let killReward: Int = 100           // Unity KillEnemy gold
+    // Ranged troopers: advance, stop at shooting range, fire bolts.
+    static let enemySightRange: CGFloat = 550  // notice the hero this far away
+    static let enemyShootRange: CGFloat = 380  // stop + shoot this close to target
+    static let enemyFireCooldown: Double = 1.7
+    static let enemyBoltDamage: CGFloat = 8
+    static let enemyBoltSpeed: CGFloat = 520
+    static let enemyBoltLife: Double = 1.2     // range ≈ 624: outranged by the hero
+
+    // MARK: - Player army (summoned from cards, marches toward the enemy base)
+    static let maxAllies: Int = 10
+    // Trooper: cheap, fast, light. Heavy: pricey, slow, tanky + hard-hitting.
+    static let trooperCost: Int = 100
+    static let trooperHP: CGFloat = 60
+    static let trooperSpeed: CGFloat = 150
+    static let trooperDamage: CGFloat = 10
+    static let trooperFireCooldown: Double = 1.4
+    static let trooperRange: CGFloat = 380
+    static let trooperSightRange: CGFloat = 600
+    static let heavyCost: Int = 250
+    static let heavyHP: CGFloat = 170
+    static let heavySpeed: CGFloat = 95
+    static let heavyDamage: CGFloat = 22
+    static let heavyFireCooldown: Double = 1.9
+    static let heavyRange: CGFloat = 340
+    static let heavySightRange: CGFloat = 550
 
     // MARK: - Parallax scroll factors (ported from your Unity Parallaxing.cs idea:
     // background moves slower than the camera; factor 1.0 = locked to world)

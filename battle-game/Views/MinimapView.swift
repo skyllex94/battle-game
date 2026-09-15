@@ -54,7 +54,22 @@ struct MinimapView: View {
             minimapMark(worldX: snap.enemyTowerX, size: 7.0, color: .red, square: false)
             minimapMark(worldX: snap.enemyBaseX, size: 10.0, color: .red, square: true)
 
-            // Hero diamond.
+            // Unit dots: player army (cyan) + enemy marchers (red, smaller
+            // than the tower dots so structures still read first).
+            ForEach(snap.allyXs.indices, id: \.self) { i in
+                Circle()
+                    .fill(.cyan)
+                    .frame(width: 5, height: 5)
+                    .position(x: inset + x(snap.allyXs[i]), y: stripHeight - 12.0)
+            }
+            ForEach(snap.enemyXs.indices, id: \.self) { i in
+                Circle()
+                    .fill(.red)
+                    .frame(width: 5, height: 5)
+                    .position(x: inset + x(snap.enemyXs[i]), y: stripHeight - 12.0)
+            }
+
+            // Hero diamond (drawn last so it stays on top of unit dots).
             Image(systemName: "diamond.fill")
                 .font(.system(size: 11))
                 .foregroundStyle(.white)

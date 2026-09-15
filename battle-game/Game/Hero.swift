@@ -20,6 +20,8 @@ final class HeroNode: SKSpriteNode {
     // MARK: - State (manual character controller)
     var velocity = CGVector.zero
     private var grounded = false
+    /// When false the hero is dead: step() skips, scene hides the node.
+    var alive = true
     private var lastGroundedTime: TimeInterval = -10
     private var lastJumpPressedTime: TimeInterval = -10
     private var prevJumpHeld = false
@@ -164,6 +166,7 @@ final class HeroNode: SKSpriteNode {
 
     // MARK: - Per-frame movement + animation (manual character controller)
     func step(dt: TimeInterval, now: TimeInterval) {
+        guard alive else { return }
         let dt = min(max(dt, 0), 1.0 / 30)
         let dtCG = CGFloat(dt)
 
@@ -211,6 +214,25 @@ final class HeroNode: SKSpriteNode {
             position.x = Balance.levelWidth - 40
             velocity.dx = min(0, velocity.dx)
         }
+    }
+
+    /// Death: stop simulating; the scene hides the node and respawns later.
+    func die() {
+        alive = false
+        velocity = .zero
+        clearAim()
+    }
+
+    /// Respawn drop: placed above the base front, falls with gravity, lands.
+    func respawn(at pos: CGPoint) {
+        position = pos
+        velocity = .zero
+        grounded = false
+        alive = true
+        isHidden = false
+        alpha = 1
+        lastGroundedTime = -10
+        lastJumpPressedTime = -10
     }
 
     private func resolveCollisions(prevPos: CGPoint, now: TimeInterval) {

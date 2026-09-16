@@ -16,6 +16,7 @@ struct GameView: View {
     @State private var moveX: CGFloat = 0
     @State private var jumpHeld = false
     @State private var showMenu = false
+    @State private var weapon: HeroWeapon = .blaster
     @State private var minimap = MinimapSnapshot(levelWidth: Balance.levelWidth, heroX: Balance.heroSpawnX,
                                                  cameraX: 0, viewWidth: 1334,
                                                  playerBaseX: Balance.playerBaseX,
@@ -31,68 +32,25 @@ struct GameView: View {
             SpriteView(scene: scene, options: [.ignoresSiblingOrder])
                 .ignoresSafeArea()
 
-            // Top HUD pinned to the safe-area top: back + level | minimap | hero.
-            VStack(spacing: 0) {
-                HStack(alignment: .top, spacing: 8) {
-                    HStack(spacing: 6) {
-                        Button { dismiss() } label: {
-                            Image(systemName: "chevron.left")
-                                .font(.caption.bold())
-                                .padding(8)
-                                .background(.black.opacity(0.55))
-                                .foregroundStyle(.white)
-                                .clipShape(Circle())
-                        }
-                        Label("Lv \(level.id)", systemImage: "flag.fill")
-                            .font(.caption.bold())
-                            .padding(.horizontal, 12).padding(.vertical, 6)
-                            .background(.black.opacity(0.55))
-                            .foregroundStyle(.white)
-                            .clipShape(Capsule())
-                            .allowsHitTesting(false)
-                        // Gold for the coming unit shop.
-                        Label("\(minimap.money)", systemImage: "dollarsign.circle.fill")
-                            .font(.caption.bold())
-                            .padding(.horizontal, 12).padding(.vertical, 6)
-                            .background(.black.opacity(0.55))
-                            .foregroundStyle(.yellow)
-                            .clipShape(Capsule())
-                            .allowsHitTesting(false)
-                        // Hero HP bar with live numbers.
-                        HeroHealthBar(hp: minimap.heroHP, maxHP: minimap.heroMaxHP)
-                            .allowsHitTesting(false)
-                    }
-                    Spacer()
-                        .allowsHitTesting(false)
-                    MinimapView(snap: minimap)
-                        .allowsHitTesting(false)
-                    Spacer()
-                        .allowsHitTesting(false)
-                    // Pause button: auto-pauses the sim and opens the menu.
-                    Button {
-                        scene.isPaused = true
-                        showMenu = true
-                    } label: {
-                        Image(systemName: "pause.fill")
-                            .font(.caption.bold())
-                            .padding(10)
-                            .background(.black.opacity(0.55))
-                            .foregroundStyle(.white)
-                            .clipShape(Circle())
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.top, 2)
-                Spacer()
-                    .allowsHitTesting(false)
-            }
-
-            // Bottom controls: joystick left (right side reserved for attack buttons).
+            // Bottom controls sit BELOW the HUD so HUD buttons always win
+            // hit-testing (this layer previously covered them and ate taps).
+            // Joystick (bottom-left) runs the hero; push up to jump.
             HStack(alignment: .bottom) {
                 JoystickView(moveX: $moveX, jumpHeld: $jumpHeld)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 Spacer(minLength: 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+            // Unified command bar: weapon | treasury | vitals | minimap | pause.
+            // Compact minimap variant wins on narrow screens via ViewThatFits.
+            VStack(spacing: 0) {
+                ViewThatFits(in: .horizontal) {
+                    commandBar(minimapWidth: 300)
+                    commandBar(minimapWidth: 210)
+                }
+                Spacer()
+                    .allowsHitTesting(false)
             }
 
             // Bottom army tabs: flush with the screen edge so the battlefield
@@ -132,6 +90,7 @@ struct GameView: View {
                         scene.resetLevel()
                         scene.heroInputX = moveX
                         scene.heroJumpHeld = jumpHeld
+                        weapon = scene.heroWeapon
                         showMenu = false
                     }
                     .font(.headline)
@@ -162,7 +121,82 @@ struct GameView: View {
         .onAppear {
             scene.heroInputX = moveX
             scene.heroJumpHeld = jumpHeld
+            weapon = scene.heroWeapon
         }
+    }
+
+    /// Single structured menu bar holding every top control:
+    /// weapon switch | treasury | vitals | minimap | pause.
+    /// Minimap width is parameterized so narrow screens get a compact strip.
+    @ViewBuilder
+    private func commandBar(minimapWidth: CGFloat) -> some View {
+        HStack(alignment: .center, spacing: 8) {
+            // Weapon switch: tap to rotate Blaster -> Scatter -> Cannon.
+            Button { weapon = scene.cycleWeapon() } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: weapon.icon)
+                        .foregroundStyle(.cyan)
+                    Text(weapon.name)
+                        .foregroundStyle(.white)
+                    Image(systemName: "arrow.2.circlepath")
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+                .font(.caption.bold())
+                .padding(.horizontal, 10).padding(.vertical, 7)
+                .background(.cyan.opacity(0.16))
+                .overlay(Capsule().stroke(.cyan.opacity(0.45), lineWidth: 1))
+                .clipShape(Capsule())
+            }
+
+            HUDDivider()
+
+            // Treasury.
+            HStack(spacing: 4) {
+                Image(systemName: "dollarsign.circle.fill")
+                Text("\(minimap.money)")
+                    .monospacedDigit()
+            }
+            .font(.caption.bold())
+            .foregroundStyle(.yellow)
+
+            HUDDivider()
+
+            // Hero vitals.
+            HeroHealthBar(hp: minimap.heroHP, maxHP: minimap.heroMaxHP)
+                .allowsHitTesting(false)
+
+            Spacer(minLength: 4)
+                .allowsHitTesting(false)
+
+            MinimapView(snap: minimap, stripWidth: minimapWidth)
+                .allowsHitTesting(false)
+
+            Spacer(minLength: 4)
+                .allowsHitTesting(false)
+
+            HUDDivider()
+
+            // Pause button: auto-pauses the sim and opens the menu.
+            Button {
+                scene.isPaused = true
+                showMenu = true
+            } label: {
+                Image(systemName: "pause.fill")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                    .frame(width: 30, height: 30)
+                    .background(.white.opacity(0.12))
+                    .clipShape(Circle())
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.black.opacity(0.62))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14)
+            .stroke(.white.opacity(0.12), lineWidth: 1))
+        .padding(.horizontal, 10)
+        .padding(.top, 6)
     }
 }
 
@@ -221,7 +255,18 @@ private struct ArmyCardButton: View {
     }
 }
 
-/// Hero health bar + live numbers (e.g. 78/100). Green -> red as HP drops.
+/// Thin vertical separator between command-bar sections.
+private struct HUDDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(.white.opacity(0.15))
+            .frame(width: 1, height: 22)
+            .allowsHitTesting(false)
+    }
+}
+
+/// Hero vitals: heart + bar + live numbers (e.g. 78/100). Green -> red as HP
+/// drops. Bare (no pill background) — it lives inside the command bar.
 private struct HeroHealthBar: View {
     let hp: CGFloat
     let maxHP: CGFloat
@@ -239,21 +284,21 @@ private struct HeroHealthBar: View {
 
     var body: some View {
         HStack(spacing: 6) {
+            Image(systemName: "heart.fill")
+                .font(.caption2)
+                .foregroundStyle(color)
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(.white.opacity(0.2))
-                    .frame(width: 110, height: 10)
+                    .fill(.white.opacity(0.18))
+                    .frame(width: 90, height: 8)
                 Capsule()
                     .fill(color)
-                    .frame(width: 110 * frac, height: 10)
+                    .frame(width: 90 * frac, height: 8)
             }
             Text("\(Int(hp))/\(Int(maxHP))")
                 .font(.caption2.bold())
                 .monospacedDigit()
                 .foregroundStyle(.white)
         }
-        .padding(.horizontal, 12).padding(.vertical, 6)
-        .background(.black.opacity(0.55))
-        .clipShape(Capsule())
     }
 }

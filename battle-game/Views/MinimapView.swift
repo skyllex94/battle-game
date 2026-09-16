@@ -5,7 +5,9 @@ import SwiftUI
 /// camera currently sees. Driven by a MinimapSnapshot polled at ~7Hz.
 struct MinimapView: View {
     let snap: MinimapSnapshot
-    private let stripWidth: CGFloat = 300
+    /// Lane strip width. The HUD embeds a compact 210pt version on narrow
+    /// screens (via ViewThatFits); defaults to the full 300pt strip.
+    var stripWidth: CGFloat = 300
     private let stripHeight: CGFloat = 38
     private let inset: CGFloat = 8
 

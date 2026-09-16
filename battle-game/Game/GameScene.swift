@@ -31,16 +31,27 @@ final class GameScene: SKScene {
     private var projectiles: [Projectile] = []
     private var aimDots: [SKShapeNode] = []
     private var shotsFired = 0
+    /// Active hero gun. The HUD weapon button cycles it via cycleWeapon().
+    var heroWeapon: HeroWeapon = .blaster
+
+    /// Switches to the next hero gun (blaster -> scatter -> cannon -> ...).
+    /// Called by the HUD weapon button; the swapped gun fires instantly.
+    @discardableResult
+    func cycleWeapon() -> HeroWeapon {
+        let all = HeroWeapon.allCases
+        heroWeapon = all[(heroWeapon.rawValue + 1) % all.count]
+        hero?.setWeapon(heroWeapon)
+        fireCooldown = 0
+        return heroWeapon
+    }
 
     // MARK: - Tower combat (proximity-triggered projectiles toward enemies)
     private struct Tower {
-        var node: SKSpriteNode
+        var node: TowerNode
         var team: Team
         var hp: CGFloat
         var maxHP: CGFloat
         var cooldown: TimeInterval
-        var hpBarBG: SKSpriteNode
-        var hpBarFill: SKSpriteNode
         var alive: Bool { hp > 0 }
     }
     private var towers: [Tower] = []
@@ -131,6 +142,7 @@ final class GameScene: SKScene {
         fireCooldown = 0
         shotsFired = 0
         frameCount = 0
+        heroWeapon = .blaster
         buildSky()
         buildFar()
         buildMid()
@@ -330,41 +342,23 @@ final class GameScene: SKScene {
                        y: Balance.groundTopY + Balance.baseMuzzleHeight)
     }
 
-    /// Tower sprite + drop shadow + HP bar. Muzzle is at the tower top
-    /// (Balance.towerMuzzleHeight above ground); shots originate there.
+    /// Pixel-art tower + turning turret head (see TowerNode).
+    /// Muzzle is the barrel tip; shots originate there.
     private func addTower(at x: CGFloat, team: Team) {
-        let tint: SKColor
-        let name: String
-        switch team {
-        case .player:
-            tint = SKColor(red: 0.3, green: 0.5, blue: 1.0, alpha: 1)
-            name = "playerTower"
-        case .enemy:
-            tint = SKColor(red: 1.0, green: 0.3, blue: 0.25, alpha: 1)
-            name = "enemyTower"
-        case .neutral:
-            tint = SKColor(white: 0.8, alpha: 1)
-            name = "tower"
-        }
-        let node = addStructureart(named: "Tower", at: x, height: 190, tint: tint, name: name)
-        // HP bar floats just above the tower.
-        let barW: CGFloat = 110
-        let barBG = SKSpriteNode(color: SKColor(white: 0, alpha: 0.6),
-                                 size: CGSize(width: barW, height: 10))
-        barBG.position = CGPoint(x: x, y: Balance.groundTopY + 205)
-        barBG.zPosition = 6
-        world.addChild(barBG)
-        let barFill = SKSpriteNode(color: team == .player ? .cyan : .red,
-                                   size: CGSize(width: barW, height: 10))
-        barFill.anchorPoint = CGPoint(x: 0, y: 0.5)
-        barFill.position = CGPoint(x: x - barW / 2, y: Balance.groundTopY + 205)
-        barFill.zPosition = 7
-        world.addChild(barFill)
+        let tower = TowerNode(team: team)
+        tower.position = CGPoint(x: x, y: Balance.groundTopY)
+        world.addChild(tower)
+        // Drop shadow ellipse for 2.5D grounding.
+        let shadow = SKShapeNode(ellipseOf: CGSize(width: 110, height: 18))
+        shadow.fillColor = SKColor(white: 0, alpha: 0.35)
+        shadow.strokeColor = .clear
+        shadow.position = CGPoint(x: x, y: Balance.groundTopY + 6)
+        shadow.zPosition = 4
+        world.addChild(shadow)
         // Stagger first shots so both towers don't volley on the same frame.
         let stagger = team == .player ? 0.0 : Balance.towerFireCooldown / 2
-        towers.append(Tower(node: node, team: team, hp: Balance.towerHP,
-                            maxHP: Balance.towerHP, cooldown: stagger,
-                            hpBarBG: barBG, hpBarFill: barFill))
+        towers.append(Tower(node: tower, team: team, hp: Balance.towerHP,
+                            maxHP: Balance.towerHP, cooldown: stagger))
     }
 
     private func addStructureart(named: String, at x: CGFloat, height: CGFloat, tint: SKColor, name: String) -> SKSpriteNode {
@@ -401,6 +395,7 @@ final class GameScene: SKScene {
 
     private func buildHero() {
         hero = HeroNode()
+        hero.setWeapon(heroWeapon)
         hero.position = CGPoint(x: Balance.heroSpawnX,
                                 y: Balance.groundTopY + Balance.heroHeight / 2 + 4)
         world.addChild(hero)
@@ -590,19 +585,28 @@ final class GameScene: SKScene {
         guard aimTouch != nil else { return }
         fireCooldown -= dt
         guard fireCooldown <= 0 else { return }
-        fireCooldown = Balance.fireCooldown
+        fireCooldown = heroWeapon.cooldown
         fireBullet()
     }
 
     private func fireBullet() {
         let muzzle = muzzlePosition(for: aimDir)
-        let bolt = ProjectileFactory.makeBolt()
-        bolt.position = muzzle
-        bolt.zRotation = atan2(aimDir.dy, aimDir.dx)
-        world.addChild(bolt)
-        projectiles.append(Projectile(node: bolt, dir: aimDir, life: Balance.bulletLife,
-                                      speed: Balance.bulletSpeed, damage: Balance.heroDamage,
-                                      team: .neutral))
+        let baseAngle = atan2(aimDir.dy, aimDir.dx)
+        let pellets = heroWeapon.pelletCount
+        for k in 0..<pellets {
+            // Symmetric fan: e.g. 3 pellets at -spread, 0, +spread.
+            let offset = (CGFloat(k) - CGFloat(pellets - 1) / 2) * heroWeapon.spread
+            let a = baseAngle + offset
+            let dir = CGVector(dx: cos(a), dy: sin(a))
+            let bolt = ProjectileFactory.makeBolt()
+            bolt.setScale(heroWeapon.boltScale)
+            bolt.position = muzzle
+            bolt.zRotation = a
+            world.addChild(bolt)
+            projectiles.append(Projectile(node: bolt, dir: dir, life: Balance.bulletLife,
+                                          speed: heroWeapon.bulletSpeed, damage: heroWeapon.damage,
+                                          team: .neutral))
+        }
         shotsFired += 1
         let flash = ProjectileFactory.makeMuzzleFlash()
         flash.position = muzzle
@@ -617,11 +621,16 @@ final class GameScene: SKScene {
     private func updateTowers(dt: TimeInterval) {
         for i in towers.indices {
             guard towers[i].alive else { continue }
+            // Smooth turret tracking runs every frame, even between shots.
+            let tracked = acquireTarget(for: towers[i])
+            towers[i].node.aimAt(tracked)
+            towers[i].node.update(dt: dt)
             towers[i].cooldown -= dt
             guard towers[i].cooldown <= 0 else { continue }
-            guard let target = acquireTarget(for: towers[i]) else { continue }
+            guard let target = tracked else { continue }
             towers[i].cooldown = Balance.towerFireCooldown
             fireTowerBolt(from: towers[i], to: target)
+            towers[i].node.recoil()
         }
     }
 
@@ -673,7 +682,7 @@ final class GameScene: SKScene {
     }
 
     private func towerMuzzle(for tower: Tower) -> CGPoint {
-        CGPoint(x: tower.node.position.x, y: Balance.groundTopY + Balance.towerMuzzleHeight)
+        tower.node.muzzlePosition()
     }
 
     private func fireTowerBolt(from tower: Tower, to target: CGPoint) {
@@ -698,19 +707,14 @@ final class GameScene: SKScene {
         towers[index].hp = max(0, towers[index].hp - amount)
         updateTowerHPBar(at: index)
         if !towers[index].alive {
-            // Rubble look: grey out + sink the HP bar. Revive/respawn lands later.
-            towers[index].node.color = SKColor(white: 0.3, alpha: 1)
-            towers[index].node.colorBlendFactor = 0.7
-            towers[index].node.alpha = 0.75
-            towers[index].hpBarFill.isHidden = true
-            towers[index].hpBarBG.alpha = 0.25
+            // TowerNode handles the rubble look (grey + slumped turret).
+            towers[index].node.setDestroyed()
         }
     }
 
     private func updateTowerHPBar(at index: Int) {
         let frac = max(0, towers[index].hp / towers[index].maxHP)
-        let fullW: CGFloat = 110
-        towers[index].hpBarFill.size.width = fullW * frac
+        towers[index].node.setHPFraction(frac)
     }
 
     // MARK: - Main base: 3-bolt fan + summoning (enemy base only)

@@ -140,14 +140,73 @@ final class HeroNode: SKSpriteNode {
         crest.position = CGPoint(x: 2, y: 55)
         visual.addChild(crest)
 
-        // Gun (hidden until the first shot; aims at the touch point).
-        gun = limb(CGSize(width: 32, height: 9), color: SKColor(white: 0.2, alpha: 1))
+        // Gun (hidden until the first aim; aims at the touch point).
+        // Built via buildGun so the HUD weapon button can re-skin it.
+        gun = buildGun(for: .blaster)
         gun.position = CGPoint(x: 16, y: 8)
         gun.isHidden = true
         visual.addChild(gun)
-        let grip = limb(CGSize(width: 7, height: 12), color: trimBlue)
-        grip.position = CGPoint(x: 8, y: 3)
-        gun.addChild(grip)
+    }
+
+    /// Rebuilds the visible gun for the active weapon (HUD gun button).
+    /// Preserves position, aim rotation and hidden state so mid-aim swaps
+    /// never snap or pop the barrel.
+    func setWeapon(_ weapon: HeroWeapon) {
+        let old = gun
+        gun = buildGun(for: weapon)
+        gun.position = old.position
+        gun.zRotation = old.zRotation
+        gun.isHidden = old.isHidden
+        old.removeFromParent()
+        visual.addChild(gun)
+    }
+
+    /// Per-weapon gun model, pointing +x in local space:
+    /// blaster = slim barrel + yellow tip, scatter = wide triple barrel,
+    /// cannon = long heavy barrel + red muzzle ring.
+    private func buildGun(for weapon: HeroWeapon) -> SKShapeNode {
+        func bar(_ size: CGSize, color: SKColor) -> SKShapeNode {
+            let n = SKShapeNode(rectOf: size, cornerRadius: size.height / 2)
+            n.fillColor = color
+            n.strokeColor = .clear
+            return n
+        }
+        let trimBlue = SKColor(red: 0.25, green: 0.55, blue: 1.0, alpha: 1)
+        let barrel: SKShapeNode
+        switch weapon {
+        case .blaster:
+            barrel = bar(CGSize(width: 32, height: 9), color: SKColor(white: 0.2, alpha: 1))
+            let tip = bar(CGSize(width: 8, height: 11),
+                          color: SKColor(red: 1, green: 0.85, blue: 0.3, alpha: 1))
+            tip.position = CGPoint(x: 18, y: 0)
+            barrel.addChild(tip)
+        case .scatter:
+            barrel = bar(CGSize(width: 28, height: 13),
+                         color: SKColor(red: 0.35, green: 0.22, blue: 0.12, alpha: 1))
+            for y in [-8, 8] as [CGFloat] {
+                let tube = bar(CGSize(width: 24, height: 6), color: SKColor(white: 0.2, alpha: 1))
+                tube.position = CGPoint(x: 2, y: y)
+                barrel.addChild(tube)
+            }
+            let mouth = bar(CGSize(width: 7, height: 26),
+                            color: SKColor(red: 1, green: 0.55, blue: 0.15, alpha: 1))
+            mouth.position = CGPoint(x: 16, y: 0)
+            barrel.addChild(mouth)
+        case .cannon:
+            barrel = bar(CGSize(width: 46, height: 13), color: SKColor(white: 0.15, alpha: 1))
+            let stripe = bar(CGSize(width: 26, height: 5),
+                             color: SKColor(red: 0.3, green: 0.9, blue: 1.0, alpha: 1))
+            stripe.position = CGPoint(x: -4, y: 0)
+            barrel.addChild(stripe)
+            let ring = bar(CGSize(width: 9, height: 17),
+                           color: SKColor(red: 1.0, green: 0.25, blue: 0.2, alpha: 1))
+            ring.position = CGPoint(x: 24, y: 0)
+            barrel.addChild(ring)
+        }
+        let grip = bar(CGSize(width: 7, height: 12), color: trimBlue)
+        grip.position = CGPoint(x: -barrel.frame.width / 4, y: -6)
+        barrel.addChild(grip)
+        return barrel
     }
 
     // MARK: - Aiming (called by GameScene while the shoot-touch is down)

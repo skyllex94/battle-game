@@ -9,8 +9,8 @@ struct MinimapSnapshot {
     var cameraX: CGFloat
     var viewWidth: CGFloat
     var playerBaseX: CGFloat
-    var playerTowerX: CGFloat
-    var enemyTowerX: CGFloat
+    var playerTowerXs: [CGFloat]
+    var enemyTowerXs: [CGFloat]
     var enemyBaseX: CGFloat
     // HUD economy/combat state (same polling channel, ~7Hz).
     var heroHP: CGFloat

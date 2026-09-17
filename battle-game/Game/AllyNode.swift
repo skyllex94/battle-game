@@ -111,6 +111,8 @@ final class AllyNode: SKSpriteNode {
     /// Small vertical offset applied by the scene on top of ground rest height.
     var yBob: CGFloat = 0
     var facing: CGFloat { xScale >= 0 ? 1 : -1 }
+    /// Set when the unit marches off-view after the enemy HQ falls.
+    var marchedOff = false
 
     init(kind: ArmyKind) {
         self.kind = kind

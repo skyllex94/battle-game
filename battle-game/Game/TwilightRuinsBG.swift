@@ -817,8 +817,9 @@ enum TwilightRuinsBG {
     // MARK: - Ground scatter (unique placements, clear of structures)
 
     private static var clearZones: [ClosedRange<CGFloat>] {
-        [Balance.playerBaseX, Balance.heroSpawnX, Balance.playerTowerX,
-         Balance.enemyTowerX, Balance.enemyBaseX].map { ($0 - 150)...($0 + 150) }
+        (Balance.playerTowerXs + Balance.enemyTowerXs
+         + [Balance.playerBaseX, Balance.heroSpawnX, Balance.enemyBaseX])
+            .map { ($0 - 150)...($0 + 150) }
     }
 
     private static func isClear(_ x: CGFloat) -> Bool {

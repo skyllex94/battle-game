@@ -5,22 +5,23 @@ import CoreGraphics
 /// No magic numbers in GameScene; everything reads from here.
 enum Balance {
     // MARK: - Level layout (points)
-    static let levelWidth: CGFloat = 4000
+    static let levelWidth: CGFloat = 5200
     static let groundTopY: CGFloat = 120        // y of the walkable surface
     static let groundThickness: CGFloat = 120
     static let viewHeight: CGFloat = 750        // logical scene height
 
-    // MARK: - Structures (x centers, from your Unity lane: base -> tower -> mid -> tower -> base)
+    // MARK: - Structures (x centers; two towers guard each base from mid:
+    // base -> tower -> tower -> mid, mirrored per side)
     static let playerBaseX: CGFloat = 220
-    static let playerTowerX: CGFloat = 800
-    static let enemyTowerX: CGFloat = 3200
-    static let enemyBaseX: CGFloat = 3780
+    static let playerTowerXs: [CGFloat] = [800, 1450]
+    static let enemyTowerXs: [CGFloat] = [3750, 4400]
+    static let enemyBaseX: CGFloat = 4980
 
     // MARK: - Platforms (mid-map verticality for the hero; physics lands next stage)
     static let platforms: [CGRect] = [
-        CGRect(x: 1650, y: 300, width: 320, height: 36),
-        CGRect(x: 2050, y: 420, width: 320, height: 36),
-        CGRect(x: 2450, y: 300, width: 320, height: 36),
+        CGRect(x: 1960, y: 300, width: 320, height: 36),
+        CGRect(x: 2440, y: 420, width: 320, height: 36),
+        CGRect(x: 2920, y: 300, width: 320, height: 36),
     ]
 
     // MARK: - Hero (visual only this stage; movement stats used next stage)
@@ -91,6 +92,7 @@ enum Balance {
     // MARK: - Drops (dead enemies randomly leave ammo/health for the hero)
     static let dropChance: Double = 0.4      // roll per enemy kill
     static let dropHeal: CGFloat = 30        // health-pack heal (capped at max)
+    static let dropMoney: Int = 50           // gold-coin pickup value
     static let dropLifetime: Double = 15.0   // seconds before a drop expires
     static let dropAmmoMultiplier: Int = 2   // ammo drop = killAmmo x this, per gun
 

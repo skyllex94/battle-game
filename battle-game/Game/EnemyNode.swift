@@ -147,6 +147,8 @@ final class EnemyNode: SKSpriteNode {
 
     /// Small vertical offset applied by the scene on top of ground rest height.
     var yBob: CGFloat = 0
+    /// Set when the unit marches off-view after the player HQ falls.
+    var marchedOff = false
 
     func refreshHPBar() {
         let frac = max(0, min(1, hp / maxHP))

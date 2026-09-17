@@ -138,6 +138,14 @@ final class GameScene: SKScene {
     /// Rebuilds the level from scratch inside the same scene instance.
     /// (Swapping the SKScene object doesn't reliably update SpriteView, so
     /// restart tears down and rebuilds all content instead.)
+    /// Unpausing invalidates the frame clock so the first post-resume frame
+    /// runs a normal 1/60 step instead of a seconds-long catch-up (which is
+    /// what snapped the camera to the hero).
+    override var isPaused: Bool {
+        didSet {
+            if !isPaused { lastUpdate = 0 }
+        }
+    }
     func resetLevel() {
         isPaused = false
         world.removeAllChildren()
@@ -229,9 +237,9 @@ final class GameScene: SKScene {
 
     // MARK: - Playfield: towers + bases (towers fight; enemy base fans + summons)
     private func buildStructures() {
-        // Towers fight: blue (player) at left, red (enemy) at right.
-        addTower(at: Balance.playerTowerX, team: .player)
-        addTower(at: Balance.enemyTowerX, team: .enemy)
+        // Towers fight: blue pair (player) at left, red pair (enemy) at right.
+        for x in Balance.playerTowerXs { addTower(at: x, team: .player) }
+        for x in Balance.enemyTowerXs { addTower(at: x, team: .enemy) }
         // Main HQs (pixel-art BaseNodes): the enemy base is the encounter
         // (HP bar, 3-bolt fan, summoner). Player base tracks HP for
         // enemy attacks; no shooting (lose screen lands later).
@@ -260,8 +268,9 @@ final class GameScene: SKScene {
         let tower = TowerNode(team: team)
         tower.position = CGPoint(x: x, y: Balance.groundTopY)
         world.addChild(tower)
-        // Stagger first shots so both towers don't volley on the same frame.
-        let stagger = team == .player ? 0.0 : Balance.towerFireCooldown / 2
+        // Stagger first shots round-robin so the line doesn't volley
+        // on the same frame.
+        let stagger = Double(towers.count) * Balance.towerFireCooldown / 4
         towers.append(Tower(node: tower, team: team, hp: Balance.towerHP,
                             maxHP: Balance.towerHP, cooldown: stagger))
     }
@@ -294,6 +303,13 @@ final class GameScene: SKScene {
 
     // MARK: - Camera + parallax update
     private var halfViewWidth: CGFloat { size.width * cam.xScale / 2 }
+
+    /// World x-range currently on screen (plus a margin). Victory-marching
+    /// armies leave the field once they step outside it.
+    private func cameraSpan(margin: CGFloat) -> ClosedRange<CGFloat> {
+        let hw = halfViewWidth + margin
+        return (cam.position.x - hw)...(cam.position.x + hw)
+    }
     private var halfViewHeight: CGFloat { size.height * cam.xScale / 2 }
 
     private func cameraTarget() -> CGPoint {
@@ -337,7 +353,13 @@ final class GameScene: SKScene {
 
     override func update(_ currentTime: TimeInterval) {
         frameCount += 1
-        let dt = lastUpdate > 0 ? currentTime - lastUpdate : 1.0 / 60
+        var dt = lastUpdate > 0 ? currentTime - lastUpdate : 1.0 / 60
+        // Pause/hitch guard: while the pause menu is up update() stops, so
+        // the first frame after resume would see a seconds-long dt — snapping
+        // the camera (rate = min(1, 6*dt) = 1) and teleporting the sim.
+        // Clamp it so resume continues exactly where the frame froze.
+        // (Unpausing also invalidates lastUpdate; see isPaused override.)
+        if dt > 1.0 / 30 || dt < 0 { dt = 1.0 / 60 }
         lastUpdate = currentTime
         sceneTime += dt
         hero.step(dt: dt, now: currentTime)
@@ -726,9 +748,15 @@ final class GameScene: SKScene {
         world.addChild(puff)
     }
 
+    /// Nearest alive tower of a team to a world x — layered defense
+    /// falls outer-first as marchers chew inward.
+    private func nearestTower(team: Team, toX x: CGFloat) -> Tower? {
+        towers.filter { $0.team == team && $0.alive }
+            .min(by: { abs($0.node.position.x - x) < abs($1.node.position.x - x) })
+    }
+
     // MARK: - Summoned enemies: advance, stop at range, shoot bolts
     private func updateEnemies(dt: TimeInterval) {
-        let playerTower = towers.first(where: { $0.team == .player })
         let playerBase = bases.first(where: { $0.team == .player })
         for e in enemies {
             guard e.alive else { continue }
@@ -753,7 +781,7 @@ final class GameScene: SKScene {
                 }
                 if let bestAlly {
                     target = bestAlly
-                } else if let tower = playerTower, tower.alive {
+                } else if let tower = nearestTower(team: .player, toX: e.position.x) {
                     target = CGPoint(x: tower.node.position.x,
                                      y: Balance.groundTopY + 100)
                 } else if let base = playerBase, base.alive {
@@ -764,6 +792,20 @@ final class GameScene: SKScene {
             guard let aim = target else {
                 // Nothing left to fight: hold position.
                 e.aimAt(nil)
+                // ...unless the player HQ is rubble: victory march past it
+                // until out of the camera view, then leave the field.
+                if playerBase?.alive == false {
+                    e.face(-1)
+                    e.position.x = max(40, e.position.x - Balance.enemySpeed * CGFloat(dt))
+                    e.animateMarch(dt: dt, advancing: true)
+                    e.position.y = Balance.groundTopY + e.size.height / 2 + e.yBob
+                    if !cameraSpan(margin: 80).contains(e.position.x)
+                        || e.position.x <= 50 {
+                        e.marchedOff = true
+                        e.removeFromParent()
+                    }
+                    continue
+                }
                 e.animateMarch(dt: dt, advancing: false)
                 e.position.y = Balance.groundTopY + e.size.height / 2
                 continue
@@ -788,7 +830,7 @@ final class GameScene: SKScene {
             e.position.y = Balance.groundTopY + e.size.height / 2 + e.yBob
         }
         // Sweep the dead (gold was already paid at kill time).
-        enemies.removeAll { !$0.alive }
+        enemies.removeAll { !$0.alive || $0.marchedOff }
     }
 
     /// Enemy trooper bolt: from the rifle tip toward the target, enemy team.
@@ -834,7 +876,6 @@ final class GameScene: SKScene {
     }
 
     private func updateAllies(dt: TimeInterval) {
-        let enemyTower = towers.first(where: { $0.team == .enemy })
         let enemyBase = bases.first(where: { $0.team == .enemy })
         for a in allies {
             guard a.alive else { continue }
@@ -854,13 +895,28 @@ final class GameScene: SKScene {
             }
             if let bestEnemy {
                 target = bestEnemy
-            } else if let tower = enemyTower, tower.alive {
+            } else if let tower = nearestTower(team: .enemy, toX: a.position.x) {
                 target = CGPoint(x: tower.node.position.x, y: Balance.groundTopY + 100)
             } else if let base = enemyBase, base.alive {
                 target = CGPoint(x: base.node.position.x, y: Balance.groundTopY + 100)
             }
             guard let aim = target else {
                 a.aimAt(nil)
+                // ...unless the enemy HQ is rubble: victory march past it
+                // until out of the camera view, then leave the field.
+                if enemyBase?.alive == false {
+                    a.face(1)
+                    a.position.x = min(Balance.levelWidth - 40,
+                                       a.position.x + a.kind.speed * CGFloat(dt))
+                    a.animateMarch(dt: dt, advancing: true)
+                    a.position.y = Balance.groundTopY + a.size.height / 2 + a.yBob
+                    if !cameraSpan(margin: 80).contains(a.position.x)
+                        || a.position.x >= Balance.levelWidth - 50 {
+                        a.marchedOff = true
+                        a.removeFromParent()
+                    }
+                    continue
+                }
                 a.animateMarch(dt: dt, advancing: false)
                 a.position.y = Balance.groundTopY + a.size.height / 2
                 continue
@@ -883,7 +939,7 @@ final class GameScene: SKScene {
             }
             a.position.y = Balance.groundTopY + a.size.height / 2 + a.yBob
         }
-        allies.removeAll { !$0.alive }
+        allies.removeAll { !$0.alive || $0.marchedOff }
     }
 
     /// Friendly bolt: player team so it hurts marchers + enemy structures.
@@ -1118,10 +1174,10 @@ final class GameScene: SKScene {
         let v = hero?.velocity ?? .zero
         let g = hero?.isGrounded ?? false
         let p = hero?.position ?? .zero
-        let ptHP = towers.first(where: { $0.team == .player })?.hp ?? 0
-        let etHP = towers.first(where: { $0.team == .enemy })?.hp ?? 0
+        let ptHP = towers.filter { $0.team == .player }.map { String(Int($0.hp)) }.joined(separator: "+")
+        let etHP = towers.filter { $0.team == .enemy }.map { String(Int($0.hp)) }.joined(separator: "+")
         let ebHP = bases.first(where: { $0.team == .enemy })?.hp ?? 0
-        return String(format: "f%d pos %4.0f,%4.0f in %+.2f jmp %@ | v %+4.0f,%+5.0f gnd %@ shots %d hero %3.0f tw P %3.0f/E %3.0f ebase %3.0f en %d al %d $%d",
+        return String(format: "f%d pos %4.0f,%4.0f in %+.2f jmp %@ | v %+4.0f,%+5.0f gnd %@ shots %d hero %3.0f tw P %@/E %@ ebase %3.0f en %d al %d $%d",
                       frameCount, p.x, p.y, heroInputX, heroJumpHeld ? "Y" : "n",
                       v.dx, v.dy, g ? "Y" : "n", shotsFired, heroHP, ptHP, etHP, ebHP, enemies.count, allies.count, money)
     }
@@ -1134,8 +1190,8 @@ final class GameScene: SKScene {
             cameraX: cam.position.x,
             viewWidth: size.width * cam.xScale,
             playerBaseX: Balance.playerBaseX,
-            playerTowerX: Balance.playerTowerX,
-            enemyTowerX: Balance.enemyTowerX,
+            playerTowerXs: Balance.playerTowerXs,
+            enemyTowerXs: Balance.enemyTowerXs,
             enemyBaseX: Balance.enemyBaseX,
             heroHP: heroHP,
             heroMaxHP: Balance.heroHP,
@@ -1156,7 +1212,6 @@ final class GameScene: SKScene {
     }
 
     // MARK: - Drops (dead enemies randomly leave ammo/health for the hero)
-    private enum DropKind { case health, ammo }
     private struct Drop {
         var node: SKNode
         var kind: DropKind
@@ -1166,15 +1221,20 @@ final class GameScene: SKScene {
     }
     private var drops: [Drop] = []
 
-    /// Rolls a drop at the dead enemy's spot. Full-HP heroes always get
-    /// ammo; otherwise it's a coin flip between a heal and ammo.
+    /// Rolls a drop at the dead enemy's spot. The overall chance never
+    /// changes (Balance.dropChance); money just joins the table.
+    /// Full-HP heroes split ammo/money; otherwise health/ammo/money thirds.
     private func maybeSpawnDrop(at pos: CGPoint) {
         guard Double.random(in: 0..<1) < Balance.dropChance else { return }
         let kind: DropKind
-        if heroHP >= Balance.heroHP || Double.random(in: 0..<1) < 0.5 {
-            kind = .ammo
+        if heroHP >= Balance.heroHP {
+            kind = Bool.random() ? .ammo : .money
         } else {
-            kind = .health
+            switch Int.random(in: 0..<3) {
+            case 0: kind = .health
+            case 1: kind = .ammo
+            default: kind = .money
+            }
         }
         let node = makeDropNode(kind: kind)
         node.position = CGPoint(
@@ -1187,46 +1247,28 @@ final class GameScene: SKScene {
                           phase: Double.random(in: 0..<(2 * .pi))))
     }
 
-    /// Floating pickup visual: glowing medkit (green cross) or ammo crate
-    /// (yellow rounds), bobbed by updateDrops.
+    /// Floating pickup visual: pixel medkit / ammo crate (see DropArt)
+    /// over a soft team glow, bobbed by updateDrops.
     private func makeDropNode(kind: DropKind) -> SKNode {
         let root = SKNode()
-        let glowColor: SKColor = kind == .health
-            ? SKColor(red: 0.2, green: 1.0, blue: 0.4, alpha: 1)
-            : SKColor(red: 1.0, green: 0.85, blue: 0.25, alpha: 1)
+        let glowColor: SKColor
+        switch kind {
+        case .health:
+            glowColor = SKColor(red: 0.2, green: 1.0, blue: 0.4, alpha: 1)
+        case .ammo:
+            glowColor = SKColor(red: 1.0, green: 0.85, blue: 0.25, alpha: 1)
+        case .money:
+            glowColor = SKColor(red: 1.0, green: 0.65, blue: 0.15, alpha: 1)
+        }
         let glow = SKShapeNode(circleOfRadius: 17)
         glow.fillColor = glowColor.withAlphaComponent(0.25)
         glow.strokeColor = glowColor.withAlphaComponent(0.9)
         glow.lineWidth = 2
         root.addChild(glow)
-        switch kind {
-        case .health:
-            let box = SKShapeNode(rectOf: CGSize(width: 20, height: 20), cornerRadius: 4)
-            box.fillColor = SKColor(red: 0.1, green: 0.7, blue: 0.3, alpha: 1)
-            box.strokeColor = .clear
-            root.addChild(box)
-            let barH = SKShapeNode(rectOf: CGSize(width: 12, height: 4), cornerRadius: 2)
-            barH.fillColor = .white
-            barH.strokeColor = .clear
-            root.addChild(barH)
-            let barV = SKShapeNode(rectOf: CGSize(width: 4, height: 12), cornerRadius: 2)
-            barV.fillColor = .white
-            barV.strokeColor = .clear
-            root.addChild(barV)
-        case .ammo:
-            let crate = SKShapeNode(rectOf: CGSize(width: 24, height: 16), cornerRadius: 2)
-            crate.fillColor = SKColor(white: 0.15, alpha: 1)
-            crate.strokeColor = glowColor
-            crate.lineWidth = 2
-            root.addChild(crate)
-            for x in [-6, 0, 6] as [CGFloat] {
-                let round = SKShapeNode(rectOf: CGSize(width: 4, height: 10), cornerRadius: 2)
-                round.fillColor = glowColor
-                round.strokeColor = .clear
-                round.position = CGPoint(x: x, y: 0)
-                root.addChild(round)
-            }
-        }
+        let sprite = SKSpriteNode(texture: DropArt.texture(for: kind))
+        sprite.setScale(2) // 20px canvas -> ~40pt pickup
+        sprite.position = CGPoint(x: 0, y: 2)
+        root.addChild(sprite)
         return root
     }
 
@@ -1270,6 +1312,11 @@ final class GameScene: SKScene {
             }
             floatText("+AMMO",
                       color: SKColor(red: 1.0, green: 0.85, blue: 0.3, alpha: 1),
+                      at: d.node.position)
+        case .money:
+            money += Balance.dropMoney
+            floatText("+\(Balance.dropMoney)",
+                      color: SKColor(red: 1.0, green: 0.75, blue: 0.25, alpha: 1),
                       at: d.node.position)
         }
         let puff = ProjectileFactory.makeImpactPuff()

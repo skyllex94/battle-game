@@ -174,8 +174,9 @@ enum GroundArt {
 
     /// X-centres to keep decoration out of (bases, towers, hero spawn).
     private static var clearZones: [ClosedRange<CGFloat>] {
-        [Balance.playerBaseX, Balance.heroSpawnX, Balance.playerTowerX,
-         Balance.enemyTowerX, Balance.enemyBaseX].map { ($0 - 150)...($0 + 150) }
+        (Balance.playerTowerXs + Balance.enemyTowerXs
+         + [Balance.playerBaseX, Balance.heroSpawnX, Balance.enemyBaseX])
+            .map { ($0 - 150)...($0 + 150) }
     }
 
     private static func isClear(_ x: CGFloat) -> Bool {

@@ -21,8 +21,8 @@ struct GameView: View {
     @State private var minimap = MinimapSnapshot(levelWidth: Balance.levelWidth, heroX: Balance.heroSpawnX,
                                                  cameraX: 0, viewWidth: 1334,
                                                  playerBaseX: Balance.playerBaseX,
-                                                 playerTowerX: Balance.playerTowerX,
-                                                 enemyTowerX: Balance.enemyTowerX,
+                                                  playerTowerXs: Balance.playerTowerXs,
+                                                  enemyTowerXs: Balance.enemyTowerXs,
                                                  enemyBaseX: Balance.enemyBaseX,
                                                  heroHP: Balance.heroHP, heroMaxHP: Balance.heroHP,
                                                  money: Balance.startingGold)
@@ -48,8 +48,8 @@ struct GameView: View {
             // screens via ViewThatFits.
             VStack(spacing: 0) {
                 ViewThatFits(in: .horizontal) {
-                    commandBar(minimapWidth: 300)
-                    commandBar(minimapWidth: 210)
+                    commandBar(minimapWidth: 230)
+                    commandBar(minimapWidth: 160)
                 }
                 Spacer()
                     .allowsHitTesting(false)
@@ -82,43 +82,43 @@ struct GameView: View {
                         showMenu = false
                         scene.isPaused = false
                     }
-                VStack(spacing: 14) {
-                    Text("Paused")
-                        .font(.title2.bold())
+                VStack(spacing: 12) {
+                    Text("PAUSED")
+                        .font(.system(size: 20, weight: .black, design: .monospaced))
+                        .tracking(4)
                         .foregroundStyle(.white)
-                    Button("Resume") {
+                    // Pixel divider: line — diamond — line.
+                    HStack(spacing: 6) {
+                        Rectangle().fill(.cyan.opacity(0.6)).frame(width: 52, height: 2)
+                        Rectangle().fill(.cyan).frame(width: 8, height: 8)
+                        Rectangle().fill(.cyan.opacity(0.6)).frame(width: 52, height: 2)
+                    }
+                    PixelMenuButton(title: "Resume", style: .primary) {
                         showMenu = false
                         scene.isPaused = false
                     }
-                    .font(.headline)
-                    .padding(.horizontal, 40).padding(.vertical, 10)
-                    .background(.cyan)
-                    .foregroundStyle(.black)
-                    .clipShape(Capsule())
-                    Button("Restart Level") {
+                    PixelMenuButton(title: "Restart Level", style: .ghost) {
                         scene.resetLevel()
                         scene.heroInputX = moveX
                         scene.heroJumpHeld = jumpHeld
                         weapon = scene.heroWeapon
                         showMenu = false
                     }
-                    .font(.headline)
-                    .padding(.horizontal, 40).padding(.vertical, 10)
-                    .background(.white.opacity(0.15))
-                    .foregroundStyle(.white)
-                    .clipShape(Capsule())
-                    Button("Quit to Menu") {
+                    PixelMenuButton(title: "Quit to Menu", style: .danger) {
                         dismiss()
                     }
-                    .font(.headline)
-                    .padding(.horizontal, 40).padding(.vertical, 10)
-                    .background(.white.opacity(0.15))
-                    .foregroundStyle(.red)
-                    .clipShape(Capsule())
+                    Text("TAP OUTSIDE TO RESUME")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(2)
+                        .foregroundStyle(.white.opacity(0.4))
+                        .padding(.top, 2)
                 }
-                .padding(30)
-                .background(.black.opacity(0.75))
-                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .padding(.horizontal, 26)
+                .padding(.vertical, 24)
+                .background(.black.opacity(0.88))
+                .clipShape(PixelPanelShape(cut: 10))
+                .overlay(PixelPanelShape(cut: 10).stroke(.cyan.opacity(0.55), lineWidth: 3))
+                .shadow(color: .cyan.opacity(0.15), radius: 16)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -139,28 +139,28 @@ struct GameView: View {
     /// Minimap width is parameterized so narrow screens get a compact strip.
     @ViewBuilder
     private func commandBar(minimapWidth: CGFloat) -> some View {
-        HStack(alignment: .center, spacing: 8) {
+        HStack(alignment: .center, spacing: 6) {
             // Weapon switch: tap to rotate Blaster -> Scatter -> Cannon.
             // Live mag/reserve readout (3/30); REL while reloading, red when dry.
             Button { weapon = scene.cycleWeapon() } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     // Little square with the actual pixel gun of the active
                     // weapon — oversized so it breaks out of the frame.
                     ZStack {
                         Rectangle()
-                            .fill(.cyan.opacity(0.18))
-                            .frame(width: 30, height: 30)
-                            .overlay(Rectangle().stroke(.cyan.opacity(0.6), lineWidth: 2))
+                            .fill(.cyan.opacity(0.14))
+                            .frame(width: 28, height: 28)
+                            .overlay(Rectangle().stroke(.cyan.opacity(0.5), lineWidth: 1))
                         Image(uiImage: PixelHeroArt.gunImage(weapon))
                             .interpolation(.none)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .frame(width: 42, height: 23)
+                            .frame(width: 38, height: 21)
                             .offset(x: 3, y: -5)
                             .allowsHitTesting(false)
                     }
-                    .frame(width: 30, height: 30)
-                    .padding(.trailing, 8)
+                    .frame(width: 28, height: 28)
+                    .padding(.trailing, 6)
                     Text(minimap.ammoText)
                         .monospacedDigit()
                         .foregroundStyle(minimap.ammoMag == 0 ? .red
@@ -168,21 +168,21 @@ struct GameView: View {
                     Image(systemName: "arrow.2.circlepath")
                         .foregroundStyle(.white.opacity(0.55))
                 }
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                .padding(.horizontal, 10).padding(.vertical, 7)
-                .background(.cyan.opacity(0.16))
-                .overlay(Rectangle().stroke(.cyan.opacity(0.6), lineWidth: 2))
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .padding(.horizontal, 8).padding(.vertical, 6)
+                .background(.cyan.opacity(0.12))
+                .overlay(Rectangle().stroke(.cyan.opacity(0.45), lineWidth: 1))
             }
 
             HUDDivider()
 
             // Treasury.
-            HStack(spacing: 4) {
-                Image(systemName: "dollarsign.circle.fill")
+            HStack(spacing: 5) {
+                PixelCoinView()
                 Text("\(minimap.money)")
                     .monospacedDigit()
             }
-            .font(.system(size: 12, weight: .bold, design: .monospaced))
+            .font(.system(size: 11, weight: .bold, design: .monospaced))
             .foregroundStyle(.yellow)
 
             HUDDivider()
@@ -191,13 +191,10 @@ struct GameView: View {
             HeroHealthBar(hp: minimap.heroHP, maxHP: minimap.heroMaxHP)
                 .allowsHitTesting(false)
 
-            Spacer(minLength: 4)
+            Spacer(minLength: 2)
                 .allowsHitTesting(false)
 
             MinimapView(snap: minimap, stripWidth: minimapWidth)
-                .allowsHitTesting(false)
-
-            Spacer(minLength: 4)
                 .allowsHitTesting(false)
 
             HUDDivider()
@@ -208,18 +205,18 @@ struct GameView: View {
                 showMenu = true
             } label: {
                 Image(systemName: "pause.fill")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 30, height: 30)
-                    .background(.white.opacity(0.12))
-                    .overlay(Rectangle().stroke(.white.opacity(0.25), lineWidth: 2))
+                    .frame(width: 28, height: 28)
+                    .background(.white.opacity(0.10))
+                    .overlay(Rectangle().stroke(.white.opacity(0.22), lineWidth: 1))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.black.opacity(0.78))
-        .clipShape(PixelTopBarShape(cut: 7))
-        .overlay(PixelTopBarShape(cut: 7).stroke(.white.opacity(0.2), lineWidth: 3))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.black.opacity(0.72))
+        .clipShape(PixelTopBarShape(cut: 6))
+        .overlay(PixelTopBarShape(cut: 6).stroke(.white.opacity(0.16), lineWidth: 2))
     }
 }
 
@@ -260,6 +257,73 @@ private struct PixelTopBarShape: Shape {
         p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - cut))
         p.closeSubpath()
         return p
+    }
+}
+
+/// Pixel panel: all four corners chamfered — the dialog/card shape.
+/// Hard stepped edges read as retro pixel UI (no smooth rounds).
+private struct PixelPanelShape: Shape {
+    var cut: CGFloat = 10
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX + cut, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX - cut, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + cut))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - cut))
+        p.addLine(to: CGPoint(x: rect.maxX - cut, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX + cut, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - cut))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY + cut))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Pixel pause-menu button: chamfered hard corners, chunky border,
+/// uppercase monospaced label. Primary = cyan fill, ghost = dark with
+/// light border, danger = dark with red border + red text.
+private struct PixelMenuButton: View {
+    enum Style { case primary, ghost, danger }
+    let title: String
+    let style: Style
+    let onTap: () -> Void
+    private let shape = PixelPanelShape(cut: 6)
+
+    var body: some View {
+        Button(action: onTap) {
+            Text(title.uppercased())
+                .font(.system(size: 13, weight: .black, design: .monospaced))
+                .tracking(2)
+                .foregroundStyle(fg)
+                .frame(width: 220, height: 42)
+                .background(bg)
+                .clipShape(shape)
+                .overlay(shape.stroke(border, lineWidth: 2))
+        }
+    }
+
+    private var bg: Color {
+        switch style {
+        case .primary: return .cyan
+        case .ghost: return .white.opacity(0.08)
+        case .danger: return .red.opacity(0.10)
+        }
+    }
+
+    private var border: Color {
+        switch style {
+        case .primary: return .white.opacity(0.65)
+        case .ghost: return .white.opacity(0.35)
+        case .danger: return .red.opacity(0.7)
+        }
+    }
+
+    private var fg: Color {
+        switch style {
+        case .primary: return .black
+        case .ghost: return .white
+        case .danger: return .red
+        }
     }
 }
 
@@ -326,8 +390,8 @@ private struct ArmyCardButton: View {
 private struct HUDDivider: View {
     var body: some View {
         Rectangle()
-            .fill(.white.opacity(0.15))
-            .frame(width: 1, height: 22)
+            .fill(.white.opacity(0.14))
+            .frame(width: 1, height: 20)
             .allowsHitTesting(false)
     }
 }
@@ -350,19 +414,17 @@ private struct HeroHealthBar: View {
     }
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "heart.fill")
-                .font(.caption2)
-                .foregroundStyle(color)
+        HStack(spacing: 5) {
+            PixelHeartView(color: color)
             ZStack(alignment: .leading) {
-                Rectangle()
-                    .fill(.white.opacity(0.18))
-                    .frame(width: 90, height: 10)
-                Rectangle()
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(.white.opacity(0.16))
+                    .frame(width: 70, height: 8)
+                RoundedRectangle(cornerRadius: 3)
                     .fill(color)
-                    .frame(width: 90 * frac, height: 10)
+                    .frame(width: 70 * frac, height: 8)
             }
-            .overlay(Rectangle().stroke(.white.opacity(0.25), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 3).stroke(.white.opacity(0.22), lineWidth: 1))
             Text("\(Int(hp))/\(Int(maxHP))")
                 .font(.caption2.bold())
                 .monospacedDigit()
@@ -370,5 +432,80 @@ private struct HeroHealthBar: View {
                 .fixedSize(horizontal: true, vertical: false)
                 .foregroundStyle(.white)
         }
+    }
+}
+
+/// Crisp pixel-grid sprite renderer: each character is one hard-edged
+/// square, "." is transparent. Vector rects so it stays sharp at any size.
+private struct PixelSpriteView: View {
+    let grid: [String]
+    let palette: [Character: Color]
+    var pixel: CGFloat = 2
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(grid.indices, id: \.self) { r in
+                HStack(spacing: 0) {
+                    ForEach(Array(grid[r]).indices, id: \.self) { c in
+                        let ch = Array(grid[r])[c]
+                        if ch == "." {
+                            Color.clear.frame(width: pixel, height: pixel)
+                        } else {
+                            (palette[ch] ?? .white)
+                                .frame(width: pixel, height: pixel)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Pixel-art gold coin for the treasury: dark outline, pale shine,
+/// deep inner notch so it reads as a coin, not a dot.
+private struct PixelCoinView: View {
+    private let grid = [
+        "..OOOO..",
+        ".OllllO.",
+        "OlLGGGGO",
+        "OLGGGGGO",
+        "OGGGGGGO",
+        "OGGDDGGO",
+        ".OggggO.",
+        "..OOOO..",
+    ]
+    var body: some View {
+        PixelSpriteView(grid: grid, palette: [
+            "O": Color(red: 0.25, green: 0.15, blue: 0.05),
+            "G": Color(red: 1.0, green: 0.80, blue: 0.20),
+            "g": Color(red: 0.75, green: 0.50, blue: 0.10),
+            "l": Color(red: 1.0, green: 0.95, blue: 0.70),
+            "L": .white,
+            "D": Color(red: 0.55, green: 0.32, blue: 0.06),
+        ], pixel: 1.75)
+        .shadow(color: .yellow.opacity(0.35), radius: 2)
+    }
+}
+
+/// Pixel-art heart for the vitals: dark outline, white glint, body tinted
+/// by the same HP color as the bar (green -> orange -> red).
+private struct PixelHeartView: View {
+    let color: Color
+    private let grid = [
+        "..OO.OO..",
+        ".OrrOrrO.",
+        "OrrLrrrrO",
+        "OrrrrrrrO",
+        "OrrrrrrrO",
+        ".OrrrrrO.",
+        "..OrrrO..",
+        "...OOO...",
+    ]
+    var body: some View {
+        PixelSpriteView(grid: grid, palette: [
+            "O": Color(white: 0.08),
+            "r": color,
+            "L": .white,
+        ], pixel: 1.5)
     }
 }

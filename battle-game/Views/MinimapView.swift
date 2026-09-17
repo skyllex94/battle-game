@@ -1,95 +1,120 @@
 import SwiftUI
 
-/// Top-center lane minimap: ground line, base squares, tower dots (blue = you,
-/// red = enemy), hero diamond, and a white viewport box showing what the
-/// camera currently sees. Driven by a MinimapSnapshot polled at ~7Hz.
+/// Top-center lane minimap: slim dusk-styled strip with territory tint,
+/// glowing structure marks (blue = you, red = enemy), unit dots, hero
+/// diamond, and a viewport box showing what the camera currently sees.
+/// Driven by a MinimapSnapshot polled at ~7Hz.
 struct MinimapView: View {
     let snap: MinimapSnapshot
-    /// Lane strip width. The HUD embeds a compact 210pt version on narrow
-    /// screens (via ViewThatFits); defaults to the full 300pt strip.
-    var stripWidth: CGFloat = 300
-    private let stripHeight: CGFloat = 38
-    private let inset: CGFloat = 8
+    /// Lane strip width. The HUD embeds a compact 160pt version on narrow
+    /// screens (via ViewThatFits); defaults to the slim 230pt strip.
+    var stripWidth: CGFloat = 230
+    private let stripHeight: CGFloat = 28
+    private let inset: CGFloat = 7
 
     private func x(_ worldX: CGFloat) -> CGFloat {
         if snap.levelWidth <= 0 { return 0 }
         let frac: CGFloat = worldX / snap.levelWidth
-        let scaled: CGFloat = frac * stripWidth
-        return scaled
+        return frac * stripWidth
     }
 
     private var viewportWidth: CGFloat {
         let frac: CGFloat = snap.viewWidth / snap.levelWidth
-        let scaled: CGFloat = frac * stripWidth
-        return max(8.0, scaled)
+        return max(8.0, frac * stripWidth)
     }
 
     var body: some View {
         ZStack {
-            Rectangle()
-                .fill(.black.opacity(0.55))
-                .frame(width: stripWidth + 16.0, height: stripHeight + 8.0)
-                .overlay(Rectangle().stroke(.white.opacity(0.25), lineWidth: 2))
+            // Outer shell: dark pill + hairline border.
+            RoundedRectangle(cornerRadius: 7)
+                .fill(.black.opacity(0.62))
+                .frame(width: stripWidth + 14, height: stripHeight + 8)
+            RoundedRectangle(cornerRadius: 7)
+                .stroke(.white.opacity(0.18), lineWidth: 1)
+                .frame(width: stripWidth + 14, height: stripHeight + 8)
 
-            // Viewport box (what the camera sees).
-            ZStack {
-                Rectangle().fill(.white.opacity(0.08))
-                Rectangle().stroke(.white.opacity(0.7), lineWidth: 1)
-            }
-            .frame(width: viewportWidth, height: stripHeight - 6.0)
-            .position(x: inset + x(snap.cameraX), y: (stripHeight + 8.0) / 2.0)
+            // Territory tint: blue home -> neutral mid -> red home.
+            LinearGradient(
+                stops: [
+                    .init(color: .blue.opacity(0.30), location: 0),
+                    .init(color: .blue.opacity(0.06), location: 0.32),
+                    .init(color: .white.opacity(0.03), location: 0.5),
+                    .init(color: .red.opacity(0.06), location: 0.68),
+                    .init(color: .red.opacity(0.30), location: 1),
+                ],
+                startPoint: .leading, endPoint: .trailing
+            )
+            .frame(width: stripWidth, height: 10)
+            .clipShape(RoundedRectangle(cornerRadius: 3))
+            .position(x: inset + stripWidth / 2, y: stripHeight - 5)
 
-            // Ground line.
+            // Ground hairline.
             Rectangle()
-                .fill(.white.opacity(0.35))
-                .frame(width: stripWidth, height: 2.0)
-                .position(x: inset + stripWidth / 2.0, y: stripHeight - 2.0)
+                .fill(.white.opacity(0.30))
+                .frame(width: stripWidth, height: 1)
+                .position(x: inset + stripWidth / 2, y: stripHeight - 2)
 
             // Midfield tick.
             Rectangle()
-                .fill(.white.opacity(0.5))
-                .frame(width: 2.0, height: 8.0)
-                .position(x: inset + stripWidth / 2.0, y: stripHeight - 6.0)
+                .fill(.white.opacity(0.45))
+                .frame(width: 1, height: 6)
+                .position(x: inset + stripWidth / 2, y: stripHeight - 6)
 
-            // Bases (squares) + towers (dots).
-            minimapMark(worldX: snap.playerBaseX, size: 10.0, color: .blue, square: true)
-            minimapMark(worldX: snap.playerTowerX, size: 7.0, color: .blue, square: false)
-            minimapMark(worldX: snap.enemyTowerX, size: 7.0, color: .red, square: false)
-            minimapMark(worldX: snap.enemyBaseX, size: 10.0, color: .red, square: true)
+            // Viewport box (what the camera sees).
+            ZStack {
+                RoundedRectangle(cornerRadius: 2).fill(.white.opacity(0.10))
+                RoundedRectangle(cornerRadius: 2).stroke(.white.opacity(0.65), lineWidth: 1)
+            }
+            .frame(width: viewportWidth, height: stripHeight - 8)
+                .position(x: inset + x(snap.cameraX), y: (stripHeight + 8) / 2 - 1)
+                .allowsHitTesting(false)
 
-            // Unit dots: player army (cyan) + enemy marchers (red, smaller
-            // than the tower dots so structures still read first).
+            // Bases (rounded squares, glowing) + towers (dots, glowing, two per side).
+            minimapMark(worldX: snap.playerBaseX, size: 8, color: .blue, square: true)
+            ForEach(snap.playerTowerXs, id: \.self) { tx in
+                minimapMark(worldX: tx, size: 5, color: .blue, square: false)
+            }
+            ForEach(snap.enemyTowerXs, id: \.self) { tx in
+                minimapMark(worldX: tx, size: 5, color: .red, square: false)
+            }
+            minimapMark(worldX: snap.enemyBaseX, size: 8, color: .red, square: true)
+
+            // Unit dots: player army (cyan) + enemy marchers (pink-red).
             ForEach(snap.allyXs.indices, id: \.self) { i in
                 Circle()
                     .fill(.cyan)
-                    .frame(width: 5, height: 5)
-                    .position(x: inset + x(snap.allyXs[i]), y: stripHeight - 12.0)
+                    .frame(width: 4, height: 4)
+                    .shadow(color: .cyan.opacity(0.8), radius: 2)
+                    .position(x: inset + x(snap.allyXs[i]), y: stripHeight - 11)
             }
             ForEach(snap.enemyXs.indices, id: \.self) { i in
                 Circle()
-                    .fill(.red)
-                    .frame(width: 5, height: 5)
-                    .position(x: inset + x(snap.enemyXs[i]), y: stripHeight - 12.0)
+                    .fill(Color(red: 1, green: 0.35, blue: 0.4))
+                    .frame(width: 4, height: 4)
+                    .shadow(color: .red.opacity(0.8), radius: 2)
+                    .position(x: inset + x(snap.enemyXs[i]), y: stripHeight - 11)
             }
 
-            // Hero diamond (drawn last so it stays on top of unit dots).
+            // Hero diamond on top, outlined so it reads over dots.
             Image(systemName: "diamond.fill")
-                .font(.system(size: 11))
+                .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(.white)
-                .position(x: inset + x(snap.heroX), y: stripHeight - 12.0)
+                .shadow(color: .black.opacity(0.9), radius: 1)
+                .position(x: inset + x(snap.heroX), y: stripHeight - 11)
         }
-        .frame(width: stripWidth + 16.0, height: stripHeight + 8.0)
+        .frame(width: stripWidth + 14, height: stripHeight + 8)
     }
 
     private func minimapMark(worldX: CGFloat, size: CGFloat, color: Color, square: Bool) -> some View {
         Group {
             if square {
-                Rectangle().fill(color)
+                RoundedRectangle(cornerRadius: 1.5).fill(color)
             } else {
                 Circle().fill(color)
             }
         }
         .frame(width: size, height: size)
-        .position(x: inset + x(worldX), y: stripHeight - 6.0)
+        .shadow(color: color.opacity(0.8), radius: 2)
+        .position(x: inset + x(worldX), y: stripHeight - 7)
     }
 }

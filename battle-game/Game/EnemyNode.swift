@@ -16,6 +16,9 @@ final class EnemyNode: SKSpriteNode {
     private var hpBarFill = SKSpriteNode()
     private var marchPhase: TimeInterval = 0
     private var body = SKNode()
+    /// Pixel sprite (2 walk frames) + cached frames for the march cycle.
+    private var bodySprite = SKSpriteNode()
+    private var frames: [SKTexture] = UnitPixelArt.frames(for: .enemy)
 
     init() {
         super.init(texture: nil, color: .clear, size: CGSize(width: 40, height: 64))
@@ -44,16 +47,6 @@ final class EnemyNode: SKSpriteNode {
 
     private func buildVisuals() {
         let h = size.height
-        let armorDark = SKColor(red: 0.16, green: 0.12, blue: 0.14, alpha: 1)
-        let armorRed = SKColor(red: 0.75, green: 0.16, blue: 0.14, alpha: 1)
-        let eyeGlow = SKColor(red: 1.0, green: 0.25, blue: 0.15, alpha: 1)
-
-        func part(_ size: CGSize, color: SKColor) -> SKShapeNode {
-            let n = SKShapeNode(rectOf: size, cornerRadius: size.width / 2)
-            n.fillColor = color
-            n.strokeColor = .clear
-            return n
-        }
 
         // Red glow disc so the dark sprite never melts into the hell ground.
         let glow = SKShapeNode(circleOfRadius: h * 0.52)
@@ -63,55 +56,13 @@ final class EnemyNode: SKSpriteNode {
         glow.zPosition = -1
         addChild(glow)
 
-        // Legs.
-        let legH = h * 0.32
-        let legL = part(CGSize(width: 12, height: legH), color: armorDark)
-        legL.position = CGPoint(x: -7, y: -h / 2 + legH / 2)
-        body.addChild(legL)
-        let legR = part(CGSize(width: 12, height: legH), color: armorDark)
-        legR.position = CGPoint(x: 7, y: -h / 2 + legH / 2)
-        body.addChild(legR)
-
-        // Torso + glowing red chest core.
-        let torso = part(CGSize(width: 32, height: h * 0.38), color: armorDark)
-        torso.position = CGPoint(x: 0, y: 2)
-        body.addChild(torso)
-        let core = part(CGSize(width: 12, height: 12), color: armorRed)
-        core.position = CGPoint(x: 6, y: 4)
-        body.addChild(core)
-
-        // Angular alien head + twin glowing eyes.
-        let head = SKShapeNode(rectOf: CGSize(width: 26, height: 20), cornerRadius: 6)
-        head.fillColor = armorDark
-        head.strokeColor = armorRed
-        head.lineWidth = 2
-        head.position = CGPoint(x: 2, y: h * 0.32)
-        body.addChild(head)
-        for x in [0, 12] as [CGFloat] {
-            let eye = SKShapeNode(circleOfRadius: 4)
-            eye.fillColor = eyeGlow
-            eye.strokeColor = .clear
-            eye.position = CGPoint(x: x, y: h * 0.32 + 2)
-            body.addChild(eye)
+        // Pixel sprite body: red alien invader with spike rifle.
+        if let first = frames.first {
+            bodySprite = SKSpriteNode(texture: first)
+            first.filteringMode = .nearest
+            bodySprite.setScale(size.height / first.size().height)
         }
-        // Antennae spikes.
-        for x in [-6, 10] as [CGFloat] {
-            let spike = SKShapeNode(rectOf: CGSize(width: 3, height: 12))
-            spike.fillColor = armorRed
-            spike.strokeColor = .clear
-            spike.position = CGPoint(x: x, y: h * 0.32 + 14)
-            spike.zRotation = x < 0 ? 0.3 : -0.3
-            body.addChild(spike)
-        }
-
-        // Rifle pointing +x.
-        let gun = part(CGSize(width: 32, height: 8), color: SKColor(white: 0.12, alpha: 1))
-        gun.position = CGPoint(x: 16, y: 2)
-        body.addChild(gun)
-        let tip = part(CGSize(width: 8, height: 10), color: armorRed)
-        tip.position = CGPoint(x: 30, y: 2)
-        body.addChild(tip)
-
+        body.addChild(bodySprite)
         addChild(body)
     }
 
@@ -140,9 +91,17 @@ final class EnemyNode: SKSpriteNode {
         addChild(hpBarFill)
     }
 
-    /// March animation: slight bob while advancing. Called by the scene.
+    /// March cycle: swaps the 2 pixel walk frames + bob while advancing.
+    /// Called by the scene.
     func animateMarch(dt: TimeInterval, advancing: Bool) {
-        if advancing { marchPhase += dt * 10 }
+        if advancing {
+            marchPhase += dt * 10
+            if frames.count == 2 {
+                bodySprite.texture = frames[Int(marchPhase) % 2]
+            }
+        } else if frames.count == 2 {
+            bodySprite.texture = frames[0]
+        }
         // Bob around the resting height the scene sets (offset only).
         yBob = advancing ? sin(marchPhase) * 2.5 : 0
         body.zRotation = advancing ? sin(marchPhase) * 0.03 : 0

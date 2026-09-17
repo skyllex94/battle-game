@@ -33,16 +33,38 @@ final class GameScene: SKScene {
     private var shotsFired = 0
     /// Active hero gun. The HUD weapon button cycles it via cycleWeapon().
     var heroWeapon: HeroWeapon = .blaster
+    // MARK: - Gun ammo (mag + reserve per gun, indexed by HeroWeapon.rawValue)
+    private var mags: [Int] = HeroWeapon.allCases.map { $0.magSize }
+    private var reserves: [Int] = HeroWeapon.allCases.map { $0.startReserve }
+    /// Gun currently reloading (background reloads keep running), if any.
+    private var reloadingWeapon: HeroWeapon?
+    private var reloadEndsAt: TimeInterval = -1
+    /// Desperation trickle for fully-starved guns (mag 0 + reserve 0).
+    private var regenAccumulator: TimeInterval = 0
 
     /// Switches to the next hero gun (blaster -> scatter -> cannon -> ...).
     /// Called by the HUD weapon button; the swapped gun fires instantly.
+    /// A swapped-in gun with an empty mag starts reloading on the spot.
     @discardableResult
     func cycleWeapon() -> HeroWeapon {
         let all = HeroWeapon.allCases
         heroWeapon = all[(heroWeapon.rawValue + 1) % all.count]
         hero?.setWeapon(heroWeapon)
         fireCooldown = 0
+        if mags[heroWeapon.rawValue] == 0 { startReload(gun: heroWeapon) }
         return heroWeapon
+    }
+
+    /// Begins a reload for one gun. One reload at a time; no-op when the mag
+    /// is already full, the reserve is dry, or another gun is reloading.
+    @discardableResult
+    private func startReload(gun: HeroWeapon) -> Bool {
+        guard reloadingWeapon == nil,
+              mags[gun.rawValue] < gun.magSize,
+              reserves[gun.rawValue] > 0 else { return false }
+        reloadingWeapon = gun
+        reloadEndsAt = sceneTime + gun.reloadTime
+        return true
     }
 
     // MARK: - Tower combat (proximity-triggered projectiles toward enemies)
@@ -61,14 +83,12 @@ final class GameScene: SKScene {
 
     // MARK: - Main bases (enemy base fans bolts + summons marchers)
     private struct Base {
-        var node: SKSpriteNode
+        var node: BaseNode
         var team: Team
         var hp: CGFloat
         var maxHP: CGFloat
         var cooldown: TimeInterval
         var summonTimer: TimeInterval
-        var hpBarBG: SKSpriteNode
-        var hpBarFill: SKSpriteNode
         var alive: Bool { hp > 0 }
     }
     private var bases: [Base] = []
@@ -131,6 +151,7 @@ final class GameScene: SKScene {
         bases = []
         enemies = []
         allies = []
+        drops = []
         heroHP = Balance.heroHP
         money = Balance.startingGold
         sceneTime = 0
@@ -143,6 +164,11 @@ final class GameScene: SKScene {
         shotsFired = 0
         frameCount = 0
         heroWeapon = .blaster
+        mags = HeroWeapon.allCases.map { $0.magSize }
+        reserves = HeroWeapon.allCases.map { $0.startReserve }
+        reloadingWeapon = nil
+        reloadEndsAt = -1
+        regenAccumulator = 0
         buildSky()
         buildFar()
         buildMid()
@@ -234,43 +260,12 @@ final class GameScene: SKScene {
     }
 
     // MARK: - Playfield: ground (factor 1.0)
+    /// Hell-lane dressing (see GroundArt): mirrored lava-crack tiling,
+    /// lit walkable rim, strata cliff, fading territory wash, rocks,
+    /// lava pools + looping embers.
     private func buildGround() {
         world.zPosition = 0
-        let texture = ImportedArt.skTexture(named: "Hell_ground")
-        texture.filteringMode = .nearest
-        let tileW: CGFloat = 500
-        let tileH: CGFloat = 87
-        var x: CGFloat = 0
-        while x < Balance.levelWidth {
-            let tile = SKSpriteNode(texture: texture)
-            tile.anchorPoint = CGPoint(x: 0, y: 1) // top edge = walkable surface
-            tile.size = CGSize(width: tileW, height: tileH)
-            tile.position = CGPoint(x: x, y: Balance.groundTopY)
-            tile.zPosition = 1
-            world.addChild(tile)
-            x += tileW
-        }
-        // Solid under-fill so gaps below the strip never show sky.
-        let fill = SKSpriteNode(color: SKColor(red: 0.13, green: 0.07, blue: 0.08, alpha: 1),
-                                size: CGSize(width: Balance.levelWidth, height: Balance.groundTopY))
-        fill.anchorPoint = CGPoint(x: 0, y: 1)
-        fill.position = CGPoint(x: 0, y: Balance.groundTopY - tileH)
-        fill.zPosition = 0
-        world.addChild(fill)
-
-        // Team-side ground tint: subtle blue (left half) / red (right half) wash.
-        let washL = SKSpriteNode(color: SKColor(red: 0.2, green: 0.4, blue: 1.0, alpha: 0.10),
-                                 size: CGSize(width: Balance.levelWidth / 2, height: tileH))
-        washL.anchorPoint = CGPoint(x: 0, y: 1)
-        washL.position = CGPoint(x: 0, y: Balance.groundTopY)
-        washL.zPosition = 2
-        world.addChild(washL)
-        let washR = SKSpriteNode(color: SKColor(red: 1.0, green: 0.25, blue: 0.2, alpha: 0.10),
-                                 size: CGSize(width: Balance.levelWidth / 2, height: tileH))
-        washR.anchorPoint = CGPoint(x: 0, y: 1)
-        washR.position = CGPoint(x: Balance.levelWidth / 2, y: Balance.groundTopY)
-        washR.zPosition = 2
-        world.addChild(washR)
+        GroundArt.dress(in: world)
     }
 
     // MARK: - Playfield: floating platforms
@@ -285,6 +280,7 @@ final class GameScene: SKScene {
             platform.zPosition = 1
             platform.name = "platform"
             world.addChild(platform)
+            world.addChild(GroundArt.platformRim(for: rect))
         }
     }
 
@@ -293,53 +289,26 @@ final class GameScene: SKScene {
         // Towers fight: blue (player) at left, red (enemy) at right.
         addTower(at: Balance.playerTowerX, team: .player)
         addTower(at: Balance.enemyTowerX, team: .enemy)
-        // Main bases (Base.png is huge -> ~170pt tall). Enemy base is the
-        // encounter: HP bar, 3-bolt fan, summoner. Player base tracks HP for
+        // Main HQs (pixel-art BaseNodes): the enemy base is the encounter
+        // (HP bar, 3-bolt fan, summoner). Player base tracks HP for
         // enemy attacks; no shooting (lose screen lands later).
         addBase(at: Balance.playerBaseX, team: .player)
         addBase(at: Balance.enemyBaseX, team: .enemy)
     }
 
-    /// Base sprite + drop shadow + wide HP bar. Enemy muzzle sits toward mid
-    /// (Balance.baseMuzzleForward); shots originate there.
+    /// Pixel-art HQ (see BaseNode): spawn gate + roof cannon + wide HP bar.
+    /// Enemy muzzle is the cannon tip; fan shots originate there.
     private func addBase(at x: CGFloat, team: Team) {
-        let tint: SKColor
-        let name: String
-        switch team {
-        case .player:
-            tint = SKColor(red: 0.3, green: 0.5, blue: 1.0, alpha: 1)
-            name = "playerBase"
-        case .enemy:
-            tint = SKColor(red: 1.0, green: 0.3, blue: 0.25, alpha: 1)
-            name = "enemyBase"
-        case .neutral:
-            tint = SKColor(white: 0.8, alpha: 1)
-            name = "base"
-        }
-        let node = addStructureart(named: "Base", at: x, height: 170, tint: tint, name: name)
-        let barW: CGFloat = 140
-        let barBG = SKSpriteNode(color: SKColor(white: 0, alpha: 0.6),
-                                 size: CGSize(width: barW, height: 10))
-        barBG.position = CGPoint(x: x, y: Balance.groundTopY + 185)
-        barBG.zPosition = 6
-        world.addChild(barBG)
-        let barFill = SKSpriteNode(color: team == .player ? .cyan : .red,
-                                   size: CGSize(width: barW, height: 10))
-        barFill.anchorPoint = CGPoint(x: 0, y: 0.5)
-        barFill.position = CGPoint(x: x - barW / 2, y: Balance.groundTopY + 185)
-        barFill.zPosition = 7
-        world.addChild(barFill)
-        bases.append(Base(node: node, team: team, hp: Balance.baseHP,
+        let base = BaseNode(team: team)
+        base.position = CGPoint(x: x, y: Balance.groundTopY)
+        world.addChild(base)
+        bases.append(Base(node: base, team: team, hp: Balance.baseHP,
                           maxHP: Balance.baseHP, cooldown: Balance.baseFireCooldown,
-                          summonTimer: Balance.firstSummonDelay,
-                          hpBarBG: barBG, hpBarFill: barFill))
+                          summonTimer: Balance.firstSummonDelay))
     }
 
     private func baseMuzzle(for base: Base) -> CGPoint {
-        // Enemy base fires toward mid (left); player base never fires.
-        let forward: CGFloat = base.team == .enemy ? -Balance.baseMuzzleForward : Balance.baseMuzzleForward
-        return CGPoint(x: base.node.position.x + forward,
-                       y: Balance.groundTopY + Balance.baseMuzzleHeight)
+        base.node.muzzlePosition()
     }
 
     /// Pixel-art tower + turning turret head (see TowerNode).
@@ -348,38 +317,10 @@ final class GameScene: SKScene {
         let tower = TowerNode(team: team)
         tower.position = CGPoint(x: x, y: Balance.groundTopY)
         world.addChild(tower)
-        // Drop shadow ellipse for 2.5D grounding.
-        let shadow = SKShapeNode(ellipseOf: CGSize(width: 110, height: 18))
-        shadow.fillColor = SKColor(white: 0, alpha: 0.35)
-        shadow.strokeColor = .clear
-        shadow.position = CGPoint(x: x, y: Balance.groundTopY + 6)
-        shadow.zPosition = 4
-        world.addChild(shadow)
         // Stagger first shots so both towers don't volley on the same frame.
         let stagger = team == .player ? 0.0 : Balance.towerFireCooldown / 2
         towers.append(Tower(node: tower, team: team, hp: Balance.towerHP,
                             maxHP: Balance.towerHP, cooldown: stagger))
-    }
-
-    private func addStructureart(named: String, at x: CGFloat, height: CGFloat, tint: SKColor, name: String) -> SKSpriteNode {
-        let texture = ImportedArt.skTexture(named: named)
-        texture.filteringMode = .linear
-        let node = SKSpriteNode(texture: texture)
-        node.setScale(height / texture.size().height)
-        node.position = CGPoint(x: x, y: Balance.groundTopY + node.size.height / 2)
-        node.color = tint
-        node.colorBlendFactor = 0.25
-        node.zPosition = 5
-        node.name = name
-        world.addChild(node)
-        // Drop shadow ellipse for 2.5D grounding.
-        let shadow = SKShapeNode(ellipseOf: CGSize(width: node.size.width * 0.9, height: 18))
-        shadow.fillColor = SKColor(white: 0, alpha: 0.35)
-        shadow.strokeColor = .clear
-        shadow.position = CGPoint(x: x, y: Balance.groundTopY + 6)
-        shadow.zPosition = 4
-        world.addChild(shadow)
-        return node
     }
 
     // MARK: - Playfield: hero
@@ -428,8 +369,9 @@ final class GameScene: SKScene {
         let x = min(max(desiredX, halfViewWidth), Balance.levelWidth - halfViewWidth)
         // Follow the hero vertically a little so jumps stay framed, but never
         // show below the ground or above the sky.
-        // Zoomed views are short: park the ground line near the bottom quarter.
-        let baseY: CGFloat = Balance.groundTopY + halfViewHeight * 0.28
+        // Camera rides high: ground line sits ~22% up from the bottom so
+        // more of the action reads above it.
+        let baseY: CGFloat = Balance.groundTopY + halfViewHeight * 0.55
         let lift = max(0, hero.position.y - (Balance.groundTopY + Balance.heroHeight)) * 0.35
         let y = min(baseY + lift, size.height - halfViewHeight)
         return CGPoint(x: x, y: max(y, halfViewHeight * 0.6))
@@ -467,11 +409,13 @@ final class GameScene: SKScene {
         sceneTime += dt
         hero.step(dt: dt, now: currentTime)
         updateRespawn()
+        updateReload(dt: dt)
         updateShooting(dt: dt)
         updateTowers(dt: dt)
         updateBases(dt: dt)
         updateEnemies(dt: dt)
         updateAllies(dt: dt)
+        updateDrops(dt: dt)
         stepProjectiles(dt: dt)
         updateGraceBlink()
         smoothCamera(dt: dt)
@@ -582,14 +526,50 @@ final class GameScene: SKScene {
     }
 
     private func updateShooting(dt: TimeInterval) {
-        guard aimTouch != nil else { return }
+        guard aimTouch != nil, hero.alive else { return }
+        // This gun is mid-reload, or the mag is dry (reload kicks in via
+        // updateReload): hold fire until rounds are back.
+        guard reloadingWeapon != heroWeapon,
+              mags[heroWeapon.rawValue] > 0 else { return }
         fireCooldown -= dt
         guard fireCooldown <= 0 else { return }
         fireCooldown = heroWeapon.cooldown
         fireBullet()
     }
 
+    /// Reload sim: finishes the active reload, auto-reloads the dry active
+    /// gun, and trickles reserve rounds to fully-starved guns so no gun can
+    /// stay bricked forever (desperation mode, capped low).
+    private func updateReload(dt: TimeInterval) {
+        // Finish the active reload.
+        if let gun = reloadingWeapon, sceneTime >= reloadEndsAt {
+            let need = gun.magSize - mags[gun.rawValue]
+            let take = min(need, reserves[gun.rawValue])
+            mags[gun.rawValue] += take
+            reserves[gun.rawValue] -= take
+            reloadingWeapon = nil
+        }
+        // The dry active gun reloads on its own, even when not aiming.
+        if reloadingWeapon == nil,
+           mags[heroWeapon.rawValue] == 0,
+           reserves[heroWeapon.rawValue] > 0 {
+            startReload(gun: heroWeapon)
+        }
+        // Desperation trickle: +1 reserve every 2s per starved gun, capped.
+        regenAccumulator += dt
+        if regenAccumulator >= 2.0 {
+            regenAccumulator = 0
+            for gun in HeroWeapon.allCases
+            where mags[gun.rawValue] == 0
+                && reserves[gun.rawValue] == 0
+                && reloadingWeapon != gun {
+                reserves[gun.rawValue] = min(reserves[gun.rawValue] + 1, 6)
+            }
+        }
+    }
+
     private func fireBullet() {
+        mags[heroWeapon.rawValue] -= 1 // one trigger pull = one round
         let muzzle = muzzlePosition(for: aimDir)
         let baseAngle = atan2(aimDir.dy, aimDir.dx)
         let pellets = heroWeapon.pelletCount
@@ -719,6 +699,8 @@ final class GameScene: SKScene {
 
     // MARK: - Main base: 3-bolt fan + summoning (enemy base only)
     private func updateBases(dt: TimeInterval) {
+        // Gate shimmer + beacons animate on both HQs every frame.
+        for base in bases { base.node.update(dt: dt) }
         for i in bases.indices {
             guard bases[i].alive, bases[i].team == .enemy else { continue }
             // Fan: fires at the hero or the closest ally pushing into base range.
@@ -780,6 +762,7 @@ final class GameScene: SKScene {
         let flash = ProjectileFactory.makeMuzzleFlash()
         flash.position = muzzle
         world.addChild(flash)
+        base.node.fireFlash()
     }
 
     private func summonEnemy(from base: Base) {
@@ -788,6 +771,7 @@ final class GameScene: SKScene {
                              y: Balance.groundTopY + e.size.height / 2)
         world.addChild(e)
         enemies.append(e)
+        base.node.spawnPulse()
         let puff = ProjectileFactory.makeImpactPuff()
         puff.position = e.position
         world.addChild(puff)
@@ -881,7 +865,8 @@ final class GameScene: SKScene {
     @discardableResult
     func summonAlly(kind: ArmyKind) -> Bool {
         guard money >= kind.cost, allies.count < Balance.maxAllies else { return false }
-        guard bases.first(where: { $0.team == .player })?.alive ?? false else { return false }
+        guard let homeBase = bases.first(where: { $0.team == .player }),
+              homeBase.alive else { return false }
         money -= kind.cost
         let a = AllyNode(kind: kind)
         // Stagger spawn positions so stacked summons don't overlap.
@@ -890,6 +875,7 @@ final class GameScene: SKScene {
                              y: Balance.groundTopY + a.size.height / 2)
         world.addChild(a)
         allies.append(a)
+        homeBase.node.spawnPulse()
         let puff = ProjectileFactory.makeImpactPuff()
         puff.position = a.position
         world.addChild(puff)
@@ -991,22 +977,18 @@ final class GameScene: SKScene {
         guard bases[index].alive else { return }
         bases[index].hp = max(0, bases[index].hp - amount)
         let frac = max(0, bases[index].hp / bases[index].maxHP)
-        bases[index].hpBarFill.size.width = 140 * frac
+        bases[index].node.setHPFraction(frac)
         if !bases[index].alive {
-            // Rubble look, same language as dead towers. Win/lose screens land later.
-            bases[index].node.color = SKColor(white: 0.3, alpha: 1)
-            bases[index].node.colorBlendFactor = 0.7
-            bases[index].node.alpha = 0.75
-            bases[index].hpBarFill.isHidden = true
-            bases[index].hpBarBG.alpha = 0.25
+            // BaseNode handles the rubble look (grey + dark gate). Win/lose screens land later.
+            bases[index].node.setDestroyed()
         }
     }
 
-    /// Point-in-base test for one team's alive bases. Base is wide (~170 tall).
+    /// Point-in-base test for one team's alive bases. HQ is ~227 wide, 170 tall.
     private func baseIndex(at pt: CGPoint, team: Team) -> Int? {
         for (i, b) in bases.enumerated() where b.team == team && b.alive {
             let dx = abs(pt.x - b.node.position.x)
-            let inX = dx < 85
+            let inX = dx < 110
             let inY = pt.y >= Balance.groundTopY && pt.y <= Balance.groundTopY + 175
             if inX && inY { return i }
         }
@@ -1081,7 +1063,7 @@ final class GameScene: SKScene {
         let pt = p.node.position
         switch p.team {
         case .neutral:
-            if hitMarcher(at: pt, amount: p.damage) { return true }
+            if hitMarcher(at: pt, amount: p.damage, fromHero: true) { return true }
             if let idx = towerIndex(at: pt, team: .enemy) {
                 damageTower(at: idx, amount: p.damage)
                 return true
@@ -1091,7 +1073,7 @@ final class GameScene: SKScene {
                 return true
             }
         case .player:
-            if hitMarcher(at: pt, amount: p.damage) { return true }
+            if hitMarcher(at: pt, amount: p.damage, fromHero: false) { return true }
             if let idx = towerIndex(at: pt, team: .enemy) {
                 damageTower(at: idx, amount: p.damage)
                 return true
@@ -1122,8 +1104,9 @@ final class GameScene: SKScene {
         return false
     }
 
-    /// Hero-bolt vs summoned marchers. Kills pay Unity's +100 gold.
-    private func hitMarcher(at pt: CGPoint, amount: CGFloat) -> Bool {
+    /// Bolt vs summoned marchers. Kills pay Unity's +100 gold, plus reserve
+    /// ammo for the active hero gun on hero-gun kills (capped at 2x start).
+    private func hitMarcher(at pt: CGPoint, amount: CGFloat, fromHero: Bool) -> Bool {
         for e in enemies where e.alive {
             if abs(pt.x - e.position.x) < 42,
                abs(pt.y - e.position.y) < e.size.height / 2 + 8 {
@@ -1131,6 +1114,12 @@ final class GameScene: SKScene {
                 e.refreshHPBar()
                 if !e.alive {
                     money += Balance.killReward
+                    if fromHero {
+                        let i = heroWeapon.rawValue
+                        reserves[i] = min(reserves[i] + heroWeapon.killAmmo,
+                                          heroWeapon.startReserve * 2)
+                    }
+                    maybeSpawnDrop(at: e.position)
                     let puff = ProjectileFactory.makeImpactPuff()
                     puff.position = e.position
                     puff.setScale(1.6)
@@ -1199,8 +1188,158 @@ final class GameScene: SKScene {
             heroMaxHP: Balance.heroHP,
             money: money,
             allyXs: allies.filter { $0.alive }.map { $0.position.x },
-            enemyXs: enemies.filter { $0.alive }.map { $0.position.x }
+            enemyXs: enemies.filter { $0.alive }.map { $0.position.x },
+            ammoText: ammoDisplayText,
+            ammoMag: mags[heroWeapon.rawValue],
+            reloading: reloadingWeapon == heroWeapon
         )
+    }
+
+    // MARK: - Gun ammo readout (shown as 12/90 on the HUD gun button)
+    private var ammoDisplayText: String {
+        let i = heroWeapon.rawValue
+        if reloadingWeapon == heroWeapon { return "REL \(mags[i])/\(reserves[i])" }
+        return "\(mags[i])/\(reserves[i])"
+    }
+
+    // MARK: - Drops (dead enemies randomly leave ammo/health for the hero)
+    private enum DropKind { case health, ammo }
+    private struct Drop {
+        var node: SKNode
+        var kind: DropKind
+        var life: TimeInterval
+        var baseY: CGFloat
+        var phase: TimeInterval
+    }
+    private var drops: [Drop] = []
+
+    /// Rolls a drop at the dead enemy's spot. Full-HP heroes always get
+    /// ammo; otherwise it's a coin flip between a heal and ammo.
+    private func maybeSpawnDrop(at pos: CGPoint) {
+        guard Double.random(in: 0..<1) < Balance.dropChance else { return }
+        let kind: DropKind
+        if heroHP >= Balance.heroHP || Double.random(in: 0..<1) < 0.5 {
+            kind = .ammo
+        } else {
+            kind = .health
+        }
+        let node = makeDropNode(kind: kind)
+        node.position = CGPoint(
+            x: min(max(pos.x, 60), Balance.levelWidth - 60),
+            y: Balance.groundTopY + 16)
+        node.zPosition = 8
+        world.addChild(node)
+        drops.append(Drop(node: node, kind: kind, life: Balance.dropLifetime,
+                          baseY: node.position.y,
+                          phase: Double.random(in: 0..<(2 * .pi))))
+    }
+
+    /// Floating pickup visual: glowing medkit (green cross) or ammo crate
+    /// (yellow rounds), bobbed by updateDrops.
+    private func makeDropNode(kind: DropKind) -> SKNode {
+        let root = SKNode()
+        let glowColor: SKColor = kind == .health
+            ? SKColor(red: 0.2, green: 1.0, blue: 0.4, alpha: 1)
+            : SKColor(red: 1.0, green: 0.85, blue: 0.25, alpha: 1)
+        let glow = SKShapeNode(circleOfRadius: 17)
+        glow.fillColor = glowColor.withAlphaComponent(0.25)
+        glow.strokeColor = glowColor.withAlphaComponent(0.9)
+        glow.lineWidth = 2
+        root.addChild(glow)
+        switch kind {
+        case .health:
+            let box = SKShapeNode(rectOf: CGSize(width: 20, height: 20), cornerRadius: 4)
+            box.fillColor = SKColor(red: 0.1, green: 0.7, blue: 0.3, alpha: 1)
+            box.strokeColor = .clear
+            root.addChild(box)
+            let barH = SKShapeNode(rectOf: CGSize(width: 12, height: 4), cornerRadius: 2)
+            barH.fillColor = .white
+            barH.strokeColor = .clear
+            root.addChild(barH)
+            let barV = SKShapeNode(rectOf: CGSize(width: 4, height: 12), cornerRadius: 2)
+            barV.fillColor = .white
+            barV.strokeColor = .clear
+            root.addChild(barV)
+        case .ammo:
+            let crate = SKShapeNode(rectOf: CGSize(width: 24, height: 16), cornerRadius: 2)
+            crate.fillColor = SKColor(white: 0.15, alpha: 1)
+            crate.strokeColor = glowColor
+            crate.lineWidth = 2
+            root.addChild(crate)
+            for x in [-6, 0, 6] as [CGFloat] {
+                let round = SKShapeNode(rectOf: CGSize(width: 4, height: 10), cornerRadius: 2)
+                round.fillColor = glowColor
+                round.strokeColor = .clear
+                round.position = CGPoint(x: x, y: 0)
+                root.addChild(round)
+            }
+        }
+        return root
+    }
+
+    /// Bob, expiry blink, and hero pickup (walk over it to collect).
+    private func updateDrops(dt: TimeInterval) {
+        var alive: [Drop] = []
+        alive.reserveCapacity(drops.count)
+        for var d in drops {
+            d.life -= dt
+            d.phase += dt * 4
+            if d.life <= 0 {
+                d.node.removeFromParent()
+                continue
+            }
+            d.node.position.y = d.baseY + sin(d.phase) * 4
+            d.node.alpha = d.life < 3 ? (sin(d.phase * 3) > 0 ? 1.0 : 0.35) : 1.0
+            if hero.alive,
+               abs(hero.position.x - d.node.position.x) < 46,
+               abs(hero.position.y - d.node.position.y) < 70 {
+                collectDrop(d)
+                d.node.removeFromParent()
+                continue
+            }
+            alive.append(d)
+        }
+        drops = alive
+    }
+
+    private func collectDrop(_ d: Drop) {
+        switch d.kind {
+        case .health:
+            heroHP = min(Balance.heroHP, heroHP + Balance.dropHeal)
+            floatText("+\(Int(Balance.dropHeal)) HP",
+                      color: SKColor(red: 0.3, green: 1.0, blue: 0.5, alpha: 1),
+                      at: d.node.position)
+        case .ammo:
+            for gun in HeroWeapon.allCases {
+                let i = gun.rawValue
+                reserves[i] = min(reserves[i] + gun.killAmmo * Balance.dropAmmoMultiplier,
+                                  gun.startReserve * 2)
+            }
+            floatText("+AMMO",
+                      color: SKColor(red: 1.0, green: 0.85, blue: 0.3, alpha: 1),
+                      at: d.node.position)
+        }
+        let puff = ProjectileFactory.makeImpactPuff()
+        puff.position = d.node.position
+        world.addChild(puff)
+    }
+
+    /// Small floating pickup label: rises and fades on its own.
+    private func floatText(_ text: String, color: SKColor, at pos: CGPoint) {
+        let label = SKLabelNode(fontNamed: "Helvetica-Bold")
+        label.text = text
+        label.fontSize = 14
+        label.fontColor = color
+        label.position = pos
+        label.zPosition = 20
+        world.addChild(label)
+        label.run(.sequence([
+            .group([
+                .moveBy(x: 0, y: 44, duration: 0.8),
+                .fadeOut(withDuration: 0.8),
+            ]),
+            .removeFromParent(),
+        ]))
     }
 
     // MARK: - Helpers

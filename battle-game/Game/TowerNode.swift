@@ -76,6 +76,14 @@ final class TowerNode: SKNode {
         teamGlow.zPosition = -2
         addChild(teamGlow)
 
+        // Drop shadow ellipse for 2.5D grounding (child so it leaves with the tower).
+        let shadow = SKShapeNode(ellipseOf: CGSize(width: 110, height: 18))
+        shadow.fillColor = SKColor(white: 0, alpha: 0.35)
+        shadow.strokeColor = .clear
+        shadow.position = CGPoint(x: 0, y: 6)
+        shadow.zPosition = -3
+        addChild(shadow)
+
         baseSprite.position = .zero
         baseSprite.zPosition = 0
         addChild(baseSprite)
@@ -179,7 +187,8 @@ final class TowerNode: SKNode {
         }
     }
 
-    /// Rubble look: grey out, slump the turret, dim the bar + glow.
+    /// Explosion + burning rubble, then the tower leaves the field.
+    /// Dead towers are already untargetable; this only plays visuals.
     func setDestroyed() {
         destroyed = true
         desiredAngle = nil
@@ -194,6 +203,17 @@ final class TowerNode: SKNode {
         teamGlow.alpha = 0.05
         hpFill.isHidden = true
         hpBG.alpha = 0.25
+        if let parent = parent {
+            StructureFX.explode(at: position, in: parent, team: team,
+                                size: TowerNode.towerHeight)
+        }
+        // Burn briefly, sink + fade, then remove (shadow is a child: goes too).
+        run(.sequence([
+            .wait(forDuration: 1.1),
+            .group([.moveBy(x: 0, y: -14, duration: 0.4),
+                    .fadeOut(withDuration: 0.4)]),
+            .removeFromParent(),
+        ]))
     }
 
     // MARK: - HP bar (chunky pixel style)
@@ -275,9 +295,8 @@ final class TowerNode: SKNode {
                                                format: format)
         let img = renderer.image { ctx in
             let cg = ctx.cgContext
-            // Flip so row 0 = top like pixel-art editors.
-            cg.translateBy(x: 0, y: CGFloat(h))
-            cg.scaleBy(x: 1, y: -1)
+            // UIKit coords: row 0 = top, matching the art below. (Do NOT
+            // flip: SKTexture(image:) displays upright.)
             draw(cg)
         }
         return SKTexture(image: img)

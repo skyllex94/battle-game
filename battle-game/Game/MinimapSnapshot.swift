@@ -19,4 +19,8 @@ struct MinimapSnapshot {
     // Unit dots: player army (blue) + enemy marchers (red).
     var allyXs: [CGFloat] = []
     var enemyXs: [CGFloat] = []
+    // Active hero-gun ammo readout (mag/reserve, e.g. 12/90).
+    var ammoText: String = "–/–"
+    var ammoMag: Int = 0
+    var reloading: Bool = false
 }

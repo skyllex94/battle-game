@@ -132,12 +132,17 @@ struct GameView: View {
     private func commandBar(minimapWidth: CGFloat) -> some View {
         HStack(alignment: .center, spacing: 8) {
             // Weapon switch: tap to rotate Blaster -> Scatter -> Cannon.
+            // Live mag/reserve readout (3/30); REL while reloading, red when dry.
             Button { weapon = scene.cycleWeapon() } label: {
                 HStack(spacing: 6) {
                     Image(systemName: weapon.icon)
                         .foregroundStyle(.cyan)
                     Text(weapon.name)
                         .foregroundStyle(.white)
+                    Text(minimap.ammoText)
+                        .monospacedDigit()
+                        .foregroundStyle(minimap.ammoMag == 0 ? .red
+                            : minimap.reloading ? .gray : .white.opacity(0.85))
                     Image(systemName: "arrow.2.circlepath")
                         .foregroundStyle(.white.opacity(0.55))
                 }
@@ -206,49 +211,65 @@ struct GameView: View {
     }
 }
 
-/// Bottom army tab: compact horizontal tab with rounded top corners and a
-/// flat bottom glued to the screen edge. Same width as before, dimmed +
-/// disabled when broke; tap summons the unit at the player base.
+/// Pixel-corner tab shape: chamfered top corners, flat bottom glued to the
+/// screen edge. Hard stepped edges read as retro pixel UI (no smooth rounds).
+private struct PixelTabShape: Shape {
+    var cut: CGFloat = 7
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY + cut))
+        p.addLine(to: CGPoint(x: rect.minX + cut, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX - cut, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + cut))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Bottom army tab: pixel-menu styling — chamfered hard corners, chunky
+/// 3pt border, uppercase monospaced label + cost. No stats, just pick-and-go.
 private struct ArmyCardButton: View {
     let kind: ArmyKind
     let money: Int
     let onTap: () -> Void
 
     private var affordable: Bool { money >= kind.cost }
-    private var tabShape: UnevenRoundedRectangle {
-        UnevenRoundedRectangle(topLeadingRadius: 12, bottomLeadingRadius: 0,
-                               bottomTrailingRadius: 0, topTrailingRadius: 12)
-    }
+    private let tabShape = PixelTabShape(cut: 7)
 
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 8) {
                 Image(systemName: kind.icon)
-                    .font(.body.bold())
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(affordable ? .cyan : .gray)
                     .frame(width: 30, height: 30)
-                    .background(.white.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(kind.name)
-                        .font(.caption.bold())
+                    .background(affordable ? .cyan.opacity(0.18) : .white.opacity(0.08))
+                    .overlay(Rectangle().stroke(affordable ? Color.cyan : Color.gray.opacity(0.5),
+                                                lineWidth: 2))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(kind.name.uppercased())
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .tracking(1)
                         .foregroundStyle(.white)
                         .lineLimit(1)
-                    Label("\(kind.cost)", systemImage: "dollarsign.circle.fill")
-                        .font(.caption2.bold())
-                        .foregroundStyle(affordable ? .yellow : .gray)
-                        .lineLimit(1)
+                    HStack(spacing: 3) {
+                        Image(systemName: "dollarsign.circle.fill")
+                            .font(.system(size: 10, weight: .bold))
+                        Text("\(kind.cost)")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .monospacedDigit()
+                    }
+                    .foregroundStyle(affordable ? .yellow : .gray)
+                    .lineLimit(1)
                 }
-                Text("HP \(Int(kind.hp))\nDMG \(Int(kind.damage))")
-                    .font(.system(size: 8))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .lineLimit(2)
             }
             .padding(.horizontal, 10)
-            .frame(width: 158, height: 50)
-            .background(.black.opacity(affordable ? 0.65 : 0.45))
+            .frame(width: 158, height: 48)
+            .background(.black.opacity(affordable ? 0.78 : 0.55))
             .clipShape(tabShape)
-            .overlay(tabShape.stroke(affordable ? Color.cyan : Color.gray.opacity(0.5), lineWidth: 1.5))
+            .overlay(tabShape.stroke(affordable ? Color.cyan : Color.gray.opacity(0.5), lineWidth: 3))
             .opacity(affordable ? 1.0 : 0.6)
         }
         .disabled(!affordable)
@@ -298,6 +319,8 @@ private struct HeroHealthBar: View {
             Text("\(Int(hp))/\(Int(maxHP))")
                 .font(.caption2.bold())
                 .monospacedDigit()
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .foregroundStyle(.white)
         }
     }

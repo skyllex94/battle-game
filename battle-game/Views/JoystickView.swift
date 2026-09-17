@@ -56,7 +56,18 @@ struct JoystickView: View {
                         knob = CGSize(width: dx, height: dy)
 
                         let rawX = dx / radius
-                        moveX = abs(rawX) < deadzone ? 0 : max(-1, min(1, rawX))
+                        // Eased response: rescale past the deadzone, then bend
+                        // the curve (gentle near center, full throw at the edge)
+                        // so small thumb moves don't slam the hero around.
+                        let mag = min(1, abs(rawX))
+                        let shaped: CGFloat
+                        if mag <= deadzone {
+                            shaped = 0
+                        } else {
+                            let t = (mag - deadzone) / (1 - deadzone)
+                            shaped = pow(t, 1.6)
+                        }
+                        moveX = (rawX >= 0 ? 1 : -1) * shaped
                         jumpHeld = dy < jumpThreshold
                     }
                     .onEnded { _ in

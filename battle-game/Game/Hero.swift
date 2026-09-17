@@ -25,6 +25,8 @@ final class HeroNode: SKSpriteNode {
     private var lastGroundedTime: TimeInterval = -10
     private var lastJumpPressedTime: TimeInterval = -10
     private var prevJumpHeld = false
+    /// Set on takeoff; spent when the stick is released mid-rise (hop).
+    private var jumpCutArmed = false
     private var legPhase: TimeInterval = 0
     var isGrounded: Bool { grounded }
 
@@ -231,13 +233,24 @@ final class HeroNode: SKSpriteNode {
 
         if grounded { lastGroundedTime = now }
 
-        // Horizontal: accelerate toward target velocity (snappy on ground,
-        // strong steering in air).
+        // Horizontal: separate drive/glide lanes so starts feel eager,
+        // releases glide out smoothly, and air keeps its flow instead of
+        // braking mid-flight.
         let targetVX = inputX * runSpeed
-        let accel: CGFloat = grounded ? Balance.heroAccelGround : Balance.heroAccelAir
+        let driving = abs(targetVX) > 1
+        let accel: CGFloat
+        if grounded {
+            accel = driving ? Balance.heroAccelGround : Balance.heroDecelGround
+        } else {
+            accel = driving ? Balance.heroAccelAir : Balance.heroAirDrag
+        }
         let maxDelta = accel * dtCG
         let dvx = targetVX - velocity.dx
         velocity.dx += max(-maxDelta, min(maxDelta, dvx))
+        // Rest once the glide decays (grounded, stick centered).
+        if grounded, !driving, abs(velocity.dx) < Balance.heroStopThreshold {
+            velocity.dx = 0
+        }
 
         // Gravity.
         velocity.dy += Balance.heroGravity * dtCG
@@ -251,8 +264,15 @@ final class HeroNode: SKSpriteNode {
         if (jumpHeld || buffered) && (grounded || coyote) {
             velocity.dy = jumpVelocity
             grounded = false
+            jumpCutArmed = true // early release will bleed the rise once
             lastGroundedTime = -10 // consume coyote so we don't double-jump
             lastJumpPressedTime = -10 // consume buffer
+        }
+        // Variable jump height: releasing mid-rise bleeds lift once, so a tap
+        // hops and a hold flies full height (hold still auto-bounces).
+        if jumpCutArmed, !jumpHeld, velocity.dy > 0 {
+            velocity.dy *= Balance.heroJumpCutFraction
+            jumpCutArmed = false
         }
 
         // Integrate.
@@ -279,6 +299,7 @@ final class HeroNode: SKSpriteNode {
     func die() {
         alive = false
         velocity = .zero
+        jumpCutArmed = false
         clearAim()
     }
 
@@ -292,6 +313,7 @@ final class HeroNode: SKSpriteNode {
         alpha = 1
         lastGroundedTime = -10
         lastJumpPressedTime = -10
+        jumpCutArmed = false
     }
 
     private func resolveCollisions(prevPos: CGPoint, now: TimeInterval) {

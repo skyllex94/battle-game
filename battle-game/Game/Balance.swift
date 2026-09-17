@@ -27,12 +27,17 @@ enum Balance {
     static let heroSpawnX: CGFloat = 420
     static let heroHeight: CGFloat = 78
 
-    // MARK: - Hero movement feel
+    // MARK: - Hero movement feel (smooth, not snappy: eased drive in,
+    // long glide out, floaty variable jumps)
     static let heroRunSpeed: CGFloat = 520
-    static let heroJumpVelocity: CGFloat = 1050
-    static let heroGravity: CGFloat = -2000   // jump apex ≈ 275pt: clears the 216pt rise to platform 1
-    static let heroAccelGround: CGFloat = 4200
-    static let heroAccelAir: CGFloat = 2800   // strong air control: steer freely mid-jump
+    static let heroJumpVelocity: CGFloat = 1000
+    static let heroGravity: CGFloat = -1850   // jump apex ≈ 270pt: clears the 216pt rise to platform 1
+    static let heroAccelGround: CGFloat = 2600 // driving (stick held): eager but not instant
+    static let heroDecelGround: CGFloat = 2000 // stick released: long glide to a stop
+    static let heroAccelAir: CGFloat = 1700   // air steering: present but soft
+    static let heroAirDrag: CGFloat = 350     // no-input air drift: momentum mostly preserved
+    static let heroStopThreshold: CGFloat = 12 // below this grounded drift, just rest
+    static let heroJumpCutFraction: CGFloat = 0.5 // early release bleeds half the rise (tap = hop)
     static let heroCoyoteTime: Double = 0.12
     static let heroJumpBuffer: Double = 0.15  // taps just before landing still jump
 
@@ -83,6 +88,12 @@ enum Balance {
     static let enemyBoltSpeed: CGFloat = 520
     static let enemyBoltLife: Double = 1.2     // range ≈ 624: outranged by the hero
 
+    // MARK: - Drops (dead enemies randomly leave ammo/health for the hero)
+    static let dropChance: Double = 0.4      // roll per enemy kill
+    static let dropHeal: CGFloat = 30        // health-pack heal (capped at max)
+    static let dropLifetime: Double = 15.0   // seconds before a drop expires
+    static let dropAmmoMultiplier: Int = 2   // ammo drop = killAmmo x this, per gun
+
     // MARK: - Player army (summoned from cards, marches toward the enemy base)
     static let maxAllies: Int = 10
     // Trooper: cheap, fast, light. Heavy: pricey, slow, tanky + hard-hitting.
@@ -109,6 +120,6 @@ enum Balance {
     static let parallaxForeground: CGFloat = 1.15
 
     // MARK: - Camera
-    static let cameraZoom: CGFloat = 0.62  // visible slice ≈ 830x465pt: hero fills ~20% of height
+    static let cameraZoom: CGFloat = 0.85  // zoomed out: hero reads smaller, more lane visible
     static let cameraYOffset: CGFloat = 120     // look slightly above ground
 }

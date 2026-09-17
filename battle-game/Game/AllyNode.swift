@@ -89,6 +89,9 @@ final class AllyNode: SKSpriteNode {
     private var hpBarBG = SKSpriteNode()
     private var hpBarFill = SKSpriteNode()
     private var body = SKNode()
+    /// Pixel sprite (2 walk frames) + cached frames for the march cycle.
+    private var bodySprite = SKSpriteNode()
+    private var frames: [SKTexture] = []
 
     /// Small vertical offset applied by the scene on top of ground rest height.
     var yBob: CGFloat = 0
@@ -106,6 +109,7 @@ final class AllyNode: SKSpriteNode {
         super.init(texture: nil, color: .clear, size: size)
         name = "ally"
         zPosition = 9
+        frames = UnitPixelArt.frames(for: kind == .heavy ? .heavy : .trooper)
         buildVisuals()
         buildHPBar()
     }
@@ -126,15 +130,6 @@ final class AllyNode: SKSpriteNode {
         let heavy = kind == .heavy
         let h = size.height
         let suitBlue = SKColor(red: 0.30, green: 0.60, blue: 1.0, alpha: 1)
-        let suitDark = SKColor(red: 0.15, green: 0.30, blue: 0.65, alpha: 1)
-        let visor = SKColor(red: 0.55, green: 0.95, blue: 1.0, alpha: 1)
-
-        func part(_ size: CGSize, color: SKColor) -> SKShapeNode {
-            let n = SKShapeNode(rectOf: size, cornerRadius: size.width / 2)
-            n.fillColor = color
-            n.strokeColor = .clear
-            return n
-        }
 
         // Team glow so friendlies pop on the dark ground.
         let glow = SKShapeNode(circleOfRadius: h * 0.52)
@@ -144,50 +139,36 @@ final class AllyNode: SKSpriteNode {
         glow.zPosition = -1
         addChild(glow)
 
-        // Legs.
-        let legH = h * 0.32
-        let legL = part(CGSize(width: heavy ? 15 : 12, height: legH), color: suitDark)
-        legL.position = CGPoint(x: -7, y: -h / 2 + legH / 2)
-        body.addChild(legL)
-        let legR = part(CGSize(width: heavy ? 15 : 12, height: legH), color: suitBlue)
-        legR.position = CGPoint(x: 7, y: -h / 2 + legH / 2)
-        body.addChild(legR)
-
-        // Torso (heavy gets a wider chest plate).
-        let torso = part(CGSize(width: heavy ? 40 : 32, height: h * 0.38), color: suitBlue)
-        torso.position = CGPoint(x: 0, y: 2)
-        body.addChild(torso)
-        if heavy {
-            let plate = part(CGSize(width: 30, height: 20), color: suitDark)
-            plate.position = CGPoint(x: 0, y: 4)
-            body.addChild(plate)
+        // Pixel sprite body (heavy fills a bigger frame than the trooper).
+        if let first = frames.first {
+            bodySprite = SKSpriteNode(texture: first)
+            first.filteringMode = .nearest
+            bodySprite.setScale(size.height / first.size().height)
         }
-
-        // Helmet + visor.
-        let helmet = SKShapeNode(circleOfRadius: heavy ? 15 : 13)
-        helmet.fillColor = SKColor(red: 0.88, green: 0.92, blue: 0.96, alpha: 1)
-        helmet.strokeColor = suitDark
-        helmet.lineWidth = 2
-        helmet.position = CGPoint(x: 2, y: h * 0.32)
-        body.addChild(helmet)
-        let visorNode = SKShapeNode(rectOf: CGSize(width: 16, height: 9), cornerRadius: 4)
-        visorNode.fillColor = visor
-        visorNode.strokeColor = .clear
-        visorNode.position = CGPoint(x: 8, y: h * 0.32)
-        body.addChild(visorNode)
-
-        // Rifle pointing +x.
-        let gun = part(CGSize(width: heavy ? 36 : 30, height: heavy ? 10 : 8),
-                       color: SKColor(white: 0.18, alpha: 1))
-        gun.position = CGPoint(x: 16, y: 4)
-        body.addChild(gun)
-
+        body.addChild(bodySprite)
         addChild(body)
+
+        // Heavy pip so the two cards read apart at a glance.
+        if heavy {
+            let pip = SKShapeNode(rectOf: CGSize(width: 10, height: 10), cornerRadius: 2)
+            pip.fillColor = suitBlue
+            pip.strokeColor = .clear
+            pip.position = CGPoint(x: -size.width / 2 - 4, y: size.height / 2 - 6)
+            addChild(pip)
+        }
     }
 
-    /// March bob while advancing. Called by the scene.
+    /// March cycle: swaps the 2 pixel walk frames + bob while advancing.
+    /// Called by the scene.
     func animateMarch(dt: TimeInterval, advancing: Bool) {
-        if advancing { marchPhase += dt * 10 }
+        if advancing {
+            marchPhase += dt * 10
+            if frames.count == 2 {
+                bodySprite.texture = frames[Int(marchPhase) % 2]
+            }
+        } else if frames.count == 2 {
+            bodySprite.texture = frames[0]
+        }
         yBob = advancing ? sin(marchPhase) * 2.5 : 0
         body.zRotation = advancing ? sin(marchPhase) * 0.03 : 0
     }

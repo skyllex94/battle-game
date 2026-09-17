@@ -72,4 +72,42 @@ enum HeroWeapon: Int, CaseIterable {
         case .blaster, .scatter: return 1.0
         }
     }
+
+    // MARK: - Ammo (mag + reserve, shown as 12/90 on the gun button)
+    /// Rounds per magazine. One trigger pull spends one round (scatter's
+    /// 3 pellets cost a single round).
+    var magSize: Int {
+        switch self {
+        case .blaster: return 30
+        case .scatter: return 6
+        case .cannon: return 4
+        }
+    }
+
+    /// Reserve rounds at level start.
+    var startReserve: Int {
+        switch self {
+        case .blaster: return 90
+        case .scatter: return 24
+        case .cannon: return 16
+        }
+    }
+
+    /// Seconds a full reload takes once the mag runs dry.
+    var reloadTime: Double {
+        switch self {
+        case .blaster: return 1.1
+        case .scatter: return 1.6
+        case .cannon: return 2.0
+        }
+    }
+
+    /// Reserve rounds earned per hero-gun kill with this gun (capped).
+    var killAmmo: Int {
+        switch self {
+        case .blaster: return 6
+        case .scatter: return 3
+        case .cannon: return 2
+        }
+    }
 }

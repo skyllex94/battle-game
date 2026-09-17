@@ -502,7 +502,7 @@ final class GameScene: SKScene {
     }
 
     private func muzzlePosition(for dir: CGVector) -> CGPoint {
-        CGPoint(x: hero.position.x + dir.dx * 36, y: hero.position.y + 8 + dir.dy * 36)
+        hero.muzzlePosition(for: dir)
     }
 
     private func buildAimGuide() {

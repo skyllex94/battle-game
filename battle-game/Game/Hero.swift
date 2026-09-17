@@ -27,7 +27,6 @@ final class HeroNode: SKSpriteNode {
     private var prevJumpHeld = false
     /// Set on takeoff; spent when the stick is released mid-rise (hop).
     private var jumpCutArmed = false
-    private var legPhase: TimeInterval = 0
     var isGrounded: Bool { grounded }
 
     var runSpeed: CGFloat { Balance.heroRunSpeed }
@@ -35,14 +34,17 @@ final class HeroNode: SKSpriteNode {
     /// Collision height (visual is Balance.heroHeight tall, centered on node).
     private var bodyHeight: CGFloat { Balance.heroHeight }
 
-    // MARK: - Visual parts
+    // MARK: - Pixel-art visual (PixelHeroArt frames + aiming rifle)
     private let visual = SKNode()
-    private var legL = SKShapeNode()
-    private var legR = SKShapeNode()
-    private var armBack = SKShapeNode()
-    private var armFront = SKShapeNode()
-    private var visor = SKShapeNode()
-    private var gun = SKShapeNode()
+    private var body: SKSpriteNode!
+    private var rifle: SKSpriteNode!
+    /// Grip -> muzzle tip for the active gun (world pt). Drives muzzlePosition.
+    private var rifleLength: CGFloat = 42
+    /// Frame player: run index + timers. Pose cache avoids texture churn.
+    private var animT: TimeInterval = 0
+    private var runFrame = 0
+    /// 0 idle, 1-4 run, 5 jump, 6 fall. -1 forces the first set.
+    private var shownPose = -1
 
     // MARK: - Aim state (written by GameScene while the shoot-touch is down)
     /// X of the current aim direction. 0 = not aiming (face travel direction).
@@ -59,171 +61,48 @@ final class HeroNode: SKSpriteNode {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
 
-    // MARK: - Visual construction (local coords: origin at node center, +x facing)
+    // MARK: - Visual construction (pixel body + rifle, facing +x)
     private func buildVisuals() {
-        let H = Balance.heroHeight // 96
-        let suitWhite = SKColor(red: 0.90, green: 0.92, blue: 0.95, alpha: 1)
-        let suitShade = SKColor(red: 0.55, green: 0.62, blue: 0.72, alpha: 1)
-        let trimBlue  = SKColor(red: 0.25, green: 0.55, blue: 1.0, alpha: 1)
-        let visorCyan = SKColor(red: 0.30, green: 0.90, blue: 1.0, alpha: 1)
-
-        func limb(_ size: CGSize, color: SKColor) -> SKShapeNode {
-            let n = SKShapeNode(rectOf: size, cornerRadius: size.width / 2)
-            n.fillColor = color
-            n.strokeColor = .clear
-            return n
-        }
-
-        // Backpack (behind torso).
-        let pack = limb(CGSize(width: 16, height: 34), color: suitShade)
-        pack.position = CGPoint(x: -16, y: 8)
-        visual.addChild(pack)
-        let tankStripe = limb(CGSize(width: 6, height: 24), color: visorCyan)
-        tankStripe.position = CGPoint(x: -16, y: 8)
-        visual.addChild(tankStripe)
-
-        // Legs pivot at the hip (anchor top-center via offset child trick:
-        // shape centered, so position the node at hip and offset the shape down).
-        legL = limb(CGSize(width: 13, height: 34), color: suitShade)
-        legL.position = CGPoint(x: -6, y: -H / 2 + 17)
-        visual.addChild(legL)
-        legR = limb(CGSize(width: 13, height: 34), color: suitWhite)
-        legR.position = CGPoint(x: 7, y: -H / 2 + 17)
-        visual.addChild(legR)
-        // Boots.
-        for (x, c) in [(-6, suitShade), (7, SKColor.darkGray)] as [(CGFloat, SKColor)] {
-            let boot = limb(CGSize(width: 16, height: 9), color: c)
-            boot.position = CGPoint(x: x + 2, y: -H / 2 + 4)
-            boot.name = "boot"
-            visual.addChild(boot)
-        }
-
-        // Torso.
-        let torso = limb(CGSize(width: 36, height: 42), color: suitWhite)
-        torso.position = CGPoint(x: 0, y: 6)
-        visual.addChild(torso)
-        // Chest light + belt.
-        let chest = limb(CGSize(width: 12, height: 12), color: trimBlue)
-        chest.position = CGPoint(x: 8, y: 14)
-        visual.addChild(chest)
-        let belt = limb(CGSize(width: 37, height: 7), color: suitShade)
-        belt.position = CGPoint(x: 0, y: -13)
-        visual.addChild(belt)
-        // Shoulder pad (team blue).
-        let pad = SKShapeNode(circleOfRadius: 9)
-        pad.fillColor = trimBlue
-        pad.strokeColor = .clear
-        pad.position = CGPoint(x: 4, y: 24)
-        visual.addChild(pad)
-
-        // Arms (swing opposite to legs; front arm will hold the gun later).
-        armBack = limb(CGSize(width: 11, height: 30), color: suitShade)
-        armBack.position = CGPoint(x: -8, y: 8)
-        visual.addChild(armBack)
-        armFront = limb(CGSize(width: 11, height: 30), color: suitWhite)
-        armFront.position = CGPoint(x: 9, y: 8)
-        visual.addChild(armFront)
-
-        // Helmet + visor.
-        let helmet = SKShapeNode(circleOfRadius: 17)
-        helmet.fillColor = suitWhite
-        helmet.strokeColor = suitShade
-        helmet.lineWidth = 2
-        helmet.position = CGPoint(x: 2, y: 40)
-        visual.addChild(helmet)
-        visor = SKShapeNode(rectOf: CGSize(width: 20, height: 11), cornerRadius: 5)
-        visor.fillColor = visorCyan
-        visor.strokeColor = SKColor(red: 0.1, green: 0.3, blue: 0.45, alpha: 1)
-        visor.lineWidth = 2
-        visor.position = CGPoint(x: 9, y: 41)
-        visual.addChild(visor)
-        // Helmet crest light.
-        let crest = limb(CGSize(width: 6, height: 6), color: trimBlue)
-        crest.position = CGPoint(x: 2, y: 55)
-        visual.addChild(crest)
-
-        // Gun (hidden until the first aim; aims at the touch point).
-        // Built via buildGun so the HUD weapon button can re-skin it.
-        gun = buildGun(for: .blaster)
-        gun.position = CGPoint(x: 16, y: 8)
-        gun.isHidden = true
-        visual.addChild(gun)
+        body = SKSpriteNode(texture: PixelHeroArt.idleTex)
+        body.size = PixelHeroArt.bodySize()
+        visual.addChild(body)
+        rifle = SKSpriteNode(texture: PixelHeroArt.gunTexture(.blaster))
+        rifle.size = PixelHeroArt.gunSize(.blaster)
+        rifle.anchorPoint = PixelHeroArt.gunAnchor // grip = rotation pivot
+        rifle.position = CGPoint(x: 10, y: 4) // chest, arms meet the body
+        visual.addChild(rifle)
+        rifleLength = PixelHeroArt.gunLength(.blaster)
     }
 
-    /// Rebuilds the visible gun for the active weapon (HUD gun button).
-    /// Preserves position, aim rotation and hidden state so mid-aim swaps
-    /// never snap or pop the barrel.
+    /// Swaps the visible rifle for the active weapon (HUD gun button).
+    /// Rotation is preserved; length re-aims the muzzle automatically.
     func setWeapon(_ weapon: HeroWeapon) {
-        let old = gun
-        gun = buildGun(for: weapon)
-        gun.position = old.position
-        gun.zRotation = old.zRotation
-        gun.isHidden = old.isHidden
-        old.removeFromParent()
-        visual.addChild(gun)
-    }
-
-    /// Per-weapon gun model, pointing +x in local space:
-    /// blaster = slim barrel + yellow tip, scatter = wide triple barrel,
-    /// cannon = long heavy barrel + red muzzle ring.
-    private func buildGun(for weapon: HeroWeapon) -> SKShapeNode {
-        func bar(_ size: CGSize, color: SKColor) -> SKShapeNode {
-            let n = SKShapeNode(rectOf: size, cornerRadius: size.height / 2)
-            n.fillColor = color
-            n.strokeColor = .clear
-            return n
-        }
-        let trimBlue = SKColor(red: 0.25, green: 0.55, blue: 1.0, alpha: 1)
-        let barrel: SKShapeNode
-        switch weapon {
-        case .blaster:
-            barrel = bar(CGSize(width: 32, height: 9), color: SKColor(white: 0.2, alpha: 1))
-            let tip = bar(CGSize(width: 8, height: 11),
-                          color: SKColor(red: 1, green: 0.85, blue: 0.3, alpha: 1))
-            tip.position = CGPoint(x: 18, y: 0)
-            barrel.addChild(tip)
-        case .scatter:
-            barrel = bar(CGSize(width: 28, height: 13),
-                         color: SKColor(red: 0.35, green: 0.22, blue: 0.12, alpha: 1))
-            for y in [-8, 8] as [CGFloat] {
-                let tube = bar(CGSize(width: 24, height: 6), color: SKColor(white: 0.2, alpha: 1))
-                tube.position = CGPoint(x: 2, y: y)
-                barrel.addChild(tube)
-            }
-            let mouth = bar(CGSize(width: 7, height: 26),
-                            color: SKColor(red: 1, green: 0.55, blue: 0.15, alpha: 1))
-            mouth.position = CGPoint(x: 16, y: 0)
-            barrel.addChild(mouth)
-        case .cannon:
-            barrel = bar(CGSize(width: 46, height: 13), color: SKColor(white: 0.15, alpha: 1))
-            let stripe = bar(CGSize(width: 26, height: 5),
-                             color: SKColor(red: 0.3, green: 0.9, blue: 1.0, alpha: 1))
-            stripe.position = CGPoint(x: -4, y: 0)
-            barrel.addChild(stripe)
-            let ring = bar(CGSize(width: 9, height: 17),
-                           color: SKColor(red: 1.0, green: 0.25, blue: 0.2, alpha: 1))
-            ring.position = CGPoint(x: 24, y: 0)
-            barrel.addChild(ring)
-        }
-        let grip = bar(CGSize(width: 7, height: 12), color: trimBlue)
-        grip.position = CGPoint(x: -barrel.frame.width / 4, y: -6)
-        barrel.addChild(grip)
-        return barrel
+        rifle.texture = PixelHeroArt.gunTexture(weapon)
+        rifle.size = PixelHeroArt.gunSize(weapon)
+        rifleLength = PixelHeroArt.gunLength(weapon)
     }
 
     // MARK: - Aiming (called by GameScene while the shoot-touch is down)
-    /// Faces the aim direction and rotates the gun to the world-space angle.
+    /// Faces the aim direction and rotates the rifle to the world-space angle.
     /// Handles the flipped visual (xScale = -1) so the barrel truly points at the tap.
     func aimToward(_ dir: CGVector) {
         aimFacingX = dir.dx
         let facingRight = dir.dx >= 0
         visual.xScale = facingRight ? 1 : -1
-        gun.isHidden = false
         let worldAngle = atan2(dir.dy, dir.dx)
-        gun.zRotation = facingRight ? worldAngle : .pi - worldAngle
+        rifle.zRotation = facingRight ? worldAngle : .pi - worldAngle
     }
 
     func clearAim() { aimFacingX = 0 }
+
+    /// Muzzle tip in parent (world) space: rifle grip at the chest + rifle
+    /// length along the aim direction.
+    func muzzlePosition(for dir: CGVector) -> CGPoint {
+        guard let parent else { return position }
+        let hx: CGFloat = dir.dx >= 0 ? 10 : -10
+        return convert(CGPoint(x: hx + dir.dx * rifleLength,
+                               y: 4 + dir.dy * rifleLength), to: parent)
+    }
 
     // MARK: - Per-frame movement + animation (manual character controller)
     func step(dt: TimeInterval, now: TimeInterval) {
@@ -352,7 +231,14 @@ final class HeroNode: SKSpriteNode {
         if grounded { lastGroundedTime = now }
     }
 
-    // MARK: - Procedural animation
+    // MARK: - Pixel-frame animation (driven by velocity, never desyncs)
+    /// Pose ids: 0 idle, 1-4 run cycle, 5 jump (rising), 6 fall.
+    private func setPose(_ pose: Int, texture: SKTexture) {
+        guard pose != shownPose else { return }
+        shownPose = pose
+        body.texture = texture
+    }
+
     private func animate(velocity: CGVector, dt: TimeInterval, now: TimeInterval) {
         let speed = abs(velocity.dx)
         let moving = speed > 30
@@ -362,40 +248,28 @@ final class HeroNode: SKSpriteNode {
         if aimFacingX == 0, moving { visual.xScale = velocity.dx < 0 ? -1 : 1 }
 
         if !isGrounded {
-            // Jump pose: legs tucked, front arm raised, slight back lean.
-            legL.position = CGPoint(x: -8, y: -Balance.heroHeight / 2 + 22)
-            legR.position = CGPoint(x: 8, y: -Balance.heroHeight / 2 + 16)
-            legL.zRotation = -0.5
-            legR.zRotation = 0.35
-            armFront.position = CGPoint(x: 10, y: 16)
-            armBack.position = CGPoint(x: -9, y: 4)
-            visual.zRotation = velocity.dy > 0 ? -0.08 : 0.10
+            // Airborne: tucked jump frame rising, stretched fall frame.
+            setPose(velocity.dy > 60 ? 5 : 6,
+                    texture: velocity.dy > 60 ? PixelHeroArt.jumpTex : PixelHeroArt.fallTex)
+            visual.zRotation = velocity.dy > 0 ? -0.06 : 0.08
             visual.position.y = 0
         } else if moving {
-            // Run cycle: legs + arms swing opposite, phase advances with speed.
-            legPhase += speed * dt * 0.055
-            let swing = sin(legPhase) * min(0.65, speed / runSpeed * 0.65)
-            legL.zRotation = swing
-            legR.zRotation = -swing
-            // Keep feet near the hip while swinging (cheap pendulum feel).
-            legL.position = CGPoint(x: -6 + swing * 14, y: -Balance.heroHeight / 2 + 17 - abs(swing) * 6)
-            legR.position = CGPoint(x: 7 - swing * 14, y: -Balance.heroHeight / 2 + 17 - abs(swing) * 6)
-            armFront.zRotation = -swing * 0.7
-            armBack.zRotation = swing * 0.7
-            // Lean into the run.
-            visual.zRotation = -min(0.14, speed / runSpeed * 0.14)
-            visual.position.y = abs(sin(legPhase)) * -2 // tiny ground-pound bounce
+            // Run cycle: frame rate scales with speed, lean + bounce on top.
+            animT += dt * (0.5 + speed / runSpeed)
+            if animT >= 0.12 {
+                animT = 0
+                runFrame = (runFrame + 1) % PixelHeroArt.runTex.count
+            }
+            setPose(1 + runFrame, texture: PixelHeroArt.runTex[runFrame])
+            visual.zRotation = -min(0.1, speed / runSpeed * 0.1)
+            visual.position.y = (runFrame % 2 == 0) ? 0 : -2
         } else {
-            // Idle: gentle breathing bob, limbs settle.
-            legPhase = 0
-            legL.zRotation = 0; legR.zRotation = 0
-            legL.position = CGPoint(x: -6, y: -Balance.heroHeight / 2 + 17)
-            legR.position = CGPoint(x: 7, y: -Balance.heroHeight / 2 + 17)
-            armFront.zRotation = 0; armBack.zRotation = 0
-            armFront.position = CGPoint(x: 9, y: 8)
-            armBack.position = CGPoint(x: -8, y: 8)
+            // Idle: single frame + gentle breathing bob.
+            runFrame = 0
+            animT = 0
+            setPose(0, texture: PixelHeroArt.idleTex)
             visual.zRotation = 0
-            visual.position.y = sin(now * 3) * 2.5
+            visual.position.y = sin(now * 3) * 2
         }
     }
 }

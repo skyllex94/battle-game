@@ -27,6 +27,7 @@ final class BaseNode: SKNode {
     var facing: CGFloat { team == .player ? 1 : -1 }
 
     private let bodySprite: SKSpriteNode
+    private let cannonPivot = SKNode() // traverses to track targets
     private let cannonSprite: SKSpriteNode
     private let muzzleSocket = SKNode()
     private let gateGlow: SKShapeNode
@@ -40,7 +41,11 @@ final class BaseNode: SKNode {
     private var phase: TimeInterval = 0
     private var gateFlash: CGFloat = 0   // 0..1, decays after a spawn
     private var muzzleFlash: CGFloat = 0 // 0..1, decays after a fan shot
+    private var desiredAngle: CGFloat?   // nil = park toward mid
     private var destroyed = false
+
+    /// Rest direction: both HQs face mid (player right, enemy left).
+    private var homeAngle: CGFloat { team == .player ? 0 : .pi }
 
     // MARK: - Init
 
@@ -114,20 +119,20 @@ final class BaseNode: SKNode {
         gateLightR.zPosition = 2
         addChild(gateLightR)
 
-        // Roof cannon toward mid. Slight upward tilt looks ready to fire.
+        // Roof cannon on a traversing pivot (turret-style, like TowerNode).
+        // Barrel points +x in texture space; the pivot steers it at targets.
         let cannonScale: CGFloat = 3.6
         cannonSprite.setScale(cannonScale)
-        cannonSprite.xScale = cannonScale * facing
-        cannonSprite.position = CGPoint(x: facing * 18, y: 140)
-        cannonSprite.zRotation = 0.12 * facing
-        cannonSprite.zPosition = 2
-        addChild(cannonSprite)
+        cannonSprite.position = .zero
+        cannonPivot.position = CGPoint(x: facing * 18, y: 140)
+        cannonPivot.zRotation = homeAngle
+        cannonPivot.zPosition = 2
+        cannonPivot.addChild(cannonSprite)
+        addChild(cannonPivot)
 
         // Muzzle at the barrel tip (18px right of the breech in texture space).
-        let tipX = facing * 18 + facing * cos(0.12) * 18 * cannonScale
-        let tipY = 140 + sin(0.12) * 18 * cannonScale
-        muzzleSocket.position = CGPoint(x: tipX, y: tipY)
-        addChild(muzzleSocket)
+        muzzleSocket.position = CGPoint(x: 18 * cannonScale, y: 0)
+        cannonPivot.addChild(muzzleSocket)
 
         // Antenna beacon on the dome.
         beacon.fillColor = palette.beacon
@@ -143,7 +148,8 @@ final class BaseNode: SKNode {
 
     // MARK: - Per-frame
 
-    /// Beacon blink + gate flicker + flash decay. Called every frame.
+    /// Beacon blink + gate flicker + flash decay + turret traverse.
+    /// Called every frame.
     func update(dt: TimeInterval) {
         guard !destroyed else { return }
         phase += dt
@@ -151,6 +157,10 @@ final class BaseNode: SKNode {
         teamGlow.alpha = 0.17 + 0.05 * sin(phase * 5)
         gateFlash = max(0, gateFlash - dt * 2.2)
         muzzleFlash = max(0, muzzleFlash - dt * 6)
+        // Traverse toward the target, or sway gently around mid when idle.
+        let want = desiredAngle ?? (homeAngle + CGFloat(sin(phase * 0.7)) * 0.12)
+        cannonPivot.zRotation = BaseNode.lerpAngle(cannonPivot.zRotation, want,
+                                                   t: min(1, 8 * dt))
         // Idle gate shimmer + bright surge right after a unit walks out.
         let shimmer = 0.45 + 0.12 * sin(phase * 7) + 0.08 * sin(phase * 13)
         gateGlow.alpha = min(1, shimmer + gateFlash * 0.6)
@@ -170,6 +180,26 @@ final class BaseNode: SKNode {
     func fireFlash() {
         guard !destroyed else { return }
         muzzleFlash = 1
+    }
+
+    /// Steer the roof cannon at a world-space point (nil = park toward
+    /// mid). Called every frame by the scene alongside update(dt:).
+    func aimAt(_ worldPoint: CGPoint?) {
+        guard !destroyed else { return }
+        guard let p = worldPoint, let parent = parent else {
+            desiredAngle = nil
+            return
+        }
+        let pivot = cannonPivot.convert(CGPoint.zero, to: parent)
+        desiredAngle = atan2(p.y - pivot.y, p.x - pivot.x)
+    }
+
+    /// Shortest-path angle interpolation (handles the ±π wrap).
+    private static func lerpAngle(_ from: CGFloat, _ to: CGFloat, t: CGFloat) -> CGFloat {
+        var delta = to - from
+        while delta > .pi { delta -= 2 * .pi }
+        while delta < -.pi { delta += 2 * .pi }
+        return from + delta * t
     }
 
     /// Fan shots originate here (roof cannon tip, parent/world coords).
@@ -196,13 +226,14 @@ final class BaseNode: SKNode {
     /// Dead bases are already untargetable; this only plays visuals.
     func setDestroyed() {
         destroyed = true
+        desiredAngle = nil
         bodySprite.color = SKColor(white: 0.3, alpha: 1)
         bodySprite.colorBlendFactor = 0.7
         bodySprite.alpha = 0.8
         cannonSprite.color = SKColor(white: 0.3, alpha: 1)
         cannonSprite.colorBlendFactor = 0.7
         cannonSprite.alpha = 0.8
-        cannonSprite.zRotation = -0.45 * facing
+        cannonPivot.zRotation = homeAngle - 0.45 * facing
         gateGlow.isHidden = true
         gateLightL.isHidden = true
         gateLightR.isHidden = true

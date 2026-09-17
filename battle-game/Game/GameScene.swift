@@ -658,12 +658,15 @@ final class GameScene: SKScene {
         for base in bases { base.node.update(dt: dt) }
         for i in bases.indices {
             guard bases[i].alive else { continue }
-            // Fan: enemy HQ fires at the hero/allies pushing in;
-            // player HQ fires back at enemy marchers pushing in.
+            // Traverse the roof cannon at whoever is pushing in (nil parks
+            // it toward mid); fan fires once aimed + cooled down.
+            // Enemy HQ hunts hero/allies; player HQ fires back at marchers.
+            let fanTarget = baseFanTarget(for: bases[i])
+            bases[i].node.aimAt(fanTarget)
             bases[i].cooldown -= dt
-            if bases[i].cooldown <= 0, let fanTarget = baseFanTarget(for: bases[i]) {
+            if bases[i].cooldown <= 0, let target = fanTarget {
                 bases[i].cooldown = Balance.baseFireCooldown
-                fireBaseFan(from: bases[i], at: fanTarget)
+                fireBaseFan(from: bases[i], at: target)
             }
             guard bases[i].team == .enemy else { continue }
             // Summon marchers toward the player base, capped.

@@ -1,6 +1,7 @@
 import Combine
 import SpriteKit
 import SwiftUI
+import UIKit // UIImage portraits from UnitPixelArt
 
 /// GameView — hosts the Level 1 SpriteKit battlefield + movement HUD.
 /// Joystick (bottom-left) runs the hero; push the stick up to jump.
@@ -70,9 +71,15 @@ struct GameView: View {
             .ignoresSafeArea(edges: .bottom)
 
             // Pause menu overlay (sim is frozen while this is up).
+            // Tap outside the card to resume automatically.
             if showMenu {
                 Color.black.opacity(0.6)
                     .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        showMenu = false
+                        scene.isPaused = false
+                    }
                 VStack(spacing: 14) {
                     Text("Paused")
                         .font(.title2.bold())
@@ -241,13 +248,24 @@ private struct ArmyCardButton: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 8) {
-                Image(systemName: kind.icon)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(affordable ? .cyan : .gray)
-                    .frame(width: 30, height: 30)
-                    .background(affordable ? .cyan.opacity(0.18) : .white.opacity(0.08))
-                    .overlay(Rectangle().stroke(affordable ? Color.cyan : Color.gray.opacity(0.5),
-                                                lineWidth: 2))
+                // Live portrait: the real pixel sprite, torso-up with its
+                // gun raised — breaking out of the little square on purpose.
+                ZStack(alignment: .bottomLeading) {
+                    Rectangle()
+                        .fill(affordable ? .cyan.opacity(0.18) : .white.opacity(0.08))
+                        .frame(width: 30, height: 30)
+                        .overlay(Rectangle().stroke(affordable ? Color.cyan : Color.gray.opacity(0.5),
+                                                    lineWidth: 2))
+                    Image(uiImage: UnitPixelArt.portraitImage(for: kind.pixelKind))
+                        .interpolation(.none)
+                        .resizable()
+                        .frame(width: 42, height: 28)
+                        .offset(x: 1, y: -5)
+                        .saturation(affordable ? 1 : 0)
+                        .opacity(affordable ? 1 : 0.6)
+                        .allowsHitTesting(false)
+                }
+                .frame(width: 30, height: 30)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(kind.name.uppercased())
                         .font(.system(size: 12, weight: .bold, design: .monospaced))

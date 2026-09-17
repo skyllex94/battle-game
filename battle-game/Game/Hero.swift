@@ -65,11 +65,15 @@ final class HeroNode: SKSpriteNode {
     private func buildVisuals() {
         body = SKSpriteNode(texture: PixelHeroArt.idleTex)
         body.size = PixelHeroArt.bodySize()
+        body.zPosition = 0
         visual.addChild(body)
         rifle = SKSpriteNode(texture: PixelHeroArt.gunTexture(.blaster))
         rifle.size = PixelHeroArt.gunSize(.blaster)
         rifle.anchorPoint = PixelHeroArt.gunAnchor // grip = rotation pivot
         rifle.position = CGPoint(x: 10, y: 4) // chest, arms meet the body
+        // Gun + arms always draw in front of the body (same-z siblings have
+        // no guaranteed order under ignoresSiblingOrder).
+        rifle.zPosition = 5
         visual.addChild(rifle)
         rifleLength = PixelHeroArt.gunLength(.blaster)
     }

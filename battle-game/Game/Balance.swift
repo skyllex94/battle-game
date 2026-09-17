@@ -117,7 +117,7 @@ enum Balance {
     static let parallaxSky: CGFloat = 0.0
     static let parallaxFar: CGFloat = 0.15
     static let parallaxMid: CGFloat = 0.35
-    static let parallaxForeground: CGFloat = 1.15
+    static let parallaxForeground: CGFloat = 1.28
 
     // MARK: - Camera
     static let cameraZoom: CGFloat = 0.85  // zoomed out: hero reads smaller, more lane visible

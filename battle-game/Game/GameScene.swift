@@ -182,105 +182,48 @@ final class GameScene: SKScene {
         updateParallax()
     }
 
-    // MARK: - Layer 0: sky gradient (static, factor 0.0)
+    // MARK: - Layer 0: twilight ruins sky (static, factor 0.0)
     private func buildSky() {
         skyLayer.zPosition = -30
-        // Vertical gradient via a tall stretched texture drawn once into a sprite.
-        let gradient = makeVerticalGradientTexture(
-            size: CGSize(width: 4, height: 256),
-            top: SKColor(red: 0.05, green: 0.07, blue: 0.18, alpha: 1),
-            bottom: SKColor(red: 0.35, green: 0.12, blue: 0.16, alpha: 1) // hellish dusk, matches Hell_ground
-        )
-        let sky = SKSpriteNode(texture: gradient)
-        sky.anchorPoint = CGPoint(x: 0.5, y: 0.5)
-        sky.size = CGSize(width: size.width * 1.2, height: size.height * 1.4)
-        sky.zPosition = 0
-        skyLayer.addChild(sky)
+        TwilightRuinsBG.buildSky(in: skyLayer, sceneSize: size)
         skyLayer.position = CGPoint(x: size.width / 2, y: size.height / 2)
     }
 
-    // MARK: - Layer 1: far MapBG tiles (factor 0.15)
+    // MARK: - Layer 1: far mountain + ruin panorama (factor 0.15, NOT tiled)
     private func buildFar() {
         farLayer.zPosition = -20
-        let texture = ImportedArt.skTexture(named: "MapBG")
-        texture.filteringMode = .linear
-        // Scale to scene height; tile enough copies to cover the parallax-travelled range.
-        let targetH = size.height * 1.05
-        let scale = targetH / texture.size().height
-        let tileW = texture.size().width * scale
-        let needed = Int(ceil((size.width + Balance.levelWidth * Balance.parallaxFar) / tileW)) + 2
-        let startX = -size.width // overhang left so the view is covered at min camera
-        for i in 0..<needed {
-            let tile = SKSpriteNode(texture: texture)
-            tile.setScale(scale)
-            tile.anchorPoint = CGPoint(x: 0, y: 0.5)
-            tile.position = CGPoint(x: startX + CGFloat(i) * tileW, y: 0)
-            tile.alpha = 0.38
-            farLayer.addChild(tile)
-        }
-        // Dark veil so the bright map art sits behind the action, not over it.
-        let veil = SKSpriteNode(color: SKColor(red: 0.04, green: 0.05, blue: 0.12, alpha: 0.55),
-                                size: CGSize(width: CGFloat(needed) * tileW, height: targetH))
-        veil.anchorPoint = CGPoint(x: 0, y: 0.5)
-        veil.position = CGPoint(x: startX, y: 0)
-        veil.zPosition = 1
-        farLayer.addChild(veil)
+        TwilightRuinsBG.buildFar(in: farLayer, sceneSize: size)
         farLayer.position = CGPoint(x: 0, y: size.height * 0.5)
     }
 
-    // MARK: - Layer 2: mid hill silhouettes (factor 0.35, procedural)
+    // MARK: - Layer 2: mid treeline panorama (factor 0.35, NOT tiled)
     private func buildMid() {
         midLayer.zPosition = -10
-        let hillColor = SKColor(red: 0.10, green: 0.08, blue: 0.14, alpha: 1)
-        // Repeating rounded hills across the travelled range.
-        let range = size.width + Balance.levelWidth * Balance.parallaxMid
-        var x: CGFloat = 0
-        var flip = false
-        while x < range + 400 {
-            let w: CGFloat = flip ? 520 : 380
-            let h: CGFloat = flip ? 130 : 190
-            let hill = SKShapeNode(ellipseOf: CGSize(width: w, height: h))
-            hill.fillColor = hillColor
-            hill.strokeColor = .clear
-            hill.position = CGPoint(x: x + w / 2, y: -size.height * 0.36)
-            midLayer.addChild(hill)
-            x += w * 0.75
-            flip.toggle()
-        }
-        // A few dead-tree spikes for the hell-ground mood.
-        for i in 0..<12 {
-            let spike = SKShapeNode(rectOf: CGSize(width: 14, height: 120 + CGFloat(i % 3) * 40))
-            spike.fillColor = hillColor
-            spike.strokeColor = .clear
-            spike.position = CGPoint(x: CGFloat(i) * (range / 12), y: -size.height * 0.18)
-            spike.zRotation = CGFloat(i % 2 == 0 ? 0.08 : -0.08)
-            midLayer.addChild(spike)
-        }
+        TwilightRuinsBG.buildMid(in: midLayer, sceneSize: size)
         midLayer.position = CGPoint(x: 0, y: size.height * 0.5)
     }
 
     // MARK: - Playfield: ground (factor 1.0)
-    /// Hell-lane dressing (see GroundArt): mirrored lava-crack tiling,
-    /// lit walkable rim, strata cliff, fading territory wash, rocks,
-    /// lava pools + looping embers.
+    /// Twilight moss lane (see TwilightRuinsBG): 4 variants (= 8 unique
+    /// faces with mirroring) over a brick cliff, moonlit lip, faint team
+    /// washes, vines + shroom glows + pollen.
     private func buildGround() {
         world.zPosition = 0
-        GroundArt.dress(in: world)
+        TwilightRuinsBG.buildGround(in: world)
     }
 
     // MARK: - Playfield: floating platforms
+    /// Twilight moss-capped brick blocks (see TwilightRuinsBG): the 80x12
+    /// chunk maps to 320x36 at exact integer scale so pixels stay crisp.
     private func buildPlatforms() {
-        let texture = ImportedArt.skTexture(named: "Hell_ground")
+        let texture = TwilightRuinsBG.platformTexture()
         for rect in Balance.platforms {
             let platform = SKSpriteNode(texture: texture)
             platform.size = CGSize(width: rect.width, height: rect.height)
             platform.position = CGPoint(x: rect.midX, y: rect.midY)
-            platform.color = SKColor(white: 0, alpha: 0.25)
-            platform.colorBlendFactor = 0.4
             platform.zPosition = 1
             platform.name = "platform"
             world.addChild(platform)
-            world.addChild(GroundArt.platformRim(for: rect))
         }
     }
 
@@ -345,17 +288,7 @@ final class GameScene: SKScene {
     // MARK: - Foreground layer (factor 1.15, subtle)
     private func buildForeground() {
         foregroundLayer.zPosition = 20
-        // Dark grass tufts along the bottom, drifting slightly faster than the world.
-        let bladeCount = 90
-        for i in 0..<bladeCount {
-            let x = CGFloat(i) * (Balance.levelWidth * Balance.parallaxForeground / CGFloat(bladeCount))
-            let blade = SKShapeNode(rectOf: CGSize(width: 6, height: 30 + CGFloat(i % 4) * 8))
-            blade.fillColor = SKColor(red: 0.05, green: 0.10, blue: 0.06, alpha: 0.4)
-            blade.strokeColor = .clear
-            blade.position = CGPoint(x: x, y: 18)
-            blade.zRotation = CGFloat((i % 5) - 2) * 0.06
-            foregroundLayer.addChild(blade)
-        }
+        TwilightRuinsBG.buildForeground(in: foregroundLayer)
         foregroundLayer.position = CGPoint(x: 0, y: 0)
     }
 
@@ -814,6 +747,7 @@ final class GameScene: SKScene {
             }
             guard let aim = target else {
                 // Nothing left to fight: hold position.
+                e.aimAt(nil)
                 e.animateMarch(dt: dt, advancing: false)
                 e.position.y = Balance.groundTopY + e.size.height / 2
                 continue
@@ -821,6 +755,7 @@ final class GameScene: SKScene {
 
             let dist = hypot(aim.x - e.position.x, aim.y - e.position.y)
             e.face(aim.x - e.position.x)
+            e.aimAt(CGVector(dx: aim.x - e.position.x, dy: aim.y - e.position.y))
             if dist > Balance.enemyShootRange {
                 // Advance on the target (never past the lane edge).
                 let dir: CGFloat = aim.x > e.position.x ? 1 : -1
@@ -909,6 +844,7 @@ final class GameScene: SKScene {
                 target = CGPoint(x: base.node.position.x, y: Balance.groundTopY + 100)
             }
             guard let aim = target else {
+                a.aimAt(nil)
                 a.animateMarch(dt: dt, advancing: false)
                 a.position.y = Balance.groundTopY + a.size.height / 2
                 continue
@@ -916,6 +852,7 @@ final class GameScene: SKScene {
 
             let dist = hypot(aim.x - a.position.x, aim.y - a.position.y)
             a.face(aim.x - a.position.x)
+            a.aimAt(CGVector(dx: aim.x - a.position.x, dy: aim.y - a.position.y))
             if dist > a.kind.shootRange {
                 let dir: CGFloat = aim.x > a.position.x ? 1 : -1
                 a.position.x = min(Balance.levelWidth - 40,

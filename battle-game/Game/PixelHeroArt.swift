@@ -1,27 +1,28 @@
 import SpriteKit
 import UIKit
 
-/// Code-drawn pixel-art hero (vanguard look: white armor, pink trim, dark
-/// visor) in the same style as the pixel towers/bases. No image assets:
-/// every frame is rendered once into cached textures.
+/// Code-drawn pixel-art hero (Vanguard look: silver-white armor, gold
+/// V-visor, gold chest core, dark joints) in the same style as the pixel
+/// towers/bases. No image assets: every frame is rendered once into
+/// cached textures.
 ///
 /// Body canvas is 30x46 (row 0 = top), origin at hero center. Legs are
 /// parameterized so idle/run/jump/fall all come from one drawing routine.
 /// Guns live on a 34x14 canvas with the grip at x=10 (rotation pivot).
 enum PixelHeroArt {
 
-    // MARK: - Palette (vanguard white/pink on dark)
+    // MARK: - Palette (vanguard white/gold on dark)
 
     private static let outline = UIColor(red: 0.05, green: 0.04, blue: 0.08, alpha: 1)
     private static let armorL = UIColor(red: 0.93, green: 0.94, blue: 0.97, alpha: 1)
     private static let armorM = UIColor(red: 0.78, green: 0.80, blue: 0.86, alpha: 1)
     private static let armorD = UIColor(red: 0.55, green: 0.57, blue: 0.65, alpha: 1)
-    private static let pink = UIColor(red: 1.0, green: 0.32, blue: 0.62, alpha: 1)
-    private static let pinkD = UIColor(red: 0.72, green: 0.16, blue: 0.42, alpha: 1)
+    private static let gold = UIColor(red: 1.0, green: 0.74, blue: 0.28, alpha: 1)
+    private static let goldD = UIColor(red: 0.78, green: 0.45, blue: 0.12, alpha: 1)
     private static let suit = UIColor(red: 0.13, green: 0.12, blue: 0.19, alpha: 1)
     private static let suitD = UIColor(red: 0.07, green: 0.06, blue: 0.11, alpha: 1)
     private static let visor = UIColor(red: 0.03, green: 0.02, blue: 0.06, alpha: 1)
-    private static let eye = UIColor(red: 1.0, green: 0.36, blue: 0.72, alpha: 1)
+    private static let eye = UIColor(red: 1.0, green: 0.70, blue: 0.22, alpha: 1)
     private static let tank = UIColor(red: 0.32, green: 0.86, blue: 1.0, alpha: 1)
     private static let metalD = UIColor(red: 0.16, green: 0.16, blue: 0.21, alpha: 1)
     private static let metalM = UIColor(red: 0.42, green: 0.44, blue: 0.52, alpha: 1)
@@ -106,45 +107,52 @@ enum PixelHeroArt {
             // Hips bridge belt -> legs.
             fill(cg, 11, 28, 8, 2, suitD)
 
-            // Torso: white chest + dark vest + pink core.
+            // Torso: white chest + dark vest + gold core.
             fill(cg, 9, 15, 12, 1, outline)
             fill(cg, 9, 16, 12, 10, armorL)
             fill(cg, 9, 16, 2, 10, armorM)   // left shade
             fill(cg, 19, 16, 2, 10, armorM)  // right shade
             fill(cg, 12, 18, 5, 7, suit)     // vest
             fill(cg, 12, 18, 5, 1, suitD)
-            fill(cg, 14, 20, 2, 3, pink)     // chest core
+            fill(cg, 14, 20, 2, 3, gold)     // chest core
             fill(cg, 14, 20, 2, 1, .white)   // core glint
-            // Belt + buckle.
+            // Belt + buckle + gold hip lights.
             fill(cg, 9, 26, 12, 2, suitD)
-            fill(cg, 13, 26, 3, 2, pinkD)
+            fill(cg, 13, 26, 3, 2, goldD)
+            fill(cg, 9, 27, 2, 1, gold)
+            fill(cg, 19, 27, 2, 1, gold)
             // Bulky shoulder pads + dark nubs where arms would join.
             fill(cg, 4, 14, 5, 5, armorL)
             fill(cg, 4, 14, 5, 1, .white)
+            fill(cg, 5, 16, 1, 1, gold) // shoulder stud
             fill(cg, 6, 19, 2, 2, suitD)
             fill(cg, 21, 14, 4, 4, armorM)
             fill(cg, 21, 14, 4, 1, armorL)
+            fill(cg, 23, 16, 1, 1, gold) // shoulder stud
             fill(cg, 22, 18, 2, 2, suitD)
 
-            // Big rounded helmet + pink crest cap.
+            // Big rounded helmet + center ridge + gold brow light.
             fill(cg, 8, 1, 13, 1, outline)
             fill(cg, 7, 2, 15, 10, armorL)
             fill(cg, 7, 2, 2, 10, armorM)   // left shade
+            fill(cg, 20, 2, 2, 10, armorD)  // right shade
             fill(cg, 7, 11, 15, 1, armorD)  // chin shade
-            fill(cg, 12, 1, 5, 4, pink)     // crest cap
-            fill(cg, 12, 1, 5, 1, .white)   // crest glint
-            fill(cg, 8, 4, 2, 4, pinkD)     // side lamp
-            // Dark face opening + glowing pink eye (faces right).
+            fill(cg, 13, 1, 3, 5, armorM)   // center ridge
+            fill(cg, 13, 1, 3, 1, .white)   // ridge glint
+            fill(cg, 8, 4, 2, 4, goldD)     // side lamp
+            fill(cg, 14, 6, 2, 1, gold)     // brow light
+            // Dark face opening + angular gold V-visor (Vanguard signature).
             fill(cg, 13, 7, 8, 5, visor)
-            fill(cg, 14, 8, 6, 3, outline)
-            fill(cg, 16, 9, 4, 1, eye)
+            segment(cg, x0: 14, y0: 8, x1: 17, y1: 10, w: 2, color: gold)
+            segment(cg, x0: 20, y0: 8, x1: 17, y1: 10, w: 2, color: gold)
+            fill(cg, 16, 10, 2, 1, .white)  // V center glint
             // Neck bridges helmet -> torso.
             fill(cg, 12, 12, 5, 3, suit)
         }
     }
 
     /// One leg with a bent knee: thigh (hip -> knee) + shin (knee -> foot),
-    /// white/dark knee pad, then boot + pink sole. Knees push forward.
+    /// white/dark knee pad, then boot + gold sole. Knees push forward.
     private static func drawLeg(_ cg: CGContext, hipX: Int, footX: Int, footY: Int,
                                 kneeFwd: Int, main: UIColor, shade: UIColor,
                                 pad: UIColor) {
@@ -154,10 +162,10 @@ enum PixelHeroArt {
         segment(cg, x0: hipX, y0: hipY, x1: kneeX, y1: kneeY, w: 4, color: main)
         segment(cg, x0: kneeX, y0: kneeY, x1: footX, y1: footY, w: 3, color: shade)
         fill(cg, kneeX - 1, kneeY, 3, 2, pad) // knee pad
-        // Boot + highlight + pink sole.
+        // Boot + highlight + gold sole.
         fill(cg, footX - 2, footY + 1, 5, 3, suitD)
         fill(cg, footX - 2, footY + 1, 5, 1, metalM) // boot highlight
-        fill(cg, footX - 2, footY + 3, 5, 1, pinkD)  // sole
+        fill(cg, footX - 2, footY + 3, 5, 1, goldD)  // sole
     }
 
     /// Thick pixel line: paints a w-wide row per step between two points.
@@ -220,7 +228,7 @@ enum PixelHeroArt {
         // Shoulder cap (pauldron) where the arms meet the body.
         fill(cg, 1, 9, 6, 6, armorL)
         fill(cg, 1, 9, 6, 1, .white)
-        fill(cg, 1, 14, 6, 1, pinkD)
+        fill(cg, 1, 14, 6, 1, goldD)
         fill(cg, 1, 9, 1, 6, armorM)
         // Back arm: cap -> grip glove (short, mostly behind).
         segment(cg, x0: 5, y0: 11, x1: 9, y1: 11, w: 3, color: suit)
@@ -228,11 +236,11 @@ enum PixelHeroArt {
         // the gun silhouette stays clean).
         segment(cg, x0: 5, y0: 13, x1: 19, y1: 9, w: 3, color: suit)
         segment(cg, x0: 5, y0: 14, x1: 17, y1: 10, w: 1, color: suitD)
-        // Gloves wrapping grip + foregrip, pink knuckle lines.
+        // Gloves wrapping grip + foregrip, gold knuckle lines.
         fill(cg, 8, 9, 4, 4, suitD)
-        fill(cg, 8, 10, 4, 1, pinkD)
+        fill(cg, 8, 10, 4, 1, goldD)
         fill(cg, 18, 7, 4, 4, suitD)
-        fill(cg, 18, 8, 4, 1, pinkD)
+        fill(cg, 18, 8, 4, 1, goldD)
         // Trigger.
         fill(cg, 12, 11, 2, 2, metalD)
     }
@@ -265,7 +273,7 @@ enum PixelHeroArt {
         // Stock.
         fill(cg, 1, 5, 8, 5, metalD)
         fill(cg, 1, 5, 8, 1, metalM)
-        fill(cg, 15, 10, 5, 2, pinkD) // pump
+        fill(cg, 15, 10, 5, 2, goldD) // pump
         // Triple barrels.
         fill(cg, 9, 3, 19, 8, outline)
         fill(cg, 10, 4, 18, 2, metalD)
@@ -291,7 +299,7 @@ enum PixelHeroArt {
         fill(cg, 10, 6, 19, 3, metalD)
         fill(cg, 10, 6, 19, 1, metalL)
         // Red muzzle rings + heavy mouth.
-        fill(cg, 23, 5, 2, 5, pinkD)
+        fill(cg, 23, 5, 2, 5, goldD)
         fill(cg, 27, 4, 2, 7, red)
         fill(cg, 30, 4, 3, 7, outline)
         fill(cg, 31, 5, 1, 5, suitD)

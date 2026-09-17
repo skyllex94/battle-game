@@ -39,7 +39,8 @@ enum PixelHeroArt {
         cg.fill(CGRect(x: x, y: y, width: w, height: h))
     }
 
-    private static func render(w: Int, h: Int, draw: (CGContext) -> Void) -> SKTexture {
+    private static func render(w: Int, h: Int, key: String? = nil,
+                               draw: (CGContext) -> Void) -> SKTexture {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = false
@@ -49,9 +50,24 @@ enum PixelHeroArt {
             // displays upright, same as the tower/base art.)
             draw(ctx.cgContext)
         }
+        if let key { imageCache[key] = img }
         let tex = SKTexture(image: img)
         tex.filteringMode = .nearest
         return tex
+    }
+
+    /// Raw pixel images behind the cached textures (for SwiftUI icons).
+    private static var imageCache: [String: UIImage] = [:]
+
+    /// Pixel gun icon for the HUD weapon button — the same art as the
+    /// aimed rifle. gunW x gunH px; show with `.interpolation(.none)`.
+    static func gunImage(_ gun: HeroWeapon) -> UIImage {
+        _ = gunTexture(gun) // warm the cache
+        switch gun {
+        case .blaster: return imageCache["gun-blaster"] ?? UIImage()
+        case .scatter: return imageCache["gun-scatter"] ?? UIImage()
+        case .cannon: return imageCache["gun-cannon"] ?? UIImage()
+        }
     }
 
     // MARK: - Body frames
@@ -253,7 +269,7 @@ enum PixelHeroArt {
         }
     }
 
-    private static let blasterTex: SKTexture = render(w: gunW, h: gunH) { cg in
+    private static let blasterTex: SKTexture = render(w: gunW, h: gunH, key: "gun-blaster") { cg in
         // Stock.
         fill(cg, 1, 5, 8, 5, metalD)
         fill(cg, 1, 5, 8, 1, metalM)
@@ -269,7 +285,7 @@ enum PixelHeroArt {
         drawGunArms(cg)
     }
 
-    private static let scatterTex: SKTexture = render(w: gunW, h: gunH) { cg in
+    private static let scatterTex: SKTexture = render(w: gunW, h: gunH, key: "gun-scatter") { cg in
         // Stock.
         fill(cg, 1, 5, 8, 5, metalD)
         fill(cg, 1, 5, 8, 1, metalM)
@@ -287,7 +303,7 @@ enum PixelHeroArt {
         drawGunArms(cg)
     }
 
-    private static let cannonTex: SKTexture = render(w: gunW, h: gunH) { cg in
+    private static let cannonTex: SKTexture = render(w: gunW, h: gunH, key: "gun-cannon") { cg in
         // Heavy stock.
         fill(cg, 0, 4, 9, 6, metalD)
         fill(cg, 0, 4, 9, 1, metalM)

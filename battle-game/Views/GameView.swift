@@ -43,8 +43,9 @@ struct GameView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
-            // Unified command bar: weapon | treasury | vitals | minimap | pause.
-            // Compact minimap variant wins on narrow screens via ViewThatFits.
+            // Top command strip, glued to the screen edge like the army tabs
+            // are glued to the bottom. Compact minimap wins on narrow
+            // screens via ViewThatFits.
             VStack(spacing: 0) {
                 ViewThatFits(in: .horizontal) {
                     commandBar(minimapWidth: 300)
@@ -53,6 +54,7 @@ struct GameView: View {
                 Spacer()
                     .allowsHitTesting(false)
             }
+            .ignoresSafeArea(edges: .top)
 
             // Bottom army tabs: flush with the screen edge so the battlefield
             // stays fully visible. Tap to summon when you can afford it.
@@ -142,10 +144,23 @@ struct GameView: View {
             // Live mag/reserve readout (3/30); REL while reloading, red when dry.
             Button { weapon = scene.cycleWeapon() } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: weapon.icon)
-                        .foregroundStyle(.cyan)
-                    Text(weapon.name)
-                        .foregroundStyle(.white)
+                    // Little square with the actual pixel gun of the active
+                    // weapon — oversized so it breaks out of the frame.
+                    ZStack {
+                        Rectangle()
+                            .fill(.cyan.opacity(0.18))
+                            .frame(width: 30, height: 30)
+                            .overlay(Rectangle().stroke(.cyan.opacity(0.6), lineWidth: 2))
+                        Image(uiImage: PixelHeroArt.gunImage(weapon))
+                            .interpolation(.none)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 42, height: 23)
+                            .offset(x: 3, y: -5)
+                            .allowsHitTesting(false)
+                    }
+                    .frame(width: 30, height: 30)
+                    .padding(.trailing, 8)
                     Text(minimap.ammoText)
                         .monospacedDigit()
                         .foregroundStyle(minimap.ammoMag == 0 ? .red
@@ -153,11 +168,10 @@ struct GameView: View {
                     Image(systemName: "arrow.2.circlepath")
                         .foregroundStyle(.white.opacity(0.55))
                 }
-                .font(.caption.bold())
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
                 .padding(.horizontal, 10).padding(.vertical, 7)
                 .background(.cyan.opacity(0.16))
-                .overlay(Capsule().stroke(.cyan.opacity(0.45), lineWidth: 1))
-                .clipShape(Capsule())
+                .overlay(Rectangle().stroke(.cyan.opacity(0.6), lineWidth: 2))
             }
 
             HUDDivider()
@@ -168,7 +182,7 @@ struct GameView: View {
                 Text("\(minimap.money)")
                     .monospacedDigit()
             }
-            .font(.caption.bold())
+            .font(.system(size: 12, weight: .bold, design: .monospaced))
             .foregroundStyle(.yellow)
 
             HUDDivider()
@@ -194,21 +208,18 @@ struct GameView: View {
                 showMenu = true
             } label: {
                 Image(systemName: "pause.fill")
-                    .font(.caption.bold())
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 30, height: 30)
                     .background(.white.opacity(0.12))
-                    .clipShape(Circle())
+                    .overlay(Rectangle().stroke(.white.opacity(0.25), lineWidth: 2))
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(.black.opacity(0.62))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14)
-            .stroke(.white.opacity(0.12), lineWidth: 1))
-        .padding(.horizontal, 10)
-        .padding(.top, 6)
+        .padding(.vertical, 8)
+        .background(.black.opacity(0.78))
+        .clipShape(PixelTopBarShape(cut: 7))
+        .overlay(PixelTopBarShape(cut: 7).stroke(.white.opacity(0.2), lineWidth: 3))
     }
 }
 
@@ -235,6 +246,23 @@ private struct PixelTabShape: Shape {
     }
 }
 
+/// Pixel top strip: flat top glued to the screen edge, chamfered bottom
+/// corners. Mirrors PixelTabShape so the HUD command bar matches the tabs.
+private struct PixelTopBarShape: Shape {
+    var cut: CGFloat = 7
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - cut))
+        p.addLine(to: CGPoint(x: rect.maxX - cut, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX + cut, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - cut))
+        p.closeSubpath()
+        return p
+    }
+}
+
 /// Bottom army tab: pixel-menu styling — chamfered hard corners, chunky
 /// 3pt border, uppercase monospaced label + cost. No stats, just pick-and-go.
 private struct ArmyCardButton: View {
@@ -250,7 +278,7 @@ private struct ArmyCardButton: View {
             HStack(spacing: 8) {
                 // Live portrait: the real pixel sprite, torso-up with its
                 // gun raised — breaking out of the little square on purpose.
-                ZStack(alignment: .bottomLeading) {
+                ZStack {
                     Rectangle()
                         .fill(affordable ? .cyan.opacity(0.18) : .white.opacity(0.08))
                         .frame(width: 30, height: 30)
@@ -259,8 +287,8 @@ private struct ArmyCardButton: View {
                     Image(uiImage: UnitPixelArt.portraitImage(for: kind.pixelKind))
                         .interpolation(.none)
                         .resizable()
-                        .frame(width: 42, height: 28)
-                        .offset(x: 1, y: -5)
+                        .frame(width: 48, height: 32)
+                        .offset(x: -2, y: -7)
                         .saturation(affordable ? 1 : 0)
                         .opacity(affordable ? 1 : 0.6)
                         .allowsHitTesting(false)
@@ -327,13 +355,14 @@ private struct HeroHealthBar: View {
                 .font(.caption2)
                 .foregroundStyle(color)
             ZStack(alignment: .leading) {
-                Capsule()
+                Rectangle()
                     .fill(.white.opacity(0.18))
-                    .frame(width: 90, height: 8)
-                Capsule()
+                    .frame(width: 90, height: 10)
+                Rectangle()
                     .fill(color)
-                    .frame(width: 90 * frac, height: 8)
+                    .frame(width: 90 * frac, height: 10)
             }
+            .overlay(Rectangle().stroke(.white.opacity(0.25), lineWidth: 1))
             Text("\(Int(hp))/\(Int(maxHP))")
                 .font(.caption2.bold())
                 .monospacedDigit()

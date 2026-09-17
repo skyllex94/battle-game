@@ -78,17 +78,18 @@ enum UnitPixelArt {
             let cg = ctx.cgContext
             // Torso-up crop: full width, rows 1...18 (head through belt).
             // Renderer scale is 1, so points == pixels for the crop.
+            // NOTE: draw via UIImage (not raw CGImage) so UIKit orientation
+            // is honoured — CGImage draws upside-down here.
             let crop = CGRect(x: 0, y: 1, width: 24, height: 18)
             if let bust = body.cgImage?.cropping(to: crop) {
-                cg.draw(bust, in: CGRect(x: 2, y: 4, width: 24, height: 18))
+                UIImage(cgImage: bust, scale: 1, orientation: .up)
+                    .draw(in: CGRect(x: 2, y: 4, width: 24, height: 18))
             }
             // Gun-arm raised high, pivoting on the shoulder grip.
             cg.saveGState()
             cg.translateBy(x: shoulder.x, y: shoulder.y)
             cg.rotate(by: -0.32)
-            if let armCG = arm.cgImage {
-                cg.draw(armCG, in: CGRect(x: -5, y: -6, width: 24, height: 12))
-            }
+            arm.draw(in: CGRect(x: -5, y: -6, width: 24, height: 12))
             cg.restoreGState()
         }
         portraitCache[kind] = portrait

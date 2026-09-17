@@ -26,9 +26,10 @@ struct MinimapView: View {
 
     var body: some View {
         ZStack {
-            Capsule()
+            Rectangle()
                 .fill(.black.opacity(0.55))
                 .frame(width: stripWidth + 16.0, height: stripHeight + 8.0)
+                .overlay(Rectangle().stroke(.white.opacity(0.25), lineWidth: 2))
 
             // Viewport box (what the camera sees).
             ZStack {

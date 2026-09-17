@@ -630,18 +630,20 @@ final class GameScene: SKScene {
         towers[index].node.setHPFraction(frac)
     }
 
-    // MARK: - Main base: 3-bolt fan + summoning (enemy base only)
+    // MARK: - Main bases: 3-bolt fan on both HQs + summoning (enemy only)
     private func updateBases(dt: TimeInterval) {
         // Gate shimmer + beacons animate on both HQs every frame.
         for base in bases { base.node.update(dt: dt) }
         for i in bases.indices {
-            guard bases[i].alive, bases[i].team == .enemy else { continue }
-            // Fan: fires at the hero or the closest ally pushing into base range.
+            guard bases[i].alive else { continue }
+            // Fan: enemy HQ fires at the hero/allies pushing in;
+            // player HQ fires back at enemy marchers pushing in.
             bases[i].cooldown -= dt
             if bases[i].cooldown <= 0, let fanTarget = baseFanTarget(for: bases[i]) {
                 bases[i].cooldown = Balance.baseFireCooldown
                 fireBaseFan(from: bases[i], at: fanTarget)
             }
+            guard bases[i].team == .enemy else { continue }
             // Summon marchers toward the player base, capped.
             bases[i].summonTimer -= dt
             if bases[i].summonTimer <= 0 {
@@ -651,9 +653,22 @@ final class GameScene: SKScene {
         }
     }
 
-    /// Base fan target: exposed hero in range, else nearest ally in range.
+    /// Base fan target: enemy HQ hunts the exposed hero in range, else the
+    /// nearest ally in range; player HQ hunts the nearest enemy marcher.
     private func baseFanTarget(for base: Base) -> CGPoint? {
         let muzzleY = Balance.groundTopY + Balance.baseMuzzleHeight
+        if base.team == .player {
+            var best: CGPoint?
+            var bestDist = Balance.baseRange
+            for e in enemies where e.alive {
+                let d = hypot(e.position.x - base.node.position.x, e.position.y - muzzleY)
+                if d < bestDist {
+                    bestDist = d
+                    best = e.position
+                }
+            }
+            return best
+        }
         if hero.alive, !heroProtected,
            hypot(hero.position.x - base.node.position.x,
                  hero.position.y - muzzleY) <= Balance.baseRange {
@@ -672,6 +687,7 @@ final class GameScene: SKScene {
     }
 
     /// 3 blasts from the same muzzle, spread out around the target direction.
+    /// Bolt team matches the firing HQ so hits land on the right side.
     private func fireBaseFan(from base: Base, at target: CGPoint) {
         let muzzle = baseMuzzle(for: base)
         var baseDir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
@@ -684,13 +700,13 @@ final class GameScene: SKScene {
             let offset = (CGFloat(k) - CGFloat(count - 1) / 2) * Balance.baseFanSpread
             let a = baseAngle + offset
             let dir = CGVector(dx: cos(a), dy: sin(a))
-            let bolt = ProjectileFactory.makeTowerBolt(team: .enemy)
+            let bolt = ProjectileFactory.makeTowerBolt(team: base.team)
             bolt.position = muzzle
             bolt.zRotation = a
             world.addChild(bolt)
             projectiles.append(Projectile(node: bolt, dir: dir, life: Balance.towerBulletLife,
                                           speed: Balance.towerBulletSpeed, damage: Balance.baseBoltDamage,
-                                          team: .enemy))
+                                          team: base.team))
         }
         let flash = ProjectileFactory.makeMuzzleFlash()
         flash.position = muzzle

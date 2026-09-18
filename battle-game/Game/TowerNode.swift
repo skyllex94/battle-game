@@ -218,12 +218,14 @@ final class TowerNode: SKNode {
 
     // MARK: - HP bar (chunky pixel style)
 
+    /// Pinned above units (z=9) but below the hero (z=10): readable
+    /// through marching armies, covered only by the hero passing by.
     private func buildHPBar(palette: Palette) {
         let w: CGFloat = 96, h: CGFloat = 12
         hpBG.color = SKColor(white: 0, alpha: 0.65)
         hpBG.size = CGSize(width: w + 4, height: h + 4)
         hpBG.position = CGPoint(x: 0, y: TowerNode.hpBarY)
-        hpBG.zPosition = 6
+        hpBG.zPosition = 9.2
         addChild(hpBG)
         // Pixel border ticks.
         let border = SKShapeNode(rectOf: CGSize(width: w + 4, height: h + 4))
@@ -231,14 +233,14 @@ final class TowerNode: SKNode {
         border.lineWidth = 1
         border.fillColor = .clear
         border.position = hpBG.position
-        border.zPosition = 7
+        border.zPosition = 9.5
         addChild(border)
 
         hpFill.color = palette.bar
         hpFill.size = CGSize(width: w, height: h)
         hpFill.anchorPoint = CGPoint(x: 0, y: 0.5)
         hpFill.position = CGPoint(x: -w / 2, y: TowerNode.hpBarY)
-        hpFill.zPosition = 7
+        hpFill.zPosition = 9.5
         addChild(hpFill)
     }
 

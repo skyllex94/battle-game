@@ -94,10 +94,12 @@ struct GameView: View {
                         Rectangle().fill(.cyan.opacity(0.6)).frame(width: 52, height: 2)
                     }
                     PixelMenuButton(title: "Resume", style: .primary) {
+                        SoundEngine.shared.uiTap()
                         showMenu = false
                         scene.isPaused = false
                     }
                     PixelMenuButton(title: "Restart Level", style: .ghost) {
+                        SoundEngine.shared.uiTap()
                         scene.resetLevel()
                         scene.heroInputX = moveX
                         scene.heroJumpHeld = jumpHeld
@@ -105,6 +107,7 @@ struct GameView: View {
                         showMenu = false
                     }
                     PixelMenuButton(title: "Quit to Menu", style: .danger) {
+                        SoundEngine.shared.uiTap()
                         dismiss()
                     }
                     Text("TAP OUTSIDE TO RESUME")
@@ -201,6 +204,7 @@ struct GameView: View {
 
             // Pause button: auto-pauses the sim and opens the menu.
             Button {
+                SoundEngine.shared.uiTap()
                 scene.isPaused = true
                 showMenu = true
             } label: {

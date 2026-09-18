@@ -52,6 +52,7 @@ final class GameScene: SKScene {
         hero?.setWeapon(heroWeapon)
         fireCooldown = 0
         if mags[heroWeapon.rawValue] == 0 { startReload(gun: heroWeapon) }
+        SoundEngine.shared.weaponSwitch()
         return heroWeapon
     }
 
@@ -64,6 +65,7 @@ final class GameScene: SKScene {
               reserves[gun.rawValue] > 0 else { return false }
         reloadingWeapon = gun
         reloadEndsAt = sceneTime + gun.reloadTime
+        SoundEngine.shared.reloadStart()
         return true
     }
 
@@ -363,6 +365,9 @@ final class GameScene: SKScene {
         lastUpdate = currentTime
         sceneTime += dt
         hero.step(dt: dt, now: currentTime)
+        // Listener for positional audio: everything attenuates + pans
+        // relative to the hero, so distant battles rumble quietly.
+        SoundEngine.shared.listenerX = hero.position.x
         updateRespawn()
         updateReload(dt: dt)
         updateShooting(dt: dt)
@@ -503,6 +508,7 @@ final class GameScene: SKScene {
             mags[gun.rawValue] += take
             reserves[gun.rawValue] -= take
             reloadingWeapon = nil
+            SoundEngine.shared.reloadDone()
         }
         // The dry active gun reloads on its own, even when not aiming.
         if reloadingWeapon == nil,
@@ -525,6 +531,7 @@ final class GameScene: SKScene {
 
     private func fireBullet() {
         mags[heroWeapon.rawValue] -= 1 // one trigger pull = one round
+        SoundEngine.shared.heroShot(heroWeapon, at: hero.position.x)
         let muzzle = muzzlePosition(for: aimDir)
         let baseAngle = atan2(aimDir.dy, aimDir.dx)
         let pellets = heroWeapon.pelletCount
@@ -625,6 +632,7 @@ final class GameScene: SKScene {
         var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
         let len = max(1, hypot(dir.dx, dir.dy))
         dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
+        SoundEngine.shared.towerFire(at: muzzle.x)
         let bolt = ProjectileFactory.makeTowerBolt(team: tower.team)
         bolt.position = muzzle
         bolt.zRotation = atan2(dir.dy, dir.dx)
@@ -644,6 +652,8 @@ final class GameScene: SKScene {
         if !towers[index].alive {
             // TowerNode handles the rubble look (grey + slumped turret).
             towers[index].node.setDestroyed()
+            SoundEngine.shared.structureDestroyed(playerOwned: towers[index].team == .player,
+                                                  at: towers[index].node.position.x)
         }
     }
 
@@ -718,6 +728,7 @@ final class GameScene: SKScene {
         var baseDir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
         let len = max(1, hypot(baseDir.dx, baseDir.dy))
         baseDir = CGVector(dx: baseDir.dx / len, dy: baseDir.dy / len)
+        SoundEngine.shared.baseFire(at: muzzle.x)
         let baseAngle = atan2(baseDir.dy, baseDir.dx)
         let count = Balance.baseFanCount
         for k in 0..<count {
@@ -746,6 +757,7 @@ final class GameScene: SKScene {
         world.addChild(e)
         enemies.append(e)
         base.node.spawnPulse()
+        SoundEngine.shared.summon(at: e.position.x)
         let puff = ProjectileFactory.makeImpactPuff()
         puff.position = e.position
         world.addChild(puff)
@@ -842,6 +854,7 @@ final class GameScene: SKScene {
         var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
         let len = max(1, hypot(dir.dx, dir.dy))
         dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
+        SoundEngine.shared.enemyFire(at: muzzle.x)
         let bolt = ProjectileFactory.makeTowerBolt(team: .enemy)
         bolt.setScale(0.8)
         bolt.position = muzzle
@@ -872,6 +885,7 @@ final class GameScene: SKScene {
         world.addChild(a)
         allies.append(a)
         homeBase.node.spawnPulse()
+        SoundEngine.shared.summon(at: a.position.x)
         let puff = ProjectileFactory.makeImpactPuff()
         puff.position = a.position
         world.addChild(puff)
@@ -951,6 +965,7 @@ final class GameScene: SKScene {
         var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
         let len = max(1, hypot(dir.dx, dir.dy))
         dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
+        SoundEngine.shared.allyFire(at: muzzle.x)
         let bolt = ProjectileFactory.makeTowerBolt(team: .player)
         bolt.setScale(a.kind == .heavy ? 1.0 : 0.8)
         bolt.position = muzzle
@@ -978,6 +993,7 @@ final class GameScene: SKScene {
                     puff.setScale(1.4)
                     world.addChild(puff)
                     a.removeFromParent()
+                    SoundEngine.shared.troopDown(at: a.position.x)
                 }
                 return true
             }
@@ -993,6 +1009,8 @@ final class GameScene: SKScene {
         if !bases[index].alive {
             // BaseNode handles the rubble look (grey + dark gate). Win/lose screens land later.
             bases[index].node.setDestroyed()
+            SoundEngine.shared.structureDestroyed(playerOwned: bases[index].team == .player,
+                                                  at: bases[index].node.position.x)
         }
     }
 
@@ -1014,6 +1032,7 @@ final class GameScene: SKScene {
             killHero()
             return
         }
+        SoundEngine.shared.heroHurt()
         // Hit flash so damage reads instantly.
         hero.run(.sequence([.fadeAlpha(to: 0.35, duration: 0.06),
                             .fadeAlpha(to: 1.0, duration: 0.12)]))
@@ -1025,6 +1044,7 @@ final class GameScene: SKScene {
         hero.isHidden = true
         releaseAimTouch()
         respawnAt = sceneTime + Balance.respawnDelay
+        SoundEngine.shared.heroDeath()
         // Death poof.
         for i in 0..<2 {
             let puff = ProjectileFactory.makeImpactPuff()
@@ -1137,6 +1157,7 @@ final class GameScene: SKScene {
                     puff.setScale(1.6)
                     world.addChild(puff)
                     e.removeFromParent()
+                    SoundEngine.shared.enemyDown(at: e.position.x)
                 }
                 return true
             }
@@ -1166,6 +1187,7 @@ final class GameScene: SKScene {
     }
 
     private func impact(at pt: CGPoint) {
+        SoundEngine.shared.impact(at: pt.x)
         let puff = ProjectileFactory.makeImpactPuff()
         puff.position = pt
         world.addChild(puff)
@@ -1301,6 +1323,7 @@ final class GameScene: SKScene {
     }
 
     private func collectDrop(_ d: Drop) {
+        SoundEngine.shared.pickup()
         switch d.kind {
         case .health:
             heroHP = min(Balance.heroHP, heroHP + Balance.dropHeal)

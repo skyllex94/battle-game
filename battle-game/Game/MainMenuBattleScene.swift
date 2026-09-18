@@ -26,6 +26,10 @@ final class MainMenuBattleScene: SKScene {
     private var towers: [TowerNode] = []
     private var lastUpdate: TimeInterval = 0
     private var panTime: TimeInterval = 0
+    /// SpriteView can present the same scene instance again when the user
+    /// navigates back and forth (SwiftUI reuses the @State scene). Re-adding
+    /// the layer nodes would crash ("already has a parent"), so build once.
+    private var didBuild = false
 
     /// Slow cinematic pan amplitude (points). Small so the towers never
     /// leave the frame; layers scale it by their parallax factor.
@@ -40,6 +44,8 @@ final class MainMenuBattleScene: SKScene {
     required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
 
     override func didMove(to view: SKView) {
+        guard !didBuild else { return }
+        didBuild = true
         anchorPoint = CGPoint(x: 0.5, y: 0.5)
         addChild(skyLayer)
         addChild(farLayer)

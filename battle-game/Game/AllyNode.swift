@@ -2,11 +2,27 @@ import SpriteKit
 
 /// Player-summonable army kinds. Exactly 2 cards for now:
 /// .trooper = cheap + fast, .heavy = expensive tank that hits hard.
+/// The Heavy is introduced in Level 2 — Level 1 fields troopers only.
 enum ArmyKind: Int, CaseIterable, Identifiable {
     case trooper
     case heavy
 
     var id: Int { rawValue }
+
+    /// Campaign level that fields this unit (trooper from the start,
+    /// heavy from Level 2's Rootwall Thicket briefing onward).
+    var unlockLevel: Int {
+        switch self {
+        case .trooper: return 1
+        case .heavy: return 2
+        }
+    }
+
+    /// Level-gated (no persistence needed): a unit is fieldable once its
+    /// introduction level is reached.
+    static func isUnlocked(_ kind: ArmyKind, levelId: Int) -> Bool {
+        levelId >= kind.unlockLevel
+    }
 
     var name: String {
         switch self {

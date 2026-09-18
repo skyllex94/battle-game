@@ -3,29 +3,106 @@ import CoreGraphics
 /// Single tuning file for Level 1. Ported from your Unity balance:
 /// tower HP 200, base HP 500, starting gold 500 — plus layout numbers.
 /// No magic numbers in GameScene; everything reads from here.
+///
+/// Per-level battlefields: layout values (width, structures, platforms)
+/// read from `active`, which the scene sets from `layout(for:)` before
+/// building. They stay `Balance.*` at call sites, so all readers follow
+/// the current level with zero signature churn. Builds are synchronous on
+/// the main thread, so the mutable active layout is race-free.
 enum Balance {
-    // MARK: - Level layout (points)
-    static let levelWidth: CGFloat = 5200
-    static let groundTopY: CGFloat = 120        // y of the walkable surface
-    static let groundThickness: CGFloat = 120
-    static let viewHeight: CGFloat = 750        // logical scene height
+    // MARK: - Battlefield themes (same Twilight concept, per-level grade)
+    /// Twilight Ruins (Level 1): indigo dusk. Overgrown Expanse (Level 2):
+    /// alien jungle — teal-green grade, denser canopy, heavier glow flora.
+    enum BGTheme { case twilight, overgrown }
 
-    // MARK: - Structures (x centers; two towers guard each base from mid:
-    // base -> tower -> tower -> mid, mirrored per side)
-    static let playerBaseX: CGFloat = 220
-    static let playerTowerXs: [CGFloat] = [800, 1450]
-    static let enemyTowerXs: [CGFloat] = [3750, 4400]
-    static let enemyBaseX: CGFloat = 4980
+    // MARK: - Per-level battlefield layout
+    struct LevelLayout {
+        var width: CGFloat
+        var playerBaseX: CGFloat
+        var playerTowerXs: [CGFloat]
+        var enemyTowerXs: [CGFloat]
+        var enemyBaseX: CGFloat
+        var heroSpawnX: CGFloat
+        var platforms: [CGRect]
+        var theme: BGTheme
+        /// War-banner poles along the lane.
+        var flags: Bool
+        /// Extraterrestrial sky-flocks (manta-rayeds with glow eyes).
+        var alienBirds: Bool
+        /// Extra glow-fern / shroom clusters on the ground.
+        var lushFlora: Bool
+    }
+
+    /// Level 1: the original 5200pt Twilight lane, 2 towers per side.
+    private static let layout1 = LevelLayout(
+        width: 5200,
+        playerBaseX: 220,
+        playerTowerXs: [800, 1450],
+        enemyTowerXs: [3750, 4400],
+        enemyBaseX: 4980,
+        heroSpawnX: 420,
+        platforms: [
+            CGRect(x: 1960, y: 300, width: 320, height: 36),
+            CGRect(x: 2440, y: 420, width: 320, height: 36),
+            CGRect(x: 2920, y: 300, width: 320, height: 36),
+        ],
+        theme: .twilight,
+        flags: false,
+        alienBirds: false,
+        lushFlora: false
+    )
+
+    /// Level 2 Rootwall Thicket: bigger 6800pt overgrown map, 3 towers per
+    /// side guarding each base, extra mid platforms, full dressing pack.
+    private static let layout2 = LevelLayout(
+        width: 6800,
+        playerBaseX: 220,
+        playerTowerXs: [800, 1500, 2200],
+        enemyTowerXs: [4600, 5300, 6000],
+        enemyBaseX: 6580,
+        heroSpawnX: 420,
+        platforms: [
+            CGRect(x: 2560, y: 300, width: 320, height: 36),
+            CGRect(x: 3040, y: 420, width: 320, height: 36),
+            CGRect(x: 3520, y: 300, width: 320, height: 36),
+            CGRect(x: 4000, y: 420, width: 320, height: 36),
+            CGRect(x: 4480, y: 300, width: 320, height: 36),
+        ],
+        theme: .overgrown,
+        flags: true,
+        alienBirds: true,
+        lushFlora: true
+    )
+
+    /// Active battlefield. GameScene sets this from the level id before
+    /// building (init + didMove). Defaults to Level 1 (menu previews etc.).
+    static var active = layout1
+
+    static func layout(for levelId: Int) -> LevelLayout {
+        switch levelId {
+        case 2: return layout2
+        default: return layout1
+        }
+    }
+
+    // MARK: - Level layout (points; follow `active`)
+    static var levelWidth: CGFloat { active.width }
+    static var groundTopY: CGFloat = 120        // y of the walkable surface
+    static var groundThickness: CGFloat = 120
+    static var viewHeight: CGFloat = 750        // logical scene height
+
+    // MARK: - Structures (x centers; towers guard each base from mid:
+    // base -> tower(s) -> mid, mirrored per side)
+    static var playerBaseX: CGFloat { active.playerBaseX }
+    static var playerTowerXs: [CGFloat] { active.playerTowerXs }
+    static var enemyTowerXs: [CGFloat] { active.enemyTowerXs }
+    static var enemyBaseX: CGFloat { active.enemyBaseX }
 
     // MARK: - Platforms (mid-map verticality for the hero; physics lands next stage)
-    static let platforms: [CGRect] = [
-        CGRect(x: 1960, y: 300, width: 320, height: 36),
-        CGRect(x: 2440, y: 420, width: 320, height: 36),
-        CGRect(x: 2920, y: 300, width: 320, height: 36),
-    ]
+    static var platforms: [CGRect] { active.platforms }
 
     // MARK: - Hero (visual only this stage; movement stats used next stage)
-    static let heroSpawnX: CGFloat = 420
+    static var heroSpawnX: CGFloat { active.heroSpawnX }
     static let heroHeight: CGFloat = 78
 
     // MARK: - Hero movement feel (smooth, not snappy: eased drive in,

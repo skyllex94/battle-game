@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine // Timer publisher for joystick pan integration
 
 /// Emra campaign map — the planet advanced humanity takes back across
 /// 15 regions. A three-page pixel world (verdant west → scorched midlands
@@ -6,95 +7,215 @@ import SwiftUI
 /// and a marching invasion route. Arrows page between regions; tap a lit
 /// node to open its briefing (LevelDetailView).
 struct LevelMapView: View {
-    /// Open on the page holding the current objective.
-    @State private var page: Int = min(2, max(0, (CampaignData.unlockedLevel - 1) / 5))
+    @Environment(\.dismiss) private var dismiss
+    /// Free pan across the 3-page world, in full-bleed points (0 = west edge).
+    @State private var panX: CGFloat = 0
+    /// Full-bleed screen size (under notch/home bar), measured by the map layer.
+    @State private var fullW: CGFloat = 800
+    @State private var fullH: CGFloat = 400
+    /// Joystick knob deflection (x only); drives pan velocity while held.
+    @State private var knob = CGSize.zero
     @State private var refresh = false // flips on appear: re-reads stars/unlocks
+    private let panTimer = Timer.publish(every: 1 / 60, on: .main, in: .common).autoconnect()
+
+    /// Nearest page to the current pan (drives zone chip + dots).
+    private var currentPage: Int {
+        min(2, max(0, Int((panX / fullW).rounded())))
+    }
+
+    private func clampPan(_ x: CGFloat) -> CGFloat {
+        min(max(0, x), fullW * 2)
+    }
+
+    private func goPage(_ p: Int) {
+        SoundEngine.shared.uiTap()
+        withAnimation(.easeInOut(duration: 0.45)) {
+            panX = clampPan(CGFloat(min(2, max(0, p))) * fullW)
+        }
+    }
 
     var body: some View {
-        GeometryReader { geo in
-            let W = geo.size.width
-            let H = geo.size.height
-            ZStack {
-                // Living world, edge-to-edge. The canvas is 3 screens wide;
-                // only the visible page (+margin) is painted each tick.
-                TimelineView(.animation(minimumInterval: 1 / 12)) { tl in
-                    Canvas { ctx, _ in
-                        EmraMap.draw(ctx: &ctx,
-                                     size: CGSize(width: W * 3, height: H),
-                                     page: page,
-                                     t: tl.date.timeIntervalSinceReferenceDate)
-                    }
-                    .frame(width: W * 3, height: H)
-                    .offset(x: -CGFloat(page) * W)
-                    .animation(.easeInOut(duration: 0.45), value: page)
-                }
-                .ignoresSafeArea(edges: .all)
-                .clipped()
-
-                // Mission nodes ride with the world.
-                ZStack {
-                    ForEach(CampaignData.levels) { level in
-                        EmraNodeView(level: level)
-                            .position(x: EmraMap.worldX(level.id) * W,
-                                      y: EmraMap.nodeY(level.id) * H)
-                    }
-                }
-                .frame(width: W * 3, height: H)
-                .offset(x: -CGFloat(page) * W)
-                .animation(.easeInOut(duration: 0.45), value: page)
-                .clipped()
-
-                // Readability grades for the chrome.
-                LinearGradient(colors: [.black.opacity(0.55), .clear],
-                               startPoint: .top, endPoint: .bottom)
-                    .frame(height: 150)
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .allowsHitTesting(false)
-                LinearGradient(colors: [.clear, .black.opacity(0.6)],
-                               startPoint: .top, endPoint: .bottom)
-                    .frame(height: 110)
-                    .frame(maxHeight: .infinity, alignment: .bottom)
-                    .allowsHitTesting(false)
-
-                // Page arrows on each end.
+        ZStack {
+            // Full-bleed world layer: measures the REAL screen (under the
+            // notch/home bar) so there is no safe-area cutout anywhere.
+            GeometryReader { full in
                 HStack(spacing: 0) {
-                    if page > 0 {
-                        EmraArrow(dir: -1) {
-                            SoundEngine.shared.uiTap()
-                            withAnimation(.easeInOut(duration: 0.45)) { page -= 1 }
+                    ZStack {
+                        Canvas { ctx, _ in
+                            EmraMap.draw(ctx: &ctx,
+                                         size: CGSize(width: fullW * 3, height: fullH),
+                                         center: Double(panX / fullW),
+                                         t: 4.2)
+                        }
+                        .frame(width: fullW * 3, height: fullH)
+                        ForEach(CampaignData.levels) { level in
+                            EmraNodeView(level: level)
+                                .position(x: EmraMap.worldX(level.id) * fullW,
+                                          y: EmraMap.nodeY(level.id) * fullH)
                         }
                     }
-                    Spacer()
-                    if page < 2 {
-                        EmraArrow(dir: 1) {
-                            SoundEngine.shared.uiTap()
-                            withAnimation(.easeInOut(duration: 0.45)) { page += 1 }
-                        }
-                    }
+                    .frame(width: fullW * 3, height: fullH)
+                    .offset(x: -panX)
+                    Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 8)
-                .frame(maxHeight: .infinity)
-                .offset(y: -30)
+                .frame(width: full.size.width, height: full.size.height)
+                .onAppear {
+                    fullW = full.size.width
+                    fullH = full.size.height
+                    // Open on the page holding the current objective.
+                    panX = clampPan(CGFloat(min(2, max(0, (CampaignData.unlockedLevel - 1) / 5))) * fullW)
+                }
+                .onChange(of: full.size) { newSize in
+                    fullW = newSize.width
+                    fullH = newSize.height
+                    panX = clampPan(panX)
+                }
+            }
+            .ignoresSafeArea(edges: .all)
 
-                // Chrome.
-                VStack(spacing: 6) {
-                    EmraTopBar()
+            // Safe-area chrome on top.
+            GeometryReader { geo in
+                ZStack {
+                    // Readability grades.
+                    LinearGradient(colors: [.black.opacity(0.30), .clear],
+                                   startPoint: .top, endPoint: .bottom)
+                        .frame(height: 150)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .allowsHitTesting(false)
+                    LinearGradient(colors: [.clear, .black.opacity(0.35)],
+                                   startPoint: .top, endPoint: .bottom)
+                        .frame(height: 110)
+                        .frame(maxHeight: .infinity, alignment: .bottom)
+                        .allowsHitTesting(false)
+                    RadialGradient(colors: [.clear, .black.opacity(0.22)],
+                                   center: .center, startRadius: 80, endRadius: 520)
+                        .ignoresSafeArea(edges: .all)
+                        .allowsHitTesting(false)
+                    MapCornerFrame()
+                        .padding(10)
+                        .allowsHitTesting(false)
+
+                    // Page arrows on each end.
+                    HStack(spacing: 0) {
+                        if currentPage > 0 {
+                            EmraArrow(dir: -1) { goPage(currentPage - 1) }
+                        }
+                        Spacer()
+                        if currentPage < 2 {
+                            EmraArrow(dir: 1) { goPage(currentPage + 1) }
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .frame(maxHeight: .infinity)
+                    .offset(y: -30)
+
+                    VStack(spacing: 6) {
+                        HStack(spacing: 10) {
+                            Button {
+                                SoundEngine.shared.uiTap()
+                                dismiss()
+                            } label: {
+                                Text("MENU")
+                                    .font(.system(size: 12, weight: .black, design: .monospaced))
+                                    .tracking(2)
+                                    .foregroundStyle(.cyan)
+                                    .padding(.horizontal, 12).padding(.vertical, 8)
+                                    .background(.black.opacity(0.65))
+                                    .clipShape(MapPixelShape(cut: 6))
+                                    .overlay(MapPixelShape(cut: 6).stroke(.cyan.opacity(0.6), lineWidth: 2))
+                            }
+                            Spacer()
+                            EmraTopBarChips()
+                        }
                         .padding(.horizontal, 12)
                         .padding(.top, 8)
-                    EmraZoneChip(page: page) { target in
-                        SoundEngine.shared.uiTap()
-                        withAnimation(.easeInOut(duration: 0.45)) { page = target }
+                        EmraZoneChip(page: currentPage) { goPage($0) }
+                        Spacer()
+                        EmraIntelStrip()
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 10)
+                            .padding(.leading, 132)
                     }
-                    Spacer()
-                    EmraIntelStrip()
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 10)
+
+                    // Map joystick, bottom-left: hold + lean to scroll.
+                    VStack {
+                        Spacer()
+                        HStack {
+                            MapJoystick(knob: $knob)
+                                .padding(.leading, 14)
+                                .padding(.bottom, 86)
+                            Spacer()
+                        }
+                    }
+                    .allowsHitTesting(true)
+                }
+                .onReceive(panTimer) { _ in
+                    // Knob deflection = pan velocity (up to ~350 pt/s).
+                    if knob.width != 0 {
+                        withAnimation(.linear(duration: 1 / 60)) {
+                            panX = clampPan(panX + knob.width * 0.18)
+                        }
+                    }
                 }
             }
         }
-        .navigationTitle("Campaign")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear { refresh.toggle() }
+    }
+}
+
+/// Small map joystick: lean the knob left/right to scroll the world.
+/// Springs back to center on release.
+private struct MapJoystick: View {
+    @Binding var knob: CGSize
+    private let maxR: CGFloat = 30
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 26)
+                .fill(.black.opacity(0.5))
+                .frame(width: 104, height: 104)
+                .overlay(RoundedRectangle(cornerRadius: 26).stroke(.cyan.opacity(0.5), lineWidth: 2))
+            // Direction ticks.
+            HStack(spacing: 0) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 12, weight: .black))
+                    .foregroundStyle(.cyan.opacity(0.6))
+                    .frame(width: 104, alignment: .leading)
+                    .padding(.leading, 6)
+                Spacer(minLength: 0)
+            }
+            .frame(width: 104)
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .black))
+                    .foregroundStyle(.cyan.opacity(0.6))
+                    .frame(width: 104, alignment: .trailing)
+                    .padding(.trailing, 6)
+            }
+            .frame(width: 104)
+            RoundedRectangle(cornerRadius: 14)
+                .fill(.cyan.opacity(0.85))
+                .frame(width: 44, height: 44)
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(0.7), lineWidth: 2))
+                .shadow(color: .cyan.opacity(0.5), radius: 8)
+                .offset(x: knob.width, y: 0)
+                .gesture(
+                    DragGesture(minimumDistance: 2)
+                        .onChanged { v in
+                            let w = v.translation.width
+                            knob = CGSize(width: min(max(-maxR, w), maxR), height: 0)
+                        }
+                        .onEnded { _ in
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) {
+                                knob = .zero
+                            }
+                        }
+                )
+        }
+        .frame(width: 104, height: 104)
     }
 }
 
@@ -201,20 +322,10 @@ private struct StarRow: View {
 
 // MARK: - Chrome
 
-private struct EmraTopBar: View {
+/// Slim progress chips (stars + region) for the top-right corner.
+private struct EmraTopBarChips: View {
     var body: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text("EMRA")
-                    .font(.system(size: 22, weight: .black, design: .monospaced))
-                    .tracking(3)
-                    .foregroundStyle(.white)
-                Text("TAKEBACK CAMPAIGN // ADVANCED HUMAN COMMAND")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .tracking(1)
-                    .foregroundStyle(.cyan)
-            }
-            Spacer()
+        HStack(spacing: 8) {
             HStack(spacing: 5) {
                 Image(systemName: "star.fill").foregroundStyle(.yellow)
                 Text("\(totalStars)/\(CampaignData.levels.count * 3)")
@@ -222,7 +333,7 @@ private struct EmraTopBar: View {
             }
             .font(.system(size: 12, weight: .black, design: .monospaced))
             .foregroundStyle(.white)
-            .padding(.horizontal, 10).padding(.vertical, 6)
+            .padding(.horizontal, 10).padding(.vertical, 8)
             .background(.black.opacity(0.55))
             .overlay(Rectangle().stroke(.yellow.opacity(0.5), lineWidth: 1))
             HStack(spacing: 5) {
@@ -232,7 +343,7 @@ private struct EmraTopBar: View {
             }
             .font(.system(size: 12, weight: .black, design: .monospaced))
             .foregroundStyle(.white)
-            .padding(.horizontal, 10).padding(.vertical, 6)
+            .padding(.horizontal, 10).padding(.vertical, 8)
             .background(.black.opacity(0.55))
             .overlay(Rectangle().stroke(.cyan.opacity(0.5), lineWidth: 1))
         }
@@ -240,6 +351,62 @@ private struct EmraTopBar: View {
 
     private var totalStars: Int {
         CampaignData.levels.reduce(0) { $0 + CampaignData.stars(for: $1.id) }
+    }
+}
+
+/// Stepped pixel corner brackets framing the world map.
+private struct MapCornerFrame: View {
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                MapCorner().position(x: 14, y: 14)
+                MapCorner()
+                    .rotationEffect(.degrees(90))
+                    .position(x: geo.size.width - 14, y: 14)
+                MapCorner()
+                    .rotationEffect(.degrees(180))
+                    .position(x: geo.size.width - 14, y: geo.size.height - 14)
+                MapCorner()
+                    .rotationEffect(.degrees(270))
+                    .position(x: 14, y: geo.size.height - 14)
+            }
+        }
+    }
+}
+
+private struct MapCorner: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 0) {
+                Color.cyan.frame(width: 22, height: 5)
+                Color.cyan.frame(width: 5, height: 5).opacity(0.55)
+            }
+            HStack(spacing: 0) {
+                Color.cyan.frame(width: 5, height: 22)
+                Color.clear.frame(width: 22, height: 22)
+            }
+            HStack(spacing: 0) {
+                Color.cyan.opacity(0.55).frame(width: 5, height: 5)
+                Color.clear.frame(width: 22, height: 5)
+            }
+        }
+        .opacity(0.8)
+    }
+}
+private struct MapPixelShape: Shape {
+    var cut: CGFloat = 6
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX + cut, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX - cut, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + cut))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - cut))
+        p.addLine(to: CGPoint(x: rect.maxX - cut, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX + cut, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - cut))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY + cut))
+        p.closeSubpath()
+        return p
     }
 }
 
@@ -399,11 +566,13 @@ enum EmraMap {
         return Double(h(gx, gy, 50)) / 100 < p.f ? p.b : p.a
     }
 
-    static func draw(ctx: inout GraphicsContext, size: CGSize, page: Int, t: Double) {
+    static func draw(ctx: inout GraphicsContext, size: CGSize, center: Double, t: Double) {
         let cw = size.width / CGFloat(cols)
         let chh = size.height / CGFloat(rows)
-        let visX0 = page * pageCols - 12
-        let visX1 = (page + 1) * pageCols + 12
+        // Paint only around the visible page (+margin) — center is the
+        // fractional page (0..2) so free joystick panning never pops.
+        let visX0 = Int(center * Double(pageCols)) - 16
+        let visX1 = Int((center + 1) * Double(pageCols)) + 16
         func visible(_ gx: Int, _ m: Int = 0) -> Bool { gx >= visX0 - m && gx <= visX1 + m }
         func px(_ gx: Int, _ gy: Int, _ w: Int, _ hgt: Int, _ c: Color, _ alpha: Double = 1) {
             guard gx + w > visX0 - 24 && gx < visX1 + 24 && gy + hgt > 0 && gy < rows else { return }
@@ -415,8 +584,8 @@ enum EmraMap {
         // -- terrain painters (biome 0..3) --
         func baseVerdant(gx: Int, gy: Int) {
             px(gx, gy, 1, 1, h(gx, gy, 7) < 30
-                ? Color(red: 0.15, green: 0.40, blue: 0.20)
-                : Color(red: 0.24, green: 0.54, blue: 0.27))
+                ? Color(red: 0.18, green: 0.46, blue: 0.23)
+                : Color(red: 0.29, green: 0.60, blue: 0.31))
             if h(gx, gy, 8) < 15 {
                 px(gx, gy, 1, 2, Color(red: 0.08, green: 0.30, blue: 0.16))
                 px(gx, gy + 2, 1, 1, Color(red: 0.35, green: 0.22, blue: 0.12))
@@ -436,8 +605,8 @@ enum EmraMap {
 
         func baseEmber(gx: Int, gy: Int) {
             px(gx, gy, 1, 1, h(gx, gy, 7) < 35
-                ? Color(red: 0.22, green: 0.16, blue: 0.16)
-                : Color(red: 0.30, green: 0.20, blue: 0.18))
+                ? Color(red: 0.27, green: 0.20, blue: 0.20)
+                : Color(red: 0.36, green: 0.25, blue: 0.22))
             if (h(gx, gy, 10) + Int(t * 10)) % 46 < 3 {
                 let hot = (sin(t * 4 + Double(gx)) + 1) / 2
                 px(gx, gy, 1, 1, Color(red: 1, green: 0.25 + 0.35 * hot, blue: 0.08))
@@ -447,9 +616,9 @@ enum EmraMap {
         func baseFrost(gx: Int, gy: Int) {
             let line = 46 + h(gx, 1, 16) % 8
             if gy < line {
-                px(gx, gy, 1, 1, Color(red: 0.90, green: 0.93, blue: 0.97))
+                px(gx, gy, 1, 1, Color(red: 0.93, green: 0.95, blue: 0.98))
             } else {
-                px(gx, gy, 1, 1, Color(red: 0.35, green: 0.38, blue: 0.45))
+                px(gx, gy, 1, 1, Color(red: 0.42, green: 0.45, blue: 0.52))
                 if h(gx, gy, 8) < 13 {
                     px(gx, gy, 1, 2, Color(red: 0.10, green: 0.25, blue: 0.28))
                     px(gx, gy - 1, 1, 1, .white)
@@ -575,11 +744,11 @@ enum EmraMap {
         // ---- frame ----
         // Ocean body (one fill for the whole world strip).
         ctx.fill(Path(CGRect(origin: .zero, size: size)),
-                 with: .color(Color(red: 0.03, green: 0.20, blue: 0.30)))
+                 with: .color(Color(red: 0.05, green: 0.29, blue: 0.41)))
         for gy in stride(from: 4, to: rows, by: 7) { // depth dither
             for gx in stride(from: (gy * 5) % 16, to: cols, by: 16) {
                 if visible(gx) {
-                    px(gx, gy, 6, 1, Color(red: 0.05, green: 0.28, blue: 0.38))
+                    px(gx, gy, 6, 1, Color(red: 0.08, green: 0.36, blue: 0.48))
                 }
             }
         }
@@ -587,8 +756,8 @@ enum EmraMap {
             let wx = (h(i, 3, 11) * 4 + Int(t * 6)) % (cols + 10) - 5
             let wy = h(i, 7, 12) * rows / 100
             if visible(wx) && h(i, wy, 13) < 30 {
-                px(wx, wy, 2, 1, Color(red: 0.35, green: 0.75, blue: 0.82),
-                   0.35 + 0.3 * sin(t * 2 + Double(i)))
+                px(wx, wy, 2, 1, Color(red: 0.45, green: 0.82, blue: 0.88),
+                   0.45 + 0.3 * sin(t * 2 + Double(i)))
             }
         }
 

@@ -33,6 +33,8 @@ final class GameScene: SKScene {
     private var shotsFired = 0
     /// Active hero gun. The HUD weapon button cycles it via cycleWeapon().
     var heroWeapon: HeroWeapon = .blaster
+    /// Gun the attempt starts (and restarts) with — the level-screen pick.
+    private var startingWeapon: HeroWeapon = .blaster
     // MARK: - Gun ammo (mag + reserve per gun, indexed by HeroWeapon.rawValue)
     private var mags: [Int] = HeroWeapon.allCases.map { $0.magSize }
     private var reserves: [Int] = HeroWeapon.allCases.map { $0.startReserve }
@@ -42,13 +44,16 @@ final class GameScene: SKScene {
     /// Desperation trickle for fully-starved guns (mag 0 + reserve 0).
     private var regenAccumulator: TimeInterval = 0
 
-    /// Switches to the next hero gun (blaster -> scatter -> cannon -> ...).
+    /// Switches to the next UNLOCKED hero gun (locked guns are skipped).
     /// Called by the HUD weapon button; the swapped gun fires instantly.
     /// A swapped-in gun with an empty mag starts reloading on the spot.
+    /// Single-gun loadouts stay put (button hides in that case anyway).
     @discardableResult
     func cycleWeapon() -> HeroWeapon {
-        let all = HeroWeapon.allCases
-        heroWeapon = all[(heroWeapon.rawValue + 1) % all.count]
+        let unlocked = GunLocker.unlockedGuns
+        guard unlocked.count > 1,
+              let idx = unlocked.firstIndex(of: heroWeapon) else { return heroWeapon }
+        heroWeapon = unlocked[(idx + 1) % unlocked.count]
         hero?.setWeapon(heroWeapon)
         fireCooldown = 0
         if mags[heroWeapon.rawValue] == 0 { startReload(gun: heroWeapon) }
@@ -58,11 +63,12 @@ final class GameScene: SKScene {
 
     /// Begins a reload for one gun. One reload at a time; no-op when the mag
     /// is already full, the reserve is dry, or another gun is reloading.
+    /// Infinite-reserve guns (Blaster) always have stock to draw on.
     @discardableResult
     private func startReload(gun: HeroWeapon) -> Bool {
         guard reloadingWeapon == nil,
               mags[gun.rawValue] < gun.magSize,
-              reserves[gun.rawValue] > 0 else { return false }
+              gun.hasInfiniteAmmo || reserves[gun.rawValue] > 0 else { return false }
         reloadingWeapon = gun
         reloadEndsAt = sceneTime + gun.reloadTime
         SoundEngine.shared.reloadStart()
@@ -112,6 +118,12 @@ final class GameScene: SKScene {
     // MARK: - Defeat (last hero heart lost -> no respawn)
     /// sceneTime of the final death; nil while hearts remain.
     private(set) var lostAt: TimeInterval?
+    /// Same re-presentation crash as the menu scene (SwiftUI reusing a scene
+    /// whose layer nodes already have parents): build content exactly once.
+    /// Restarts go through resetLevel(), which tears down first.
+    private var didBuild = false
+    /// Level this scene is pinned to (drives Balance.active on every entry).
+    private var levelId: Int = 1
 
     // MARK: - Setup
     override init(size: CGSize) {
@@ -120,9 +132,26 @@ final class GameScene: SKScene {
         backgroundColor = .black
     }
 
+    /// Designated entry: pins the battlefield layout for this level before
+    /// anything builds or simulates (all Balance layout reads follow it).
+    init(size: CGSize, levelId: Int, weapon: HeroWeapon = .blaster) {
+        self.levelId = levelId
+        // Never start on a locked gun (stale picks, future grants).
+        let pick = GunLocker.isUnlocked(weapon) ? weapon : .blaster
+        self.startingWeapon = pick
+        self.heroWeapon = pick
+        super.init(size: size)
+        scaleMode = .aspectFill
+        backgroundColor = .black
+        Balance.active = Balance.layout(for: levelId)
+    }
+
     required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
 
     override func didMove(to view: SKView) {
+        guard !didBuild else { return }
+        didBuild = true
+        Balance.active = Balance.layout(for: levelId)
         anchorPoint = CGPoint(x: 0, y: 0)
         addChild(skyLayer)
         addChild(farLayer)
@@ -141,6 +170,7 @@ final class GameScene: SKScene {
         buildHero()
         buildAimGuide()
         buildForeground()
+        buildDressing()
         snapCamera()
         updateParallax()
         SoundEngine.shared.listenerX = hero.position.x
@@ -187,7 +217,7 @@ final class GameScene: SKScene {
         fireCooldown = 0
         shotsFired = 0
         frameCount = 0
-        heroWeapon = .blaster
+        heroWeapon = startingWeapon
         mags = HeroWeapon.allCases.map { $0.magSize }
         reserves = HeroWeapon.allCases.map { $0.startReserve }
         reloadingWeapon = nil
@@ -202,10 +232,21 @@ final class GameScene: SKScene {
         buildHero()
         buildAimGuide()
         buildForeground()
+        buildDressing()
         snapCamera()
         updateParallax()
         SoundEngine.shared.listenerX = hero.position.x
         SoundEngine.shared.startBattleMusic()
+    }
+
+    // MARK: - Per-level set dressing (flags, alien sky-flocks, lush flora)
+    /// Levels opt in via Balance.LevelLayout (today: Level 2). Runs after
+    /// every layer exists so dressing can sit in world + sky alike.
+    private func buildDressing() {
+        let layout = Balance.active
+        if layout.flags { LevelDressing.buildFlags(in: world) }
+        if layout.alienBirds { LevelDressing.buildAlienBirds(in: skyLayer, sceneSize: size) }
+        if layout.lushFlora { LevelDressing.buildGlowFlora(in: world) }
     }
 
     // MARK: - Layer 0: twilight ruins sky (static, factor 0.0)
@@ -519,12 +560,15 @@ final class GameScene: SKScene {
     /// gun, and trickles reserve rounds to fully-starved guns so no gun can
     /// stay bricked forever (desperation mode, capped low).
     private func updateReload(dt: TimeInterval) {
-        // Finish the active reload.
+        // Finish the active reload. Infinite-reserve guns refill to full
+        // without spending stock; everyone else draws from the reserve.
         if let gun = reloadingWeapon, sceneTime >= reloadEndsAt {
             let need = gun.magSize - mags[gun.rawValue]
-            let take = min(need, reserves[gun.rawValue])
+            let take = gun.hasInfiniteAmmo ? need : min(need, reserves[gun.rawValue])
             mags[gun.rawValue] += take
-            reserves[gun.rawValue] -= take
+            if !gun.hasInfiniteAmmo {
+                reserves[gun.rawValue] -= take
+            }
             reloadingWeapon = nil
             SoundEngine.shared.reloadDone()
         }
@@ -888,10 +932,12 @@ final class GameScene: SKScene {
     }
 
     // MARK: - Player army: summon + march toward the enemy base
-    /// Called by the SwiftUI cards. Returns false when broke or capped.
+    /// Called by the SwiftUI cards. Returns false when broke, capped,
+    /// or the unit isn't fielded on this level yet (Heavy = Level 2+).
     @discardableResult
     func summonAlly(kind: ArmyKind) -> Bool {
-        guard money >= kind.cost, allies.count < Balance.maxAllies else { return false }
+        guard ArmyKind.isUnlocked(kind, levelId: levelId),
+              money >= kind.cost, allies.count < Balance.maxAllies else { return false }
         guard let homeBase = bases.first(where: { $0.team == .player }),
               homeBase.alive else { return false }
         money -= kind.cost
@@ -1272,8 +1318,9 @@ final class GameScene: SKScene {
     // MARK: - Gun ammo readout (shown as 12/90 on the HUD gun button)
     private var ammoDisplayText: String {
         let i = heroWeapon.rawValue
-        if reloadingWeapon == heroWeapon { return "REL \(mags[i])/\(reserves[i])" }
-        return "\(mags[i])/\(reserves[i])"
+        let stock = heroWeapon.hasInfiniteAmmo ? "∞" : "\(reserves[i])"
+        if reloadingWeapon == heroWeapon { return "REL \(mags[i])/\(stock)" }
+        return "\(mags[i])/\(stock)"
     }
 
     // MARK: - Drops (dead enemies randomly leave ammo/health for the hero)

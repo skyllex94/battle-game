@@ -12,8 +12,22 @@ struct GameView: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    @State private var scene: GameScene = GameScene(size: CGSize(width: 1334,
-                                                                 height: Balance.viewHeight))
+    /// Builds the scene pinned to this level's battlefield layout (width,
+    /// towers, theme) before anything reads Balance. The hero deploys with
+    /// the level-screen gun pick (clamped to unlocked inside the scene).
+    init(level: LevelDef, hero: HeroDef) {
+        self.level = level
+        self.hero = hero
+        Balance.active = Balance.layout(for: level.id)
+        let gun = GunLocker.selectedGun
+        _scene = State(initialValue: GameScene(size: CGSize(width: 1334,
+                                                            height: Balance.viewHeight),
+                                               levelId: level.id,
+                                               weapon: gun))
+        _weapon = State(initialValue: gun)
+    }
+
+    @State private var scene: GameScene
     @State private var moveX: CGFloat = 0
     @State private var jumpHeld = false
     @State private var showMenu = false
@@ -68,7 +82,8 @@ struct GameView: View {
             VStack(spacing: 0) {
                 Spacer()
                 HStack(spacing: 8) {
-                    ForEach(ArmyKind.allCases) { kind in
+                    // Locked units aren't shown at all (Heavy arrives L2+).
+                    ForEach(ArmyKind.allCases.filter { ArmyKind.isUnlocked($0, levelId: level.id) }) { kind in
                         ArmyCardButton(kind: kind, money: minimap.money) {
                             scene.summonAlly(kind: kind)
                         }
@@ -305,8 +320,9 @@ struct GameView: View {
     @ViewBuilder
     private func commandBar(minimapWidth: CGFloat) -> some View {
         HStack(alignment: .center, spacing: 6) {
-            // Weapon switch: tap to rotate Blaster -> Scatter -> Cannon.
-            // Live mag/reserve readout (3/30); REL while reloading, red when dry.
+            // Weapon switch: tap to rotate through UNLOCKED guns (Blaster ->
+            // Scatter -> Cannon as milestones claim them). Single-gun
+            // loadouts show a static chip: nothing to switch to yet.
             Button { weapon = scene.cycleWeapon() } label: {
                 HStack(spacing: 5) {
                     // Little square with the actual pixel gun of the active
@@ -330,14 +346,17 @@ struct GameView: View {
                         .monospacedDigit()
                         .foregroundStyle(minimap.ammoMag == 0 ? .red
                             : minimap.reloading ? .gray : .white.opacity(0.85))
-                    Image(systemName: "arrow.2.circlepath")
-                        .foregroundStyle(.white.opacity(0.55))
+                    if GunLocker.unlockedGuns.count > 1 {
+                        Image(systemName: "arrow.2.circlepath")
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
                 }
                 .font(.system(size: 11, weight: .bold, design: .monospaced))
                 .padding(.horizontal, 8).padding(.vertical, 6)
                 .background(.cyan.opacity(0.12))
                 .overlay(Rectangle().stroke(.cyan.opacity(0.45), lineWidth: 1))
             }
+            .disabled(GunLocker.unlockedGuns.count < 2)
 
             HUDDivider()
 
@@ -389,7 +408,7 @@ struct GameView: View {
 
 #Preview {
     NavigationStack {
-        GameView(level: CampaignData.levels[0], hero: HeroRoster.heroes[0])
+        GameView(level: CampaignData.levels[0], hero: HeroRoster.selectedHero)
     }
 }
 
@@ -495,7 +514,8 @@ private struct PixelMenuButton: View {
 }
 
 /// Bottom army tab: pixel-menu styling — chamfered hard corners, chunky
-/// 3pt border, uppercase monospaced label + cost. No stats, just pick-and-go.
+/// 3pt border, uppercase monospaced label + cost. Locked units never reach
+/// this card (the bar only lists fieldable kinds). No stats, just pick-and-go.
 private struct ArmyCardButton: View {
     let kind: ArmyKind
     let money: Int

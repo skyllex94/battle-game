@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 
 /// Hero guns. One HUD button cycles through them (blaster -> scatter -> cannon).
 /// Blaster is the current default feel; scatter trades damage for a 3-pellet
@@ -61,6 +62,11 @@ enum HeroWeapon: Int, CaseIterable {
         }
     }
 
+    /// Max reach in points (speed × life). Shown in the gun shop.
+    var maxRange: CGFloat {
+        bulletSpeed * CGFloat(bulletLife)
+    }
+
     var pelletCount: Int {
         switch self {
         case .blaster: return 1
@@ -120,6 +126,67 @@ enum HeroWeapon: Int, CaseIterable {
         case .blaster: return 6
         case .scatter: return 3
         case .cannon: return 2
+        }
+    }
+
+    // MARK: - Unlock gating (milestone grants; diamonds buyout plugs in later)
+
+    /// Campaign level that unlocks this gun (0 = available from the start).
+    /// Only the Blaster starts unlocked; Scatter/Cannon are novelty grants.
+    var unlockLevel: Int {
+        switch self {
+        case .blaster: return 0
+        case .scatter: return 1
+        case .cannon: return 7
+        }
+    }
+
+    /// One-line sales pitch for the gun shop cards.
+    var blurb: String {
+        switch self {
+        case .blaster: return "Reliable + endless ammo."
+        case .scatter: return "3-pellet fan. Eats shells."
+        case .cannon: return "Slow siege hammer."
+        }
+    }
+
+    /// The Blaster fires from an endless reserve: the mag still drains and
+    /// reloads exactly like other guns, but the reserve never depletes
+    /// (reloads always fill to full, no drought, no REL-lockout).
+    var hasInfiniteAmmo: Bool {
+        self == .blaster
+    }
+}
+
+/// GunLocker — mirrors HeroRoster gating for guns: selection persistence
+/// with migration, lock checks, and the unlock schedule seam the future
+/// UnlockStore (milestone grants + diamonds buyout) will claim through.
+enum GunLocker {
+    private static let selectedKey = "campaign.selectedGun"
+
+    /// A gun is selectable when its milestone is claimed. Until the
+    /// UnlockStore lands, only unlockLevel 0 (Blaster) is available.
+    static func isUnlocked(_ gun: HeroWeapon) -> Bool {
+        gun.unlockLevel <= 0
+    }
+
+    static var unlockedGuns: [HeroWeapon] { HeroWeapon.allCases.filter(isUnlocked) }
+
+    static var selectedGun: HeroWeapon {
+        get {
+            let stored = UserDefaults.standard.integer(forKey: selectedKey)
+            if let match = HeroWeapon(rawValue: stored), isUnlocked(match) {
+                return match
+            }
+            // Migrate old installs (default 0 = blaster) and guard locked
+            // picks: always fall back to the Blaster, never a locked gun.
+            return .blaster
+        }
+        set {
+            // Never persist a locked gun.
+            if isUnlocked(newValue) {
+                UserDefaults.standard.set(newValue.rawValue, forKey: selectedKey)
+            }
         }
     }
 }

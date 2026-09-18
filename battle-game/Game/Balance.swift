@@ -45,9 +45,13 @@ enum Balance {
     // MARK: - Shooting (tap right side to aim + fire)
     static let bulletSpeed: CGFloat = 950
     static let fireCooldown: Double = 0.26 // hold touch = auto-fire at this cadence
-    static let bulletLife: Double = 1.6   // max range ≈ speed × life
+    // NOTE: hero bolt lifetime moved to HeroWeapon.bulletLife (per-gun range
+    // tuning lives with the guns, not here).
     static let heroDamage: CGFloat = 10
     static let heroHP: CGFloat = 100
+    /// Full deaths the hero survives per attempt. Each death costs one
+    /// heart (HUD); the run ends in defeat when the last heart is lost.
+    static let heroLives: Int = 3
     static let startingGold: Int = 500 // Unity PlayerMoney.startingMoney
     // MARK: - Hero respawn (dropped from above, in front of the player base)
     static let respawnDelay: Double = 2.0      // seconds dead before the drop

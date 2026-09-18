@@ -49,6 +49,18 @@ enum HeroWeapon: Int, CaseIterable {
         }
     }
 
+    /// Seconds a bolt stays alive. Max range = speed × life, tuned per gun
+    /// so nothing outranges enemy towers (750): the hero must close in to
+    /// deal damage — no safe cross-map sniping.
+    /// Blaster ≈ 640, scatter ≈ 500 (shotgun-falloff feel), cannon ≈ 700.
+    var bulletLife: Double {
+        switch self {
+        case .blaster: return 0.67
+        case .scatter: return 0.59
+        case .cannon: return 0.64
+        }
+    }
+
     var pelletCount: Int {
         switch self {
         case .blaster: return 1

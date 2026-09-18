@@ -103,6 +103,15 @@ final class GameScene: SKScene {
     private var sceneTime: TimeInterval = 0
     private var respawnAt: TimeInterval = -1 // <0 = no pending respawn
     private var graceUntil: TimeInterval = -1
+    /// Hearts remaining this attempt. Each death costs one; at zero the
+    /// hero stays down and the run ends in defeat (see lostAt).
+    private var heroLives: Int = Balance.heroLives
+    // MARK: - Victory (enemy HQ destroyed -> level won)
+    /// sceneTime of the winning blow; nil until the enemy HQ falls.
+    private(set) var wonAt: TimeInterval?
+    // MARK: - Defeat (last hero heart lost -> no respawn)
+    /// sceneTime of the final death; nil while hearts remain.
+    private(set) var lostAt: TimeInterval?
 
     // MARK: - Setup
     override init(size: CGSize) {
@@ -134,6 +143,8 @@ final class GameScene: SKScene {
         buildForeground()
         snapCamera()
         updateParallax()
+        SoundEngine.shared.listenerX = hero.position.x
+        SoundEngine.shared.startBattleMusic()
     }
 
     // MARK: - Restart (in-place full reset)
@@ -163,11 +174,14 @@ final class GameScene: SKScene {
         allies = []
         drops = []
         heroHP = Balance.heroHP
+        heroLives = Balance.heroLives
         money = Balance.startingGold
         sceneTime = 0
         lastUpdate = 0
         respawnAt = -1
         graceUntil = -1
+        wonAt = nil
+        lostAt = nil
         aimTouch = nil
         aimDir = .zero
         fireCooldown = 0
@@ -190,6 +204,8 @@ final class GameScene: SKScene {
         buildForeground()
         snapCamera()
         updateParallax()
+        SoundEngine.shared.listenerX = hero.position.x
+        SoundEngine.shared.startBattleMusic()
     }
 
     // MARK: - Layer 0: twilight ruins sky (static, factor 0.0)
@@ -355,6 +371,8 @@ final class GameScene: SKScene {
 
     override func update(_ currentTime: TimeInterval) {
         frameCount += 1
+        // ~1/sec: follow the music toggle without polling UserDefaults hot.
+        if frameCount % 60 == 0 { SoundEngine.shared.syncMusic() }
         var dt = lastUpdate > 0 ? currentTime - lastUpdate : 1.0 / 60
         // Pause/hitch guard: while the pause menu is up update() stops, so
         // the first frame after resume would see a seconds-long dt — snapping
@@ -545,7 +563,7 @@ final class GameScene: SKScene {
             bolt.position = muzzle
             bolt.zRotation = a
             world.addChild(bolt)
-            projectiles.append(Projectile(node: bolt, dir: dir, life: Balance.bulletLife,
+            projectiles.append(Projectile(node: bolt, dir: dir, life: heroWeapon.bulletLife,
                                           speed: heroWeapon.bulletSpeed, damage: heroWeapon.damage,
                                           team: .neutral))
         }
@@ -1007,10 +1025,19 @@ final class GameScene: SKScene {
         let frac = max(0, bases[index].hp / bases[index].maxHP)
         bases[index].node.setHPFraction(frac)
         if !bases[index].alive {
-            // BaseNode handles the rubble look (grey + dark gate). Win/lose screens land later.
             bases[index].node.setDestroyed()
             SoundEngine.shared.structureDestroyed(playerOwned: bases[index].team == .player,
                                                   at: bases[index].node.position.x)
+            // Enemy HQ down = level won. The SwiftUI layer picks this up
+            // (~7Hz poll) and raises the victory card.
+            if bases[index].team == .enemy, wonAt == nil {
+                wonAt = sceneTime
+            }
+            // Player HQ down = run lost. Same defeat channel as the last
+            // hero heart (GameView raises mission-failed off minimap.lost).
+            if bases[index].team == .player, lostAt == nil {
+                lostAt = sceneTime
+            }
         }
     }
 
@@ -1043,7 +1070,15 @@ final class GameScene: SKScene {
         hero.die()
         hero.isHidden = true
         releaseAimTouch()
-        respawnAt = sceneTime + Balance.respawnDelay
+        heroLives = max(0, heroLives - 1)
+        if heroLives > 0 {
+            respawnAt = sceneTime + Balance.respawnDelay
+        } else {
+            // Last heart gone: no respawn — the run ends in defeat and
+            // GameView raises the mission-failed panel (see minimap.lost).
+            respawnAt = -1
+            lostAt = sceneTime
+        }
         SoundEngine.shared.heroDeath()
         // Death poof.
         for i in 0..<2 {
@@ -1220,12 +1255,17 @@ final class GameScene: SKScene {
             enemyBaseX: Balance.enemyBaseX,
             heroHP: heroHP,
             heroMaxHP: Balance.heroHP,
+            heroLives: heroLives,
+            heroMaxLives: Balance.heroLives,
             money: money,
             allyXs: allies.filter { $0.alive }.map { $0.position.x },
             enemyXs: enemies.filter { $0.alive }.map { $0.position.x },
             ammoText: ammoDisplayText,
             ammoMag: mags[heroWeapon.rawValue],
-            reloading: reloadingWeapon == heroWeapon
+            reloading: reloadingWeapon == heroWeapon,
+            won: wonAt != nil,
+            winTime: wonAt ?? 0,
+            lost: lostAt != nil
         )
     }
 

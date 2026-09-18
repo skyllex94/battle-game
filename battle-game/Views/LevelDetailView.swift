@@ -38,7 +38,7 @@ struct LevelDetailView: View {
                             GameView(level: level, hero: selectedHero)
                         } label: {
                             HStack {
-                                Image(systemName: "sword.fill")
+                                Image(systemName: "bolt.fill")
                                 Text("START BATTLE").fontWeight(.bold)
                             }
                             .frame(maxWidth: .infinity, minHeight: 54)

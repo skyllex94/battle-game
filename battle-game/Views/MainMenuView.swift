@@ -68,7 +68,7 @@ struct MainMenuView: View {
                             Text("Hero-led lane battler — hold the line, push mid, break their HQ.")
                                 .font(.system(size: 13, weight: .bold, design: .monospaced))
                                 .foregroundStyle(.white.opacity(0.85))
-                            Text(blink ? "▶ TAP DEPLOY TO JOIN THE FIGHT" : "  TAP DEPLOY TO JOIN THE FIGHT")
+                            Text(blink ? "▶ TAP CAMPAIGN TO TAKE BACK EMRA" : "  TAP CAMPAIGN TO TAKE BACK EMRA")
                                 .font(.system(size: 11, weight: .black, design: .monospaced))
                                 .tracking(1)
                                 .foregroundStyle(.yellow)
@@ -93,7 +93,7 @@ struct MainMenuView: View {
                             NavigationLink {
                                 LevelMapView()
                             } label: {
-                                PixelCommandButton(title: "DEPLOY", systemIcon: "sword.fill",
+                                PixelCommandButton(title: "CAMPAIGN", systemIcon: "flag.fill",
                                                    style: .war)
                             }
                             .simultaneousGesture(TapGesture().onEnded {
@@ -118,6 +118,14 @@ struct MainMenuView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
+            .task {
+                // Warm the audio engine + next screen's map art in the
+                // background so the first DEPLOY tap pushes instantly.
+                SoundEngine.shared.warmUp()
+                await Task.detached(priority: .utility) {
+                    _ = ImportedArt.uiImage(named: "MapBG")
+                }.value
+            }
             .sheet(isPresented: $showSettings) {
                 SettingsSheet(settings: settings)
             }

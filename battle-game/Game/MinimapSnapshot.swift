@@ -15,6 +15,8 @@ struct MinimapSnapshot {
     // HUD economy/combat state (same polling channel, ~7Hz).
     var heroHP: CGFloat
     var heroMaxHP: CGFloat
+    var heroLives: Int = 3
+    var heroMaxLives: Int = 3
     var money: Int
     // Unit dots: player army (blue) + enemy marchers (red).
     var allyXs: [CGFloat] = []
@@ -23,4 +25,9 @@ struct MinimapSnapshot {
     var ammoText: String = "–/–"
     var ammoMag: Int = 0
     var reloading: Bool = false
+    // Victory channel: enemy HQ down + the winning time (seconds).
+    var won: Bool = false
+    var winTime: Double = 0
+    // Defeat channel: last hero heart lost (no respawn coming).
+    var lost: Bool = false
 }

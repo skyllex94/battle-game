@@ -17,6 +17,13 @@ struct GameView: View {
     @State private var moveX: CGFloat = 0
     @State private var jumpHeld = false
     @State private var showMenu = false
+    @State private var showWin = false
+    @State private var winStars = 0
+    @State private var winTime: Double = 0
+    /// When the winning blow landed (wall clock). The card waits 2s while
+    /// the battle keeps raging behind it.
+    @State private var winDetectedAt: Date?
+    @State private var showDefeat = false
     @State private var weapon: HeroWeapon = .blaster
     @State private var minimap = MinimapSnapshot(levelWidth: Balance.levelWidth, heroX: Balance.heroSpawnX,
                                                  cameraX: 0, viewWidth: 1334,
@@ -105,6 +112,7 @@ struct GameView: View {
                         scene.heroJumpHeld = jumpHeld
                         weapon = scene.heroWeapon
                         showMenu = false
+                        showDefeat = false
                     }
                     PixelMenuButton(title: "Quit to Menu", style: .danger) {
                         SoundEngine.shared.uiTap()
@@ -123,18 +131,172 @@ struct GameView: View {
                 .overlay(PixelPanelShape(cut: 10).stroke(.cyan.opacity(0.55), lineWidth: 3))
                 .shadow(color: .cyan.opacity(0.15), radius: 16)
             }
+
+            // Victory card: enemy HQ destroyed. Congrats, clear time, stars.
+            if showWin {
+                Color.black.opacity(0.55)
+                    .ignoresSafeArea()
+                VStack(spacing: 10) {
+                    Text("VICTORY")
+                        .font(.system(size: 26, weight: .black, design: .monospaced))
+                        .tracking(6)
+                        .foregroundStyle(.yellow)
+                    Text(level.name.uppercased())
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .tracking(3)
+                        .foregroundStyle(.white.opacity(0.7))
+                    HStack(spacing: 6) {
+                        Rectangle().fill(.yellow.opacity(0.6)).frame(width: 52, height: 2)
+                        Rectangle().fill(.yellow).frame(width: 8, height: 8)
+                        Rectangle().fill(.yellow.opacity(0.6)).frame(width: 52, height: 2)
+                    }
+                    // Pixel stars earned for this clear.
+                    HStack(spacing: 8) {
+                        ForEach(0..<3, id: \.self) { i in
+                            PixelStarView(lit: i < winStars)
+                        }
+                    }
+                    // Clear time.
+                    HStack(spacing: 6) {
+                        Text("TIME")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .tracking(2)
+                            .foregroundStyle(.white.opacity(0.55))
+                        Text(formatTime(winTime))
+                            .font(.system(size: 20, weight: .black, design: .monospaced))
+                            .monospacedDigit()
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.top, 2)
+                    PixelMenuButton(title: "Play Again", style: .primary) {
+                        SoundEngine.shared.uiTap()
+                        scene.resetLevel()
+                        scene.heroInputX = moveX
+                        scene.heroJumpHeld = jumpHeld
+                        weapon = scene.heroWeapon
+                        showWin = false
+                        winDetectedAt = nil
+                        scene.isPaused = false
+                    }
+                    PixelMenuButton(title: "Map", style: .ghost) {
+                        SoundEngine.shared.uiTap()
+                        dismiss()
+                    }
+                }
+                .padding(.horizontal, 26)
+                .padding(.vertical, 24)
+                .background(.black.opacity(0.9))
+                .clipShape(PixelPanelShape(cut: 10))
+                .overlay(PixelPanelShape(cut: 10).stroke(.yellow.opacity(0.6), lineWidth: 3))
+                .shadow(color: .yellow.opacity(0.2), radius: 18)
+            }
+
+            // Defeat card: last heart lost. Retry restores all 3 hearts.
+            if showDefeat {
+                Color.black.opacity(0.55)
+                    .ignoresSafeArea()
+                VStack(spacing: 10) {
+                    Text("MISSION FAILED")
+                        .font(.system(size: 24, weight: .black, design: .monospaced))
+                        .tracking(4)
+                        .foregroundStyle(.red)
+                    Text(level.name.uppercased())
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .tracking(3)
+                        .foregroundStyle(.white.opacity(0.7))
+                    HStack(spacing: 6) {
+                        Rectangle().fill(.red.opacity(0.6)).frame(width: 52, height: 2)
+                        Rectangle().fill(.red).frame(width: 8, height: 8)
+                        Rectangle().fill(.red.opacity(0.6)).frame(width: 52, height: 2)
+                    }
+                    // Spent hearts: all dimmed — the reason the run ended.
+                    HStack(spacing: 6) {
+                        ForEach(0..<minimap.heroMaxLives, id: \.self) { _ in
+                            PixelHeartView(color: .gray)
+                                .saturation(0)
+                                .opacity(0.25)
+                        }
+                    }
+                    Text("ALL HEARTS LOST")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .tracking(2)
+                        .foregroundStyle(.white.opacity(0.55))
+                        .padding(.top, 2)
+                    PixelMenuButton(title: "Retry", style: .primary) {
+                        SoundEngine.shared.uiTap()
+                        scene.resetLevel()
+                        scene.heroInputX = moveX
+                        scene.heroJumpHeld = jumpHeld
+                        weapon = scene.heroWeapon
+                        showDefeat = false
+                        scene.isPaused = false
+                    }
+                    PixelMenuButton(title: "Map", style: .ghost) {
+                        SoundEngine.shared.uiTap()
+                        dismiss()
+                    }
+                }
+                .padding(.horizontal, 26)
+                .padding(.vertical, 24)
+                .background(.black.opacity(0.9))
+                .clipShape(PixelPanelShape(cut: 10))
+                .overlay(PixelPanelShape(cut: 10).stroke(.red.opacity(0.6), lineWidth: 3))
+                .shadow(color: .red.opacity(0.2), radius: 18)
+            }
         }
         .toolbar(.hidden, for: .navigationBar)
         .onChange(of: moveX) { scene.heroInputX = $0 }
         .onChange(of: jumpHeld) { scene.heroJumpHeld = $0 }
         .onReceive(debugTimer) { _ in
             minimap = scene.minimap
+            // Enemy HQ down -> let the win breathe 2s with the sim still
+            // running, then freeze the frame, bank it, raise the card.
+            if minimap.won, !showWin, !showDefeat {
+                if winDetectedAt == nil {
+                    winDetectedAt = Date()
+                } else if Date().timeIntervalSince(winDetectedAt!) >= 2 {
+                    winDetectedAt = nil
+                    showWin = true
+                    showMenu = false
+                    scene.isPaused = true
+                    winTime = minimap.winTime
+                    winStars = starsFor(time: minimap.winTime)
+                    CampaignData.awardStars(winStars, for: level.id)
+                    SoundEngine.shared.stopBattleMusic()
+                    SoundEngine.shared.victory()
+                }
+            } else if !minimap.won {
+                winDetectedAt = nil
+            }
+            // Last heart lost -> freeze the frame, raise the defeat card.
+            if minimap.lost, !showDefeat {
+                showDefeat = true
+                showMenu = false
+                showWin = false
+                scene.isPaused = true
+                SoundEngine.shared.stopBattleMusic()
+            }
         }
         .onAppear {
             scene.heroInputX = moveX
             scene.heroJumpHeld = jumpHeld
             weapon = scene.heroWeapon
         }
+        .onDisappear {
+            SoundEngine.shared.stopBattleMusic()
+        }
+    }
+
+    /// Victory stars from clear time: fast clears earn the full row.
+    private func starsFor(time: Double) -> Int {
+        if time <= 180 { return 3 }
+        if time <= 300 { return 2 }
+        return 1
+    }
+
+    private func formatTime(_ t: Double) -> String {
+        let total = max(0, Int(t))
+        return String(format: "%02d:%02d", total / 60, total % 60)
     }
 
     /// Single structured menu bar holding every top control:
@@ -190,8 +352,9 @@ struct GameView: View {
 
             HUDDivider()
 
-            // Hero vitals.
-            HeroHealthBar(hp: minimap.heroHP, maxHP: minimap.heroMaxHP)
+            // Hero vitals: 3 life-hearts + HP bar + live numbers.
+            HeroVitalsView(lives: minimap.heroLives, maxLives: minimap.heroMaxLives,
+                           hp: minimap.heroHP, maxHP: minimap.heroMaxHP)
                 .allowsHitTesting(false)
 
             Spacer(minLength: 2)
@@ -400,9 +563,14 @@ private struct HUDDivider: View {
     }
 }
 
-/// Hero vitals: heart + bar + live numbers (e.g. 78/100). Green -> red as HP
-/// drops. Bare (no pill background) — it lives inside the command bar.
-private struct HeroHealthBar: View {
+/// Hero vitals: life-hearts + HP bar + live numbers (e.g. 78/100).
+/// Each death costs one heart — spent hearts render desaturated and almost
+/// transparent so the remaining attempts read at a glance. The HP bar tracks
+/// the current life (green -> red). Bare (no pill background) — it lives
+/// inside the command bar.
+private struct HeroVitalsView: View {
+    let lives: Int
+    let maxLives: Int
     let hp: CGFloat
     let maxHP: CGFloat
 
@@ -419,16 +587,19 @@ private struct HeroHealthBar: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            PixelHeartView(color: color)
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(.white.opacity(0.16))
-                    .frame(width: 70, height: 8)
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(color)
-                    .frame(width: 70 * frac, height: 8)
+            HStack(spacing: 2) {
+                ForEach(0..<max(1, maxLives), id: \.self) { i in
+                    if i < lives {
+                        PixelHeartView(color: color)
+                    } else {
+                        // Spent life: dimmed to near-ghost.
+                        PixelHeartView(color: .gray)
+                            .saturation(0)
+                            .opacity(0.25)
+                    }
+                }
             }
-            .overlay(RoundedRectangle(cornerRadius: 3).stroke(.white.opacity(0.22), lineWidth: 1))
+            PixelHPBarView(frac: frac, color: color)
             Text("\(Int(hp))/\(Int(maxHP))")
                 .font(.caption2.bold())
                 .monospacedDigit()
@@ -436,6 +607,53 @@ private struct HeroHealthBar: View {
                 .fixedSize(horizontal: true, vertical: false)
                 .foregroundStyle(.white)
         }
+    }
+}
+
+/// Chunky pixel HP bar: dark padded frame + hairline border + discrete
+/// block segments that wink out one by one (10 chunks), with a faint top
+/// shine. Same language as the in-world tower/HQ bars.
+private struct PixelHPBarView: View {
+    let frac: CGFloat
+    let color: Color
+    private let chunks = 10
+    private let chunkW: CGFloat = 6
+    private let chunkH: CGFloat = 8
+    private let gap: CGFloat = 1
+    private let pad: CGFloat = 3
+
+    private var lit: Int { Int((min(1, max(0, frac)) * CGFloat(chunks)).rounded()) }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            // Dark padded frame.
+            Rectangle()
+                .fill(.black.opacity(0.65))
+                .frame(width: frameW, height: chunkH + pad * 2)
+            // Block segments.
+            HStack(spacing: gap) {
+                ForEach(0..<chunks, id: \.self) { i in
+                    Rectangle()
+                        .fill(i < lit ? color : .white.opacity(0.12))
+                        .frame(width: chunkW, height: chunkH)
+                }
+            }
+            .padding(.horizontal, pad)
+            // Top shine across the frame.
+            VStack {
+                Rectangle()
+                    .fill(.white.opacity(0.14))
+                    .frame(width: frameW, height: 2)
+                Spacer(minLength: 0)
+            }
+            .frame(width: frameW, height: chunkH + pad * 2)
+        }
+        .frame(width: frameW, height: chunkH + pad * 2)
+        .overlay(Rectangle().stroke(.white.opacity(0.25), lineWidth: 1))
+    }
+
+    private var frameW: CGFloat {
+        CGFloat(chunks) * chunkW + CGFloat(chunks - 1) * gap + pad * 2
     }
 }
 
@@ -511,5 +729,27 @@ private struct PixelHeartView: View {
             "r": color,
             "L": .white,
         ], pixel: 1.5)
+    }
+}
+
+/// Pixel victory star: lit gold or dim outline grey.
+private struct PixelStarView: View {
+    let lit: Bool
+    private let grid = [
+        "....O....",
+        "...OOO...",
+        "...OOO...",
+        "OOOOOOOOO",
+        ".OOOOOOO.",
+        "..OOOOO..",
+        "..OOOOO..",
+        ".OOO.OOO.",
+        ".OO...OO.",
+    ]
+    var body: some View {
+        PixelSpriteView(grid: grid, palette: [
+            "O": lit ? Color(red: 1.0, green: 0.82, blue: 0.2) : Color(white: 0.3),
+        ], pixel: 2)
+        .shadow(color: lit ? .yellow.opacity(0.5) : .clear, radius: 4)
     }
 }

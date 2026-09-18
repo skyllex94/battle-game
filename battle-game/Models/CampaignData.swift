@@ -15,13 +15,40 @@ struct LevelDef: Identifiable, Codable {
 }
 
 struct CampaignData {
+    /// The 15-region takeback of Emra, west → east: verdant woods give way
+    /// to dunes, then volcanic wastes, then frost, then the umbral core.
+    /// Castles punctuate each biome (ids 3 / 6 / 9 / 11 / 15).
     static let levels: [LevelDef] = [
-        LevelDef(id: 1, name: "Outpost Breach", subtitle: "First push — learn the lane",
+        LevelDef(id: 1, name: "Verdant Landing", subtitle: "First push — learn the lane",
                  mapArtName: "LevelSelectionBG", enemyWaves: 3, towerHP: 200, baseHP: 500),
-        LevelDef(id: 2, name: "Hell Grounds", subtitle: "Hold the middle",
-                 mapArtName: "MapBG", enemyWaves: 5, towerHP: 300, baseHP: 750),
-        LevelDef(id: 3, name: "Core Assault", subtitle: "Break the enemy base",
+        LevelDef(id: 2, name: "Rootwall Thicket", subtitle: "Pincer through the pines",
+                 mapArtName: "MapBG", enemyWaves: 4, towerHP: 220, baseHP: 550),
+        LevelDef(id: 3, name: "Thornwood Bastion", subtitle: "Storm the timber castle",
+                 mapArtName: "MapBG", enemyWaves: 5, towerHP: 250, baseHP: 600),
+        LevelDef(id: 4, name: "Dune Atoll", subtitle: "Cross the white sands",
+                 mapArtName: "MapBG", enemyWaves: 5, towerHP: 260, baseHP: 650),
+        LevelDef(id: 5, name: "Sunscorch Expanse", subtitle: "Hold out at high noon",
+                 mapArtName: "MapBG", enemyWaves: 6, towerHP: 300, baseHP: 700),
+        LevelDef(id: 6, name: "Sandhold Citadel", subtitle: "Breach the desert keep",
+                 mapArtName: "MapBG", enemyWaves: 6, towerHP: 320, baseHP: 800),
+        LevelDef(id: 7, name: "Cinder Gate", subtitle: "Enter the burn",
+                 mapArtName: "MapBG", enemyWaves: 7, towerHP: 350, baseHP: 900),
+        LevelDef(id: 8, name: "Hell Grounds", subtitle: "Hold the middle",
                  mapArtName: "MapBG", enemyWaves: 8, towerHP: 400, baseHP: 1000),
+        LevelDef(id: 9, name: "Ashfall Bastion", subtitle: "Take the ash keep",
+                 mapArtName: "MapBG", enemyWaves: 9, towerHP: 440, baseHP: 1100),
+        LevelDef(id: 10, name: "Frostbite Approach", subtitle: "Into the white",
+                 mapArtName: "MapBG", enemyWaves: 9, towerHP: 460, baseHP: 1150),
+        LevelDef(id: 11, name: "Whiteout Redoubt", subtitle: "Siege the ice fortress",
+                 mapArtName: "MapBG", enemyWaves: 10, towerHP: 500, baseHP: 1250),
+        LevelDef(id: 12, name: "Howling Causeway", subtitle: "Cross the ice bridge",
+                 mapArtName: "MapBG", enemyWaves: 10, towerHP: 540, baseHP: 1350),
+        LevelDef(id: 13, name: "Stormwatch Crag", subtitle: "Silence the spire",
+                 mapArtName: "MapBG", enemyWaves: 11, towerHP: 560, baseHP: 1400),
+        LevelDef(id: 14, name: "Umbral Outskirts", subtitle: "Break the outer dark",
+                 mapArtName: "MapBG", enemyWaves: 12, towerHP: 600, baseHP: 1450),
+        LevelDef(id: 15, name: "Embral Core", subtitle: "Break the enemy core",
+                 mapArtName: "MapBG", enemyWaves: 12, towerHP: 650, baseHP: 1500),
     ]
 
     private static let unlockedKey = "campaign.unlockedLevel"

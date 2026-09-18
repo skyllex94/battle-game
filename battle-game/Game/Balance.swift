@@ -13,7 +13,8 @@ enum Balance {
     // MARK: - Battlefield themes (same Twilight concept, per-level grade)
     /// Twilight Ruins (Level 1): indigo dusk. Overgrown Expanse (Level 2):
     /// alien jungle — teal-green grade, denser canopy, heavier glow flora.
-    enum BGTheme { case twilight, overgrown }
+    /// Thornwood Bastion (Level 3): ember-amber timber grade, russet canopy.
+    enum BGTheme { case twilight, overgrown, bastion }
 
     // MARK: - Per-level battlefield layout
     struct LevelLayout {
@@ -31,6 +32,19 @@ enum Balance {
         var alienBirds: Bool
         /// Extra glow-fern / shroom clusters on the ground.
         var lushFlora: Bool
+        // MARK: - Enemy summon tuning (enemy base marchers)
+        /// Seconds between summon ticks.
+        var summonInterval: Double
+        /// Chance a tick pops a PAIR out of the gate instead of one.
+        var doubleChance: Double
+        /// Marcher cap on the field.
+        var maxEnemies: Int
+        /// Every Nth summon marches out a Brute instead of a Raider
+        /// (0 = never — Levels 1-2 field raiders only).
+        var bruteEvery: Int
+        // MARK: - Structure durability (matches the LevelDef dossier)
+        var towerHP: CGFloat
+        var baseHP: CGFloat
     }
 
     /// Level 1: the original 5200pt Twilight lane, 2 towers per side.
@@ -49,7 +63,13 @@ enum Balance {
         theme: .twilight,
         flags: false,
         alienBirds: false,
-        lushFlora: false
+        lushFlora: false,
+        summonInterval: 8.0,
+        doubleChance: 0.0,
+        maxEnemies: 6,
+        bruteEvery: 0,
+        towerHP: 200,
+        baseHP: 500
     )
 
     /// Level 2 Rootwall Thicket: bigger 6800pt overgrown map, 3 towers per
@@ -71,7 +91,44 @@ enum Balance {
         theme: .overgrown,
         flags: true,
         alienBirds: true,
-        lushFlora: true
+        lushFlora: true,
+        summonInterval: 7.0,
+        doubleChance: 0.45,
+        maxEnemies: 8,
+        bruteEvery: 0,
+        towerHP: 220,
+        baseHP: 550
+    )
+
+    /// Level 3 Thornwood Bastion: longest lane yet (7200pt), 3 towers per
+    /// side like Level 2 but shifted inward, and a stepped bastion-approach
+    /// platform run with a high perch mid-lane. Timber-ember grade.
+    /// Easy-to-medium flow: steady raiders, occasional pairs, and every
+    /// 4th summon a Brute (first one ~25s in — easy start, medium punch).
+    private static let layout3 = LevelLayout(
+        width: 7200,
+        playerBaseX: 220,
+        playerTowerXs: [750, 1450, 2150],
+        enemyTowerXs: [5050, 5750, 6450],
+        enemyBaseX: 6980,
+        heroSpawnX: 420,
+        platforms: [
+            CGRect(x: 2500, y: 280, width: 300, height: 36),
+            CGRect(x: 2960, y: 400, width: 300, height: 36),
+            CGRect(x: 3420, y: 480, width: 280, height: 36),
+            CGRect(x: 3860, y: 360, width: 300, height: 36),
+            CGRect(x: 4320, y: 280, width: 320, height: 36),
+        ],
+        theme: .bastion,
+        flags: true,
+        alienBirds: true,
+        lushFlora: true,
+        summonInterval: 6.0,
+        doubleChance: 0.35,
+        maxEnemies: 9,
+        bruteEvery: 4,
+        towerHP: 250,
+        baseHP: 600
     )
 
     /// Active battlefield. GameScene sets this from the level id before
@@ -81,6 +138,7 @@ enum Balance {
     static func layout(for levelId: Int) -> LevelLayout {
         switch levelId {
         case 2: return layout2
+        case 3: return layout3
         default: return layout1
         }
     }
@@ -137,7 +195,8 @@ enum Balance {
     static let respawnGrace: Double = 1.0      // invulnerable seconds after landing
 
     // MARK: - Tower combat (towers fire at enemies in proximity)
-    static let towerHP: CGFloat = 200
+    /// Per-level via the layout table (matches each LevelDef dossier).
+    static var towerHP: CGFloat { active.towerHP }
     static let towerRange: CGFloat = 750       // acquire targets within this distance
     static let towerFireCooldown: Double = 1.1 // seconds between tower shots
     static let towerDamage: CGFloat = 12
@@ -146,7 +205,8 @@ enum Balance {
     static let towerMuzzleHeight: CGFloat = 150 // muzzle above ground (near tower top)
 
     // MARK: - Main base (enemy base fans 3 bolts + summons marchers)
-    static let baseHP: CGFloat = 500           // your Unity Base value
+    /// Per-level via the layout table (matches each LevelDef dossier).
+    static var baseHP: CGFloat { active.baseHP }
     static let baseRange: CGFloat = 900        // fan fires when the hero closes in
     static let baseFireCooldown: Double = 2.4
     static let baseFanCount: Int = 3           // 3 blasts, same muzzle, spread out
@@ -156,9 +216,13 @@ enum Balance {
     static let baseMuzzleForward: CGFloat = 60 // muzzle sits toward the enemy side
 
     // MARK: - Summoned enemies (march on the enemy base's side toward your base)
-    static let summonInterval: Double = 8.0
+    // Per-level via the layout table (L1: single every 8s, cap 6 — untouched).
+    static var summonInterval: Double { active.summonInterval }
+    static var summonDoubleChance: Double { active.doubleChance }
+    static var maxEnemies: Int { active.maxEnemies }
+    static var bruteEvery: Int { active.bruteEvery }
     static let firstSummonDelay: Double = 5.0
-    static let maxEnemies: Int = 6
+    /// Raider (the classic marcher — Levels 1+).
     static let enemyHP: CGFloat = 40
     static let enemySpeed: CGFloat = 120
     static let killReward: Int = 100           // Unity KillEnemy gold
@@ -167,6 +231,15 @@ enum Balance {
     static let enemyShootRange: CGFloat = 380  // stop + shoot this close to target
     static let enemyFireCooldown: Double = 1.7
     static let enemyBoltDamage: CGFloat = 8
+    /// Brute (bulky siege marcher — Level 3+): slow, tanky, hits like a
+    /// tower bolt and pays a premium when dropped.
+    static let bruteHP: CGFloat = 150
+    static let bruteSpeed: CGFloat = 70
+    static let bruteReward: Int = 175
+    static let bruteSightRange: CGFloat = 500
+    static let bruteShootRange: CGFloat = 330
+    static let bruteFireCooldown: Double = 2.2
+    static let bruteBoltDamage: CGFloat = 16
     static let enemyBoltSpeed: CGFloat = 520
     static let enemyBoltLife: Double = 1.2     // range ≈ 624: outranged by the hero
 
@@ -194,6 +267,15 @@ enum Balance {
     static let heavyFireCooldown: Double = 1.9
     static let heavyRange: CGFloat = 340
     static let heavySightRange: CGFloat = 550
+    // Ranger: Level 2 long-rifle skirmisher. Outranges raiders (520 vs
+    // their 380) so it shoots first, but folds fast when caught.
+    static let rangerCost: Int = 175
+    static let rangerHP: CGFloat = 50
+    static let rangerSpeed: CGFloat = 165
+    static let rangerDamage: CGFloat = 14
+    static let rangerFireCooldown: Double = 1.1
+    static let rangerRange: CGFloat = 520
+    static let rangerSightRange: CGFloat = 650
 
     // MARK: - Parallax scroll factors (ported from your Unity Parallaxing.cs idea:
     // background moves slower than the camera; factor 1.0 = locked to world)

@@ -74,13 +74,22 @@ enum TwilightRuinsBG {
     /// Gradient + moon + stars + drifting clouds + horizon glow + vignette.
     /// The overgrown theme (Level 2) regrades the same dusk concept toward
     /// alien jungle teal-green: same moon/stars/vignette, greener air.
+    /// The bastion theme (Level 3) burns it toward timber-ember amber:
+    /// same shapes, furnace horizon, russet air.
     static func buildSky(in layer: SKNode, sceneSize: CGSize) {
-        let overgrown = Balance.active.theme == .overgrown
-        let gTop = overgrown ? UIColor(red: 0.02, green: 0.09, blue: 0.12, alpha: 1) : skyTop
-        let gMid = overgrown ? UIColor(red: 0.05, green: 0.20, blue: 0.21, alpha: 1) : skyMid
-        let gLow = overgrown ? UIColor(red: 0.13, green: 0.30, blue: 0.22, alpha: 1) : skyLow
-        let gHorizon = overgrown ? UIColor(red: 0.38, green: 0.50, blue: 0.28, alpha: 1) : horizonPink
-        let gMist = overgrown ? UIColor(red: 0.15, green: 0.32, blue: 0.28, alpha: 1) : mistBlue
+        let theme = Balance.active.theme
+        let overgrown = theme == .overgrown
+        let bastion = theme == .bastion
+        let gTop = overgrown ? UIColor(red: 0.02, green: 0.09, blue: 0.12, alpha: 1)
+            : bastion ? UIColor(red: 0.07, green: 0.04, blue: 0.10, alpha: 1) : skyTop
+        let gMid = overgrown ? UIColor(red: 0.05, green: 0.20, blue: 0.21, alpha: 1)
+            : bastion ? UIColor(red: 0.20, green: 0.09, blue: 0.12, alpha: 1) : skyMid
+        let gLow = overgrown ? UIColor(red: 0.13, green: 0.30, blue: 0.22, alpha: 1)
+            : bastion ? UIColor(red: 0.36, green: 0.17, blue: 0.10, alpha: 1) : skyLow
+        let gHorizon = overgrown ? UIColor(red: 0.38, green: 0.50, blue: 0.28, alpha: 1)
+            : bastion ? UIColor(red: 0.80, green: 0.50, blue: 0.22, alpha: 1) : horizonPink
+        let gMist = overgrown ? UIColor(red: 0.15, green: 0.32, blue: 0.28, alpha: 1)
+            : bastion ? UIColor(red: 0.30, green: 0.20, blue: 0.15, alpha: 1) : mistBlue
         // Dithered vertical gradient: deep indigo -> purple -> dim pink band -> mist.
         let grad = render(w: 2, h: 256) { cg in
             for y in 0..<256 {
@@ -161,12 +170,15 @@ enum TwilightRuinsBG {
         }
 
         // Horizon glow band: faint pink light sitting over the mountains
-        // (lime-gold breath over the jungle for the overgrown theme).
+        // (lime-gold breath over the jungle for the overgrown theme,
+        // furnace amber for the bastion theme).
         let glowTex = render(w: 64, h: 8) { cg in
             for x in 0..<64 {
                 let edge = abs(CGFloat(x) - 32) / 32 // 0 center -> 1 edge
                 if overgrown {
                     cg.setFillColor(UIColor(red: 0.55, green: 0.9, blue: 0.45, alpha: 0.16 * (1 - edge)).cgColor)
+                } else if bastion {
+                    cg.setFillColor(UIColor(red: 1, green: 0.55, blue: 0.25, alpha: 0.20 * (1 - edge)).cgColor)
                 } else {
                     cg.setFillColor(UIColor(red: 1, green: 0.42, blue: 0.66, alpha: 0.20 * (1 - edge)).cgColor)
                 }
@@ -184,11 +196,13 @@ enum TwilightRuinsBG {
         ])))
 
         // Drifting clouds: 5 long wispy streaks, pink-purple, very dim
-        // (teal-green for the overgrown theme).
+        // (teal-green for the overgrown theme, ember for the bastion theme).
         for i in 0..<5 {
             let cw = W * rng.cgFloat(in: 0.35...0.6)
             let cloud = SKSpriteNode(color: overgrown
                 ? SKColor(red: 0.30, green: 0.48, blue: 0.38, alpha: 0.16)
+                : bastion
+                ? SKColor(red: 0.55, green: 0.35, blue: 0.25, alpha: 0.16)
                 : SKColor(red: 0.45, green: 0.32, blue: 0.55, alpha: 0.16),
                                      size: CGSize(width: cw, height: rng.cgFloat(in: 10...22)))
             cloud.position = CGPoint(x: rng.cgFloat(in: -W * 0.6...W * 0.6),
@@ -288,9 +302,10 @@ enum TwilightRuinsBG {
                 fill(cg, px, 78 - h, 5, h, mtnNear)
                 fill(cg, px + 1, 78 - h, 1, 4, treeRim.withAlpha(0.6))
             }
-            // Overgrown signature: a colossal world-tree rising behind the
-            // range, canopy glowing faintly with spores (Level 2 identity).
-            if Balance.active.theme == .overgrown {
+            // Overgrown/bastion signature: a colossal world-tree rising behind
+            // the range, canopy glowing faintly with spores (Level 2 identity,
+            // timber great-tree for Level 3's Thornwood).
+            if Balance.active.theme != .twilight {
                 let tx = 400
                 fill(cg, tx - 6, 30, 12, 92, mtnNear) // trunk
                 fill(cg, tx - 6, 30, 3, 92, treeRim.withAlpha(0.5)) // moonlit edge
@@ -376,18 +391,25 @@ enum TwilightRuinsBG {
 
     /// Dark forest + fallen pillars + drifting mist bands + fireflies.
     /// Overgrown theme: lusher double canopy, hanging vines, heavier glow.
+    /// Bastion theme: same dense timberline in russet-amber (thornwood
+    /// autumn), amber fireflies instead of green.
     static func buildMid(in layer: SKNode, sceneSize: CGSize) {
         let travel = Balance.levelWidth * Balance.parallaxMid
         let panoW: CGFloat = sceneSize.width + travel + 500
-        let overgrown = Balance.active.theme == .overgrown
-        let canopy = overgrown ? UIColor(red: 0.05, green: 0.22, blue: 0.14, alpha: 1) : treeDark
-        let rim = overgrown ? UIColor(red: 0.30, green: 0.62, blue: 0.32, alpha: 1) : treeRim
+        let theme = Balance.active.theme
+        let overgrown = theme == .overgrown
+        let bastion = theme == .bastion
+        let wooded = overgrown || bastion
+        let canopy = overgrown ? UIColor(red: 0.05, green: 0.22, blue: 0.14, alpha: 1)
+            : bastion ? UIColor(red: 0.22, green: 0.11, blue: 0.07, alpha: 1) : treeDark
+        let rim = overgrown ? UIColor(red: 0.30, green: 0.62, blue: 0.32, alpha: 1)
+            : bastion ? UIColor(red: 0.80, green: 0.48, blue: 0.20, alpha: 1) : treeRim
         let PW = 800, PH = 90
         let tex = render(w: PW, h: PH) { cg in
             cg.clear(CGRect(x: 0, y: 0, width: PW, height: PH))
             // Canopy: overlapping dark blobs with teal moonlit tops.
-            // Overgrown runs a second offset pass for jungle density.
-            for pass in 0..<(overgrown ? 2 : 1) {
+            // Wooded themes run a second offset pass for jungle density.
+            for pass in 0..<(wooded ? 2 : 1) {
                 var rng = SeededRNG(seed: 555 + UInt64(pass * 1000))
                 var x = -10 + pass * 23
                 while x < PW + 10 {
@@ -411,8 +433,8 @@ enum TwilightRuinsBG {
                     x += w * 3 / 4
                 }
             }
-            // Hanging vines off the jungle canopy (overgrown only).
-            if overgrown {
+            // Hanging vines off the wooded canopy (overgrown + bastion).
+            if wooded {
                 for vx in stride(from: 8, to: PW - 8, by: 14) {
                     if hash(vx, 5, 41) < 55 {
                         let len = 10 + hash(vx, 9, 42) % 22
@@ -431,9 +453,9 @@ enum TwilightRuinsBG {
                 fill(cg, px + 8, PH - h - 18, 2, h, ruinRim.withAlpha(0.5))
                 fill(cg, px - 6, PH - 22, 22, 6, ruinBody) // toppled chunk
             }
-            // Firefly dots baked faintly into the canopy (denser overgrown).
+            // Firefly dots baked faintly into the canopy (denser wooded).
             var frng = SeededRNG(seed: 777)
-            for _ in 0..<(overgrown ? 44 : 26) {
+            for _ in 0..<(wooded ? 44 : 26) {
                 let fx = frng.int(in: 0...(PW - 1))
                 let fy = frng.int(in: 8...(PH - 8))
                 fill(cg, fx, fy, 1, 1, heartY.withAlpha(0.85))
@@ -464,14 +486,14 @@ enum TwilightRuinsBG {
         }
 
         // Live fireflies: warm dots floating above the treeline
-        // (more + greener for the overgrown jungle).
-        for i in 0..<(overgrown ? 22 : 14) {
+        // (more + greener for the overgrown jungle; amber for the bastion).
+        for i in 0..<(wooded ? 22 : 14) {
             let green = overgrown && i % 3 == 0
             let f = SKSpriteNode(color: green
                 ? SKColor(red: 0.55, green: 1, blue: 0.6, alpha: 0.95)
                 : SKColor(red: 1, green: 0.85, blue: 0.4, alpha: 0.95),
                                  size: CGSize(width: 3, height: 3))
-            f.position = CGPoint(x: CGFloat(i) * (panoW / CGFloat(overgrown ? 22 : 14)) + rng.cgFloat(in: -20...20),
+            f.position = CGPoint(x: CGFloat(i) * (panoW / CGFloat(wooded ? 22 : 14)) + rng.cgFloat(in: -20...20),
                                  y: -sceneSize.height * 0.22 + rng.cgFloat(in: -10...70))
             f.zPosition = 2
             layer.addChild(f)

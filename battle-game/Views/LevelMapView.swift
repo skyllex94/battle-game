@@ -16,7 +16,8 @@ struct LevelMapView: View {
     /// Joystick knob deflection (x only); drives pan velocity while held.
     @State private var knob = CGSize.zero
     @State private var refresh = false // flips on appear: re-reads stars/unlocks
-    private let panTimer = Timer.publish(every: 1 / 60, on: .main, in: .common).autoconnect()
+    /// 30fps pan integration: halves Canvas repaints vs 60fps, same scroll speed.
+    private let panTimer = Timer.publish(every: 1 / 30, on: .main, in: .common).autoconnect()
 
     /// Nearest page to the current pan (drives zone chip + dots).
     private var currentPage: Int {
@@ -41,10 +42,13 @@ struct LevelMapView: View {
             GeometryReader { full in
                 HStack(spacing: 0) {
                     ZStack {
+                        // Live pixel world, painted in full every render —
+                        // nothing is ever culled, so no region can pop in
+                        // or go missing while panning. Repaints only happen
+                        // when pan state changes (active scroll / page jump).
                         Canvas { ctx, _ in
                             EmraMap.draw(ctx: &ctx,
                                          size: CGSize(width: fullW * 3, height: fullH),
-                                         center: Double(panX / fullW),
                                          t: 4.2)
                         }
                         .frame(width: fullW * 3, height: fullH)
@@ -54,11 +58,11 @@ struct LevelMapView: View {
                                           y: EmraMap.nodeY(level.id) * fullH)
                         }
                     }
-                    .frame(width: fullW * 3, height: fullH)
+                    .frame(width: fullW * 3, height: fullH, alignment: .leading)
                     .offset(x: -panX)
                     Spacer(minLength: 0)
                 }
-                .frame(width: full.size.width, height: full.size.height)
+                .frame(width: full.size.width, height: full.size.height, alignment: .leading)
                 .onAppear {
                     fullW = full.size.width
                     fullH = full.size.height
@@ -90,9 +94,6 @@ struct LevelMapView: View {
                     RadialGradient(colors: [.clear, .black.opacity(0.22)],
                                    center: .center, startRadius: 80, endRadius: 520)
                         .ignoresSafeArea(edges: .all)
-                        .allowsHitTesting(false)
-                    MapCornerFrame()
-                        .padding(10)
                         .allowsHitTesting(false)
 
                     // Page arrows on each end.
@@ -152,8 +153,8 @@ struct LevelMapView: View {
                 .onReceive(panTimer) { _ in
                     // Knob deflection = pan velocity (up to ~350 pt/s).
                     if knob.width != 0 {
-                        withAnimation(.linear(duration: 1 / 60)) {
-                            panX = clampPan(panX + knob.width * 0.18)
+                        withAnimation(.linear(duration: 1 / 30)) {
+                            panX = clampPan(panX + knob.width * 0.36)
                         }
                     }
                 }
@@ -354,45 +355,7 @@ private struct EmraTopBarChips: View {
     }
 }
 
-/// Stepped pixel corner brackets framing the world map.
-private struct MapCornerFrame: View {
-    var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                MapCorner().position(x: 14, y: 14)
-                MapCorner()
-                    .rotationEffect(.degrees(90))
-                    .position(x: geo.size.width - 14, y: 14)
-                MapCorner()
-                    .rotationEffect(.degrees(180))
-                    .position(x: geo.size.width - 14, y: geo.size.height - 14)
-                MapCorner()
-                    .rotationEffect(.degrees(270))
-                    .position(x: 14, y: geo.size.height - 14)
-            }
-        }
-    }
-}
-
-private struct MapCorner: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 0) {
-                Color.cyan.frame(width: 22, height: 5)
-                Color.cyan.frame(width: 5, height: 5).opacity(0.55)
-            }
-            HStack(spacing: 0) {
-                Color.cyan.frame(width: 5, height: 22)
-                Color.clear.frame(width: 22, height: 22)
-            }
-            HStack(spacing: 0) {
-                Color.cyan.opacity(0.55).frame(width: 5, height: 5)
-                Color.clear.frame(width: 22, height: 5)
-            }
-        }
-        .opacity(0.8)
-    }
-}
+/// Chamfered pixel panel shape for map chrome.
 private struct MapPixelShape: Shape {
     var cut: CGFloat = 6
     func path(in rect: CGRect) -> Path {
@@ -566,16 +529,16 @@ enum EmraMap {
         return Double(h(gx, gy, 50)) / 100 < p.f ? p.b : p.a
     }
 
-    static func draw(ctx: inout GraphicsContext, size: CGSize, center: Double, t: Double) {
+    static func draw(ctx: inout GraphicsContext, size: CGSize, t: Double) {
         let cw = size.width / CGFloat(cols)
         let chh = size.height / CGFloat(rows)
-        // Paint only around the visible page (+margin) — center is the
-        // fractional page (0..2) so free joystick panning never pops.
-        let visX0 = Int(center * Double(pageCols)) - 16
-        let visX1 = Int((center + 1) * Double(pageCols)) + 16
-        func visible(_ gx: Int, _ m: Int = 0) -> Bool { gx >= visX0 - m && gx <= visX1 + m }
+        // No culling: the whole world paints every render, so regions never
+        // pop in while panning. (The view snapshots this once to an image.)
+        func visible(_ gx: Int, _ m: Int = 0) -> Bool {
+            gx >= -40 - m && gx <= cols + 40 + m
+        }
         func px(_ gx: Int, _ gy: Int, _ w: Int, _ hgt: Int, _ c: Color, _ alpha: Double = 1) {
-            guard gx + w > visX0 - 24 && gx < visX1 + 24 && gy + hgt > 0 && gy < rows else { return }
+            guard gx + w > -40 && gx < cols + 40 && gy + hgt > -48 && gy < rows else { return }
             ctx.fill(Path(CGRect(x: CGFloat(gx) * cw, y: CGFloat(gy) * chh,
                                  width: CGFloat(w) * cw, height: CGFloat(hgt) * chh)),
                      with: .color(c.opacity(alpha)))
@@ -763,7 +726,7 @@ enum EmraMap {
 
         // Continent body.
         let foamA = 0.5 + 0.4 * sin(t * 3)
-        for gx in visX0...visX1 where gx >= 0 && gx < cols {
+        for gx in 0..<cols {
             let top = landTop(gx), bot = landBot(gx)
             guard top < bot else { continue }
             let frosty = pickBiome(gx: gx, gy: (top + bot) / 2) == 3
@@ -854,7 +817,7 @@ enum EmraMap {
             }
         }
         for (i, d) in dots.enumerated() {
-            if Int(d.x) >= visX0 && Int(d.x) <= visX1 && (i + Int(t * 8)) % 9 < 5 {
+            if (i + Int(t * 8)) % 9 < 5 {
                 px(Int(d.x), Int(d.y), 1, 1, Color(red: 1, green: 0.9, blue: 0.6))
             }
         }

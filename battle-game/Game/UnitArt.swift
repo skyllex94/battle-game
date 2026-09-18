@@ -9,7 +9,7 @@ import UIKit
 /// advancing for a scuttling march cycle.
 enum UnitPixelArt {
 
-    enum Kind { case trooper, heavy, enemy }
+    enum Kind { case trooper, heavy, ranger, enemy, brute }
 
     /// Walk frames for a kind: full 4-step stride
     /// (contact -> support -> toe-off -> swing). Generated once, shared.
@@ -17,7 +17,9 @@ enum UnitPixelArt {
         switch kind {
         case .trooper: return (0...3).map { trooper(pose: $0) }
         case .heavy: return (0...3).map { heavy(pose: $0) }
+        case .ranger: return (0...3).map { ranger(pose: $0) }
         case .enemy: return (0...3).map { enemy(pose: $0) }
+        case .brute: return (0...3).map { brute(pose: $0) }
         }
     }
 
@@ -60,9 +62,15 @@ enum UnitPixelArt {
         case .heavy:
             bodyKey = "body-heavy-0"; armKey = "arm-heavy"
             shoulder = CGPoint(x: 16, y: 15)
+        case .ranger:
+            bodyKey = "body-ranger-0"; armKey = "arm-ranger"
+            shoulder = CGPoint(x: 16, y: 14)
         case .enemy:
             bodyKey = "body-enemy-0"; armKey = "arm-enemy"
             shoulder = CGPoint(x: 16, y: 14)
+        case .brute:
+            bodyKey = "body-brute-0"; armKey = "arm-brute"
+            shoulder = CGPoint(x: 16, y: 15)
         }
         // Warm the cache (no-ops once textures exist).
         _ = frames(for: kind)
@@ -189,6 +197,42 @@ enum UnitPixelArt {
         }
     }
 
+    // MARK: - Player ranger (lean long-rifle scout)
+
+    private static func ranger(pose: Int) -> SKTexture {
+        canvas(key: "body-ranger-\(pose)") { cg in
+            let armor = UIColor(red: 0.35, green: 0.62, blue: 0.38, alpha: 1)
+            let armorD = UIColor(red: 0.18, green: 0.36, blue: 0.22, alpha: 1)
+            let suit = UIColor(red: 0.22, green: 0.28, blue: 0.26, alpha: 1)
+            let visor = UIColor(red: 1.0, green: 0.80, blue: 0.35, alpha: 1)
+            let O = outline
+
+            // Hood + antenna nub.
+            fill(cg, x: 9, y: 1, w: 8, h: 7, O)
+            fill(cg, x: 10, y: 2, w: 6, h: 5, armor)
+            fill(cg, x: 10, y: 2, w: 6, h: 1, .white.withAlphaComponent(0.35))
+            // Visor slit (faces +x), amber marksman lens.
+            fill(cg, x: 13, y: 4, w: 4, h: 2, O)
+            fill(cg, x: 14, y: 4, w: 2, h: 2, visor)
+            // Neck + light torso armor.
+            fill(cg, x: 10, y: 8, w: 5, h: 8, O)
+            fill(cg, x: 11, y: 9, w: 3, h: 6, armor)
+            fill(cg, x: 11, y: 9, w: 1, h: 6, .white.withAlphaComponent(0.4))
+            fill(cg, x: 13, y: 9, w: 1, h: 6, armorD)
+            // Rangefinder chest pip.
+            fill(cg, x: 12, y: 11, w: 2, h: 2, O)
+            fill(cg, x: 12, y: 11, w: 2, h: 1, visor)
+            // Belt + cloak tail fluttering behind (-x).
+            fill(cg, x: 10, y: 16, w: 5, h: 2, O)
+            fill(cg, x: 6, y: 12, w: 3, h: 6, armorD)
+            // Firing hand at the chest — the aimable gun-arm mounts here.
+            fill(cg, x: 14, y: 11, w: 3, h: 3, suit) // hand
+            // Lean runner legs (4-frame stride).
+            legs(cg, frame: pose, cx: 12, top: 18, len: 9,
+                 pants: suit, shade: armorD, boot: dark, outline: O)
+        }
+    }
+
     // MARK: - Enemy raider (red alien)
 
     private static func enemy(pose: Int) -> SKTexture {
@@ -226,6 +270,48 @@ enum UnitPixelArt {
             // Digitigrade legs (4-frame stride).
             legs(cg, frame: pose, cx: 11, top: 17, len: 10,
                  pants: hide, shade: chitinD, boot: dark, outline: O)
+        }
+    }
+
+    // MARK: - Enemy brute (bulky siege crusher)
+
+    /// Twice the presence of a raider: low heavy skull, shoulder slabs,
+    /// barrel torso with a furnace core, thick stomping legs.
+    private static func brute(pose: Int) -> SKTexture {
+        canvas(key: "body-brute-\(pose)") { cg in
+            let chitin = UIColor(red: 0.52, green: 0.14, blue: 0.16, alpha: 1)
+            let chitinD = UIColor(red: 0.28, green: 0.09, blue: 0.11, alpha: 1)
+            let hide = UIColor(red: 0.22, green: 0.13, blue: 0.15, alpha: 1)
+            let glow = UIColor(red: 1.0, green: 0.35, blue: 0.10, alpha: 1)
+            let O = outline
+
+            // Low heavy skull with brow horns.
+            fill(cg, x: 8, y: 3, w: 10, h: 6, O)
+            fill(cg, x: 9, y: 4, w: 8, h: 4, hide)
+            fill(cg, x: 6, y: 2, w: 3, h: 2, chitinD) // rear horn
+            fill(cg, x: 17, y: 2, w: 3, h: 2, chitinD) // brow horn toward +x
+            // Triple glowing eyes.
+            fill(cg, x: 13, y: 5, w: 2, h: 2, glow)
+            fill(cg, x: 16, y: 5, w: 2, h: 2, glow)
+            fill(cg, x: 15, y: 7, w: 1, h: 1, glow)
+            // Shoulder slabs.
+            fill(cg, x: 5, y: 9, w: 5, h: 4, O)
+            fill(cg, x: 6, y: 9, w: 3, h: 3, chitin)
+            fill(cg, x: 14, y: 9, w: 5, h: 4, O)
+            fill(cg, x: 15, y: 9, w: 3, h: 3, chitin)
+            fill(cg, x: 15, y: 9, w: 3, h: 1, .white.withAlphaComponent(0.3))
+            // Barrel torso carapace.
+            fill(cg, x: 7, y: 12, w: 10, h: 8, O)
+            fill(cg, x: 8, y: 13, w: 8, h: 6, chitin)
+            fill(cg, x: 8, y: 13, w: 2, h: 6, chitinD)
+            // Furnace core.
+            fill(cg, x: 11, y: 14, w: 3, h: 4, O)
+            fill(cg, x: 11, y: 14, w: 3, h: 3, glow)
+            // Claw hand at the chest — the aimable spike-arm mounts here.
+            fill(cg, x: 16, y: 13, w: 3, h: 4, hide) // claw
+            // Thick stomping legs (4-frame stride).
+            legs(cg, frame: pose, cx: 12, top: 20, len: 8,
+                 pants: hide, shade: chitinD, boot: dark, outline: O, wide: true)
         }
     }
 
@@ -295,7 +381,9 @@ enum UnitPixelArt {
         switch kind {
         case .trooper: return trooperArm()
         case .heavy: return heavyArm()
+        case .ranger: return rangerArm()
         case .enemy: return enemyArm()
+        case .brute: return bruteArm()
         }
     }
 
@@ -354,6 +442,50 @@ enum UnitPixelArt {
             fill(cg, x: 9, y: 5, w: 10, h: 2, chitinD)
             fill(cg, x: 18, y: 4, w: 3, h: 4, chitin)
             fill(cg, x: 20, y: 3, w: 1, h: 2, glow)
+        }
+    }
+
+    /// Ranger long rifle: slim stock + extended barrel with amber sight dot.
+    private static func rangerArm() -> SKTexture {
+        canvas(w: armW, h: armH, key: "arm-ranger") { cg in
+            let armor = UIColor(red: 0.35, green: 0.62, blue: 0.38, alpha: 1)
+            let suit = UIColor(red: 0.22, green: 0.28, blue: 0.26, alpha: 1)
+            let sight = UIColor(red: 1.0, green: 0.80, blue: 0.35, alpha: 1)
+            let O = outline
+            // Sleeve + glove wrapping the grip (x=5).
+            fill(cg, x: 2, y: 5, w: 6, h: 3, O)
+            fill(cg, x: 3, y: 5, w: 4, h: 2, armor)
+            fill(cg, x: 5, y: 4, w: 3, h: 4, O)
+            fill(cg, x: 6, y: 5, w: 1, h: 2, suit)
+            // Long barrel + highlight + sight dot + slim muzzle.
+            fill(cg, x: 8, y: 5, w: 13, h: 3, O)
+            fill(cg, x: 9, y: 5, w: 12, h: 2, gunMetal)
+            fill(cg, x: 9, y: 5, w: 12, h: 1, UIColor(white: 0.6, alpha: 1))
+            fill(cg, x: 12, y: 3, w: 2, h: 2, O)
+            fill(cg, x: 12, y: 3, w: 2, h: 1, sight)
+            fill(cg, x: 20, y: 5, w: 2, h: 3, armor)
+        }
+    }
+
+    /// Brute siege cannon: fat spiked barrel with a furnace-hot muzzle ring.
+    private static func bruteArm() -> SKTexture {
+        canvas(w: armW, h: armH, key: "arm-brute") { cg in
+            let chitin = UIColor(red: 0.52, green: 0.14, blue: 0.16, alpha: 1)
+            let chitinD = UIColor(red: 0.28, green: 0.09, blue: 0.11, alpha: 1)
+            let hide = UIColor(red: 0.22, green: 0.13, blue: 0.15, alpha: 1)
+            let glow = UIColor(red: 1.0, green: 0.35, blue: 0.10, alpha: 1)
+            let O = outline
+            // Thick arm + claw wrapping the grip (x=5).
+            fill(cg, x: 2, y: 4, w: 7, h: 5, O)
+            fill(cg, x: 3, y: 5, w: 5, h: 3, hide)
+            fill(cg, x: 5, y: 4, w: 3, h: 5, O)
+            fill(cg, x: 6, y: 5, w: 1, h: 3, chitin)
+            // Fat cannon + top spike + furnace muzzle ring.
+            fill(cg, x: 8, y: 3, w: 11, h: 6, O)
+            fill(cg, x: 9, y: 4, w: 9, h: 4, chitinD)
+            fill(cg, x: 12, y: 1, w: 2, h: 3, chitin)
+            fill(cg, x: 18, y: 3, w: 3, h: 6, chitin)
+            fill(cg, x: 18, y: 4, w: 3, h: 4, glow)
         }
     }
 }

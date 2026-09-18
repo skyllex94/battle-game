@@ -1,20 +1,24 @@
 import SpriteKit
 
-/// Player-summonable army kinds. Exactly 2 cards for now:
-/// .trooper = cheap + fast, .heavy = expensive tank that hits hard.
-/// The Heavy is introduced in Level 2 — Level 1 fields troopers only.
+/// Player-summonable army kinds. Three cards:
+/// .trooper = cheap + fast, .heavy = expensive tank that hits hard,
+/// .ranger = long-rifle skirmisher that outranges raiders but folds fast.
+/// The Ranger is introduced in Level 2, the Heavy in Level 3.
 enum ArmyKind: Int, CaseIterable, Identifiable {
     case trooper
     case heavy
+    case ranger
 
     var id: Int { rawValue }
 
     /// Campaign level that fields this unit (trooper from the start,
-    /// heavy from Level 2's Rootwall Thicket briefing onward).
+    /// ranger from Level 2's Rootwall Thicket briefing onward,
+    /// heavy from Level 3's Thornwood Bastion briefing onward).
     var unlockLevel: Int {
         switch self {
         case .trooper: return 1
-        case .heavy: return 2
+        case .heavy: return 3
+        case .ranger: return 2
         }
     }
 
@@ -28,6 +32,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         switch self {
         case .trooper: return "Trooper"
         case .heavy: return "Heavy"
+        case .ranger: return "Ranger"
         }
     }
 
@@ -35,6 +40,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         switch self {
         case .trooper: return Balance.trooperCost
         case .heavy: return Balance.heavyCost
+        case .ranger: return Balance.rangerCost
         }
     }
 
@@ -42,6 +48,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         switch self {
         case .trooper: return Balance.trooperHP
         case .heavy: return Balance.heavyHP
+        case .ranger: return Balance.rangerHP
         }
     }
 
@@ -49,6 +56,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         switch self {
         case .trooper: return Balance.trooperSpeed
         case .heavy: return Balance.heavySpeed
+        case .ranger: return Balance.rangerSpeed
         }
     }
 
@@ -56,6 +64,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         switch self {
         case .trooper: return Balance.trooperDamage
         case .heavy: return Balance.heavyDamage
+        case .ranger: return Balance.rangerDamage
         }
     }
 
@@ -63,6 +72,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         switch self {
         case .trooper: return Balance.trooperFireCooldown
         case .heavy: return Balance.heavyFireCooldown
+        case .ranger: return Balance.rangerFireCooldown
         }
     }
 
@@ -70,6 +80,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         switch self {
         case .trooper: return Balance.trooperRange
         case .heavy: return Balance.heavyRange
+        case .ranger: return Balance.rangerRange
         }
     }
 
@@ -77,6 +88,16 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         switch self {
         case .trooper: return Balance.trooperSightRange
         case .heavy: return Balance.heavySightRange
+        case .ranger: return Balance.rangerSightRange
+        }
+    }
+
+    /// One-line dossier for intel cards and showcases.
+    var blurb: String {
+        switch self {
+        case .trooper: return "Fast skirmisher. Cheap, quick, everywhere."
+        case .heavy: return "Walking bunker. Slow, pricey, unstoppable."
+        case .ranger: return "Long rifle. Outranges raiders, folds fast."
         }
     }
 
@@ -85,6 +106,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         switch self {
         case .trooper: return "person.fill"
         case .heavy: return "shield.fill"
+        case .ranger: return "scope"
         }
     }
 
@@ -93,6 +115,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         switch self {
         case .trooper: return .trooper
         case .heavy: return .heavy
+        case .ranger: return .ranger
         }
     }
 }
@@ -138,11 +161,12 @@ final class AllyNode: SKSpriteNode {
         switch kind {
         case .trooper: size = CGSize(width: 40, height: 62)
         case .heavy: size = CGSize(width: 52, height: 76)
+        case .ranger: size = CGSize(width: 38, height: 60)
         }
         super.init(texture: nil, color: .clear, size: size)
         name = "ally"
         zPosition = 9
-        frames = UnitPixelArt.frames(for: kind == .heavy ? .heavy : .trooper)
+        frames = UnitPixelArt.frames(for: kind.pixelKind)
         buildVisuals()
         buildHPBar()
     }
@@ -193,7 +217,7 @@ final class AllyNode: SKSpriteNode {
 
         // Aimable gun-arm on the shoulder; the scene steers it via aimAt(_).
         // Pixels match the body (same 32px-tall canvas scale).
-        let armTex = UnitPixelArt.armTexture(for: kind == .heavy ? .heavy : .trooper)
+        let armTex = UnitPixelArt.armTexture(for: kind.pixelKind)
         armTex.filteringMode = .nearest
         let s = size.height / 32
         armSprite = SKSpriteNode(texture: armTex)

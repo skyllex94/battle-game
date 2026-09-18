@@ -1,5 +1,62 @@
 import SpriteKit
 
+/// Enemy marcher kinds. .raider is the classic fast shooter (Levels 1+);
+/// .brute is the bulky siege crusher debuting in Level 3 — slow, tanky,
+/// hits like a tower bolt, pays a premium when dropped.
+enum EnemyKind: Int, CaseIterable {
+    case raider
+    case brute
+
+    var hp: CGFloat {
+        switch self {
+        case .raider: return Balance.enemyHP
+        case .brute: return Balance.bruteHP
+        }
+    }
+
+    var moveSpeed: CGFloat {
+        switch self {
+        case .raider: return Balance.enemySpeed
+        case .brute: return Balance.bruteSpeed
+        }
+    }
+
+    var sightRange: CGFloat {
+        switch self {
+        case .raider: return Balance.enemySightRange
+        case .brute: return Balance.bruteSightRange
+        }
+    }
+
+    var shootRange: CGFloat {
+        switch self {
+        case .raider: return Balance.enemyShootRange
+        case .brute: return Balance.bruteShootRange
+        }
+    }
+
+    var fireInterval: TimeInterval {
+        switch self {
+        case .raider: return Balance.enemyFireCooldown
+        case .brute: return Balance.bruteFireCooldown
+        }
+    }
+
+    var boltDamage: CGFloat {
+        switch self {
+        case .raider: return Balance.enemyBoltDamage
+        case .brute: return Balance.bruteBoltDamage
+        }
+    }
+
+    var reward: Int {
+        switch self {
+        case .raider: return Balance.killReward
+        case .brute: return Balance.bruteReward
+        }
+    }
+}
+
 /// Enemy raider trooper: red alien invader built procedurally (no texture
 /// dependency, so the design always shows), mirroring AllyNode's structure.
 /// Ground-bound ranged fighter: the scene advances it toward its target,
@@ -7,10 +64,18 @@ import SpriteKit
 /// No physics bodies — same manual style as the hero.
 final class EnemyNode: SKSpriteNode {
 
-    var hp: CGFloat = Balance.enemyHP
-    var maxHP: CGFloat = Balance.enemyHP
+    let kind: EnemyKind
+    var hp: CGFloat
+    var maxHP: CGFloat
     var fireCooldown: TimeInterval = 0
     var alive: Bool { hp > 0 }
+    /// Per-kind combat stats (the scene reads these, never globals).
+    var moveSpeed: CGFloat
+    var sightRange: CGFloat
+    var shootRange: CGFloat
+    var fireInterval: TimeInterval
+    var boltDamage: CGFloat
+    var reward: Int
 
     private var hpBarRoot = SKNode()
     private var hpBarBG = SKSpriteNode()
@@ -19,7 +84,7 @@ final class EnemyNode: SKSpriteNode {
     private var body = SKNode()
     /// Pixel sprite (4 walk frames) + cached frames for the march cycle.
     private var bodySprite = SKSpriteNode()
-    private var frames: [SKTexture] = UnitPixelArt.frames(for: .enemy)
+    private var frames: [SKTexture]
     /// Aimable spike-arm: shoulder pivot + barrel-tip socket (see aimAt).
     private let armPivot = SKNode()
     private var spikeSprite = SKSpriteNode()
@@ -27,8 +92,23 @@ final class EnemyNode: SKSpriteNode {
     private var aimAngle: CGFloat = 0
     private var desiredAim: CGFloat?
 
-    init() {
-        super.init(texture: nil, color: .clear, size: CGSize(width: 40, height: 64))
+    init(kind: EnemyKind = .raider) {
+        self.kind = kind
+        self.hp = kind.hp
+        self.maxHP = kind.hp
+        self.moveSpeed = kind.moveSpeed
+        self.sightRange = kind.sightRange
+        self.shootRange = kind.shootRange
+        self.fireInterval = kind.fireInterval
+        self.boltDamage = kind.boltDamage
+        self.reward = kind.reward
+        self.frames = UnitPixelArt.frames(for: kind == .brute ? .brute : .enemy)
+        let size: CGSize
+        switch kind {
+        case .raider: size = CGSize(width: 40, height: 64)
+        case .brute: size = CGSize(width: 58, height: 88)
+        }
+        super.init(texture: nil, color: .clear, size: size)
         name = "enemy"
         zPosition = 9
         xScale = -abs(xScale) // marchers head left
@@ -80,14 +160,14 @@ final class EnemyNode: SKSpriteNode {
         addChild(body)
 
         // Aimable spike-arm on the shoulder; the scene steers it via aimAt(_).
-        let armTex = UnitPixelArt.armTexture(for: .enemy)
+        let armTex = UnitPixelArt.armTexture(for: kind == .brute ? .brute : .enemy)
         armTex.filteringMode = .nearest
         let s = size.height / 32
         spikeSprite = SKSpriteNode(texture: armTex)
         spikeSprite.setScale(s)
         spikeSprite.anchorPoint = CGPoint(x: CGFloat(UnitPixelArt.armGripX) / CGFloat(UnitPixelArt.armW),
                                           y: 0.5)
-        armPivot.position = CGPoint(x: 6, y: 8)
+        armPivot.position = kind == .brute ? CGPoint(x: 8, y: 10) : CGPoint(x: 6, y: 8)
         armPivot.addChild(spikeSprite)
         gunTip.position = CGPoint(x: CGFloat(UnitPixelArt.armTipX - UnitPixelArt.armGripX) * s,
                                   y: 0)
@@ -98,8 +178,9 @@ final class EnemyNode: SKSpriteNode {
     private func buildHPBar() {
         // Pro chunky pixel bar, same language as TowerNode/BaseNode:
         // dark padded BG + thin light border + left-anchored fill that
-        // drains from the right side only.
-        let barW: CGFloat = 44, barH: CGFloat = 7
+        // drains from the right side only. Brutes wear a wider bar.
+        let barW: CGFloat = kind == .brute ? 56 : 44
+        let barH: CGFloat = 7
         // Soft + sunk: more transparent than the structure bars, and pinned
         // deep behind so the hero always covers it when passing by units.
         hpBarRoot.position = CGPoint(x: 0, y: size.height / 2 + 10)

@@ -103,6 +103,9 @@ final class GameScene: SKScene {
 
     // MARK: - Summoned enemies
     private var enemies: [EnemyNode] = []
+    /// Total marchers gated out so far (drives the Brute cadence:
+    /// every bruteEvery-th summon is a Brute on levels that field them).
+    private var summonCount: Int = 0
     // MARK: - Player army (summoned from cards, marches toward the enemy base)
     private var allies: [AllyNode] = []
     // MARK: - Hero death/respawn
@@ -203,6 +206,7 @@ final class GameScene: SKScene {
         enemies = []
         allies = []
         drops = []
+        summonCount = 0
         heroHP = Balance.heroHP
         heroLives = Balance.heroLives
         money = Balance.startingGold
@@ -741,11 +745,24 @@ final class GameScene: SKScene {
                 fireBaseFan(from: bases[i], at: target)
             }
             guard bases[i].team == .enemy else { continue }
-            // Summon marchers toward the player base, capped.
+            // Summon marchers toward the player base, capped. Levels with a
+            // doubleChance sometimes pop a PAIR out of the gate together.
+            // Levels with a bruteEvery march a Brute out every Nth summon
+            // instead of a Raider (Level 3: every 4th).
             bases[i].summonTimer -= dt
             if bases[i].summonTimer <= 0 {
                 bases[i].summonTimer = Balance.summonInterval
-                if enemies.count < Balance.maxEnemies { summonEnemy(from: bases[i]) }
+                var batch = 1
+                if Double.random(in: 0..<1) < Balance.summonDoubleChance { batch = 2 }
+                var slot = 0
+                while batch > 0, enemies.count < Balance.maxEnemies {
+                    summonCount += 1
+                    let kind: EnemyKind = (Balance.bruteEvery > 0
+                        && summonCount % Balance.bruteEvery == 0) ? .brute : .raider
+                    summonEnemy(from: bases[i], slot: slot, kind: kind)
+                    slot += 1
+                    batch -= 1
+                }
             }
         }
     }
@@ -812,9 +829,12 @@ final class GameScene: SKScene {
         base.node.fireFlash()
     }
 
-    private func summonEnemy(from base: Base) {
-        let e = EnemyNode()
-        e.position = CGPoint(x: base.node.position.x - 120,
+    /// One marcher out of the enemy gate. Batch slots stagger the drop so
+    /// pairs don't spawn inside each other (slot 0 = the classic spot, so
+    /// single-spawn levels are pixel-identical to before).
+    private func summonEnemy(from base: Base, slot: Int = 0, kind: EnemyKind = .raider) {
+        let e = EnemyNode(kind: kind)
+        e.position = CGPoint(x: base.node.position.x - 120 - CGFloat(slot) * 55,
                              y: Balance.groundTopY + e.size.height / 2)
         world.addChild(e)
         enemies.append(e)
@@ -844,11 +864,11 @@ final class GameScene: SKScene {
             var target: CGPoint? = nil
             if hero.alive, !heroProtected,
                hypot(hero.position.x - e.position.x,
-                     hero.position.y - e.position.y) < Balance.enemySightRange {
+                     hero.position.y - e.position.y) < e.sightRange {
                 target = hero.position
             } else {
                 var bestAlly: CGPoint?
-                var bestDist = Balance.enemySightRange
+                var bestDist = e.sightRange
                 for a in allies where a.alive {
                     let d = hypot(a.position.x - e.position.x, a.position.y - e.position.y)
                     if d < bestDist {
@@ -873,7 +893,7 @@ final class GameScene: SKScene {
                 // until out of the camera view, then leave the field.
                 if playerBase?.alive == false {
                     e.face(-1)
-                    e.position.x = max(40, e.position.x - Balance.enemySpeed * CGFloat(dt))
+                    e.position.x = max(40, e.position.x - e.moveSpeed * CGFloat(dt))
                     e.animateMarch(dt: dt, advancing: true)
                     e.position.y = Balance.groundTopY + e.size.height / 2 + e.yBob
                     if !cameraSpan(margin: 80).contains(e.position.x)
@@ -891,16 +911,16 @@ final class GameScene: SKScene {
             let dist = hypot(aim.x - e.position.x, aim.y - e.position.y)
             e.face(aim.x - e.position.x)
             e.aimAt(CGVector(dx: aim.x - e.position.x, dy: aim.y - e.position.y))
-            if dist > Balance.enemyShootRange {
+            if dist > e.shootRange {
                 // Advance on the target (never past the lane edge).
                 let dir: CGFloat = aim.x > e.position.x ? 1 : -1
-                e.position.x = max(40, e.position.x + dir * Balance.enemySpeed * CGFloat(dt))
+                e.position.x = max(40, e.position.x + dir * e.moveSpeed * CGFloat(dt))
                 e.animateMarch(dt: dt, advancing: true)
             } else {
                 // In range: stop and shoot.
                 e.animateMarch(dt: dt, advancing: false)
                 if e.fireCooldown <= 0 {
-                    e.fireCooldown = Balance.enemyFireCooldown
+                    e.fireCooldown = e.fireInterval
                     fireEnemyBolt(from: e, to: aim)
                 }
             }
@@ -923,7 +943,7 @@ final class GameScene: SKScene {
         bolt.zRotation = atan2(dir.dy, dir.dx)
         world.addChild(bolt)
         projectiles.append(Projectile(node: bolt, dir: dir, life: Balance.enemyBoltLife,
-                                      speed: Balance.enemyBoltSpeed, damage: Balance.enemyBoltDamage,
+                                      speed: Balance.enemyBoltSpeed, damage: e.boltDamage,
                                       team: .enemy))
         let flash = ProjectileFactory.makeMuzzleFlash()
         flash.setScale(0.7)
@@ -1217,16 +1237,17 @@ final class GameScene: SKScene {
         return false
     }
 
-    /// Bolt vs summoned marchers. Kills pay Unity's +100 gold, plus reserve
-    /// ammo for the active hero gun on hero-gun kills (capped at 2x start).
+    /// Bolt vs summoned marchers. Kills pay the marcher's bounty (raider
+    /// +100, brute +175), plus reserve ammo for the active hero gun on
+    /// hero-gun kills (capped at 2x start).
     private func hitMarcher(at pt: CGPoint, amount: CGFloat, fromHero: Bool) -> Bool {
         for e in enemies where e.alive {
-            if abs(pt.x - e.position.x) < 42,
+            if abs(pt.x - e.position.x) < e.size.width / 2 + 22,
                abs(pt.y - e.position.y) < e.size.height / 2 + 8 {
                 e.hp = max(0, e.hp - amount)
                 e.refreshHPBar()
                 if !e.alive {
-                    money += Balance.killReward
+                    money += e.reward
                     if fromHero {
                         let i = heroWeapon.rawValue
                         reserves[i] = min(reserves[i] + heroWeapon.killAmmo,

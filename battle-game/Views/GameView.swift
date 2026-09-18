@@ -38,6 +38,9 @@ struct GameView: View {
     /// the battle keeps raging behind it.
     @State private var winDetectedAt: Date?
     @State private var showDefeat = false
+    /// New-unit intel card: levels that debut a unit pause 1s after entry
+    /// and brief the player (stats + portrait) until dismissed.
+    @State private var showUnitIntro = false
     @State private var weapon: HeroWeapon = .blaster
     @State private var minimap = MinimapSnapshot(levelWidth: Balance.levelWidth, heroX: Balance.heroSpawnX,
                                                  cameraX: 0, viewWidth: 1334,
@@ -258,6 +261,59 @@ struct GameView: View {
                 .overlay(PixelPanelShape(cut: 10).stroke(.red.opacity(0.6), lineWidth: 3))
                 .shadow(color: .red.opacity(0.2), radius: 18)
             }
+
+            // New-unit intel: debut unit for THIS level (portrait + stats).
+            // Close button or tap outside dismisses and resumes the sim.
+            if showUnitIntro, let debut = debutUnit {
+                Color.black.opacity(0.6)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { closeUnitIntro() }
+                VStack(spacing: 10) {
+                    Text("NEW UNIT")
+                        .font(.system(size: 11, weight: .black, design: .monospaced))
+                        .tracking(3)
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 10).padding(.vertical, 3)
+                        .background(.yellow)
+                    Image(uiImage: UnitPixelArt.portraitImage(for: debut.pixelKind))
+                        .interpolation(.none)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 120, height: 80)
+                        .background(.black.opacity(0.6))
+                        .clipShape(PixelPanelShape(cut: 8))
+                        .overlay(PixelPanelShape(cut: 8).stroke(.yellow, lineWidth: 2))
+                        .shadow(color: .yellow.opacity(0.4), radius: 10)
+                    Text(debut.name.uppercased())
+                        .font(.system(size: 20, weight: .black, design: .monospaced))
+                        .tracking(2)
+                        .foregroundStyle(.white)
+                    Text(debut.blurb)
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.75))
+                    HStack(spacing: 14) {
+                        UnitStatChip(label: "HP", value: "\(Int(debut.hp))")
+                        UnitStatChip(label: "DMG", value: "\(Int(debut.damage))")
+                        UnitStatChip(label: "SPD", value: "\(Int(debut.speed))")
+                        UnitStatChip(label: "COST", value: "\(debut.cost)")
+                    }
+                    PixelMenuButton(title: "Close", style: .primary) {
+                        SoundEngine.shared.uiTap()
+                        closeUnitIntro()
+                    }
+                    Text("TAP OUTSIDE TO RESUME")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(2)
+                        .foregroundStyle(.white.opacity(0.4))
+                }
+                .padding(.horizontal, 26)
+                .padding(.vertical, 22)
+                .background(.black.opacity(0.9))
+                .clipShape(PixelPanelShape(cut: 10))
+                .overlay(PixelPanelShape(cut: 10).stroke(.yellow.opacity(0.6), lineWidth: 3))
+                .shadow(color: .yellow.opacity(0.2), radius: 18)
+            }
         }
         .toolbar(.hidden, for: .navigationBar)
         .onChange(of: moveX) { scene.heroInputX = $0 }
@@ -296,6 +352,16 @@ struct GameView: View {
             scene.heroInputX = moveX
             scene.heroJumpHeld = jumpHeld
             weapon = scene.heroWeapon
+            // New-unit briefing: let the battle breathe 1s, then freeze and brief.
+            if debutUnit != nil {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    guard debutUnit != nil, !showUnitIntro,
+                          !minimap.won, !minimap.lost else { return }
+                    showUnitIntro = true
+                    showMenu = false
+                    scene.isPaused = true
+                }
+            }
         }
         .onDisappear {
             SoundEngine.shared.stopBattleMusic()
@@ -307,6 +373,17 @@ struct GameView: View {
         if time <= 180 { return 3 }
         if time <= 300 { return 2 }
         return 1
+    }
+
+    /// Unit debuting on this level, if any (Ranger on Level 2, Heavy on
+    /// Level 3). Nil keeps entry instant — no modal, no pause.
+    private var debutUnit: ArmyKind? {
+        ArmyKind.allCases.first(where: { $0.unlockLevel == level.id })
+    }
+
+    private func closeUnitIntro() {
+        showUnitIntro = false
+        scene.isPaused = false
     }
 
     private func formatTime(_ t: Double) -> String {
@@ -570,6 +647,28 @@ private struct ArmyCardButton: View {
             .opacity(affordable ? 1.0 : 0.6)
         }
         .disabled(!affordable)
+    }
+}
+
+/// Compact label + value chip for the unit intel card.
+private struct UnitStatChip: View {
+    let label: String
+    let value: String
+    var body: some View {
+        VStack(spacing: 2) {
+            Text(label)
+                .font(.system(size: 9, weight: .black, design: .monospaced))
+                .tracking(1)
+                .foregroundStyle(.cyan)
+            Text(value)
+                .font(.system(size: 14, weight: .black, design: .monospaced))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+        }
+        .frame(minWidth: 52)
+        .padding(.vertical, 6)
+        .background(.white.opacity(0.06))
+        .overlay(Rectangle().stroke(.white.opacity(0.18), lineWidth: 1))
     }
 }
 

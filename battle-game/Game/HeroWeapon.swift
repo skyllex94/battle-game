@@ -132,11 +132,12 @@ enum HeroWeapon: Int, CaseIterable {
     // MARK: - Unlock gating (milestone grants; diamonds buyout plugs in later)
 
     /// Campaign level that unlocks this gun (0 = available from the start).
-    /// Only the Blaster starts unlocked; Scatter/Cannon are novelty grants.
+    /// Blaster from the start, Scatter claimed at Level 4's Dune Atoll,
+    /// Cannon at Level 7's Cinder Gate.
     var unlockLevel: Int {
         switch self {
         case .blaster: return 0
-        case .scatter: return 1
+        case .scatter: return 4
         case .cannon: return 7
         }
     }
@@ -164,10 +165,12 @@ enum HeroWeapon: Int, CaseIterable {
 enum GunLocker {
     private static let selectedKey = "campaign.selectedGun"
 
-    /// A gun is selectable when its milestone is claimed. Until the
-    /// UnlockStore lands, only unlockLevel 0 (Blaster) is available.
+    /// A gun is selectable once its campaign milestone is reached: the
+    /// Blaster from the start, Scatter once Level 4 is unlocked, Cannon
+    /// once Level 7 is. (Until UnlockStore lands, campaign progress is
+    /// the claim — no separate persistence needed.)
     static func isUnlocked(_ gun: HeroWeapon) -> Bool {
-        gun.unlockLevel <= 0
+        gun.unlockLevel <= 0 || CampaignData.unlockedLevel >= gun.unlockLevel
     }
 
     static var unlockedGuns: [HeroWeapon] { HeroWeapon.allCases.filter(isUnlocked) }

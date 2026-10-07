@@ -31,7 +31,7 @@ struct CampaignData {
                  briefing: "A timber fortress blocks the east road and the Heavy has just rolled off the dropship to crack it — but the enemy answers with siege Brutes. Objective: bring Thornwood Bastion down.",
                  mapArtName: "MapBG", enemyWaves: 5, towerHP: 250, baseHP: 600),
         LevelDef(id: 4, name: "Dune Atoll", subtitle: "Cross the white sands",
-                 briefing: "Beyond the woods Emra turns to glass-white sand. The Ranger volunteered for point — open ground is a skirmisher's home. Objective: cross the Atoll, kill the HQ.",
+                 briefing: "Beyond the woods Emra turns to glass-white sand, and Reavers charge the line swinging axes. Good news: the Scattergun just cleared customs — check the armory. Objective: cross the Atoll, kill the HQ.",
                  mapArtName: "MapBG", enemyWaves: 5, towerHP: 260, baseHP: 650),
         LevelDef(id: 5, name: "Sunscorch Expanse", subtitle: "Hold out at high noon",
                  briefing: "High noon on the Expanse: no cover, no shade, no mercy. Keep moving or cook where you stand. Objective: hold the line and break their base.",

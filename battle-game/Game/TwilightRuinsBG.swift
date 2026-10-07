@@ -76,20 +76,28 @@ enum TwilightRuinsBG {
     /// alien jungle teal-green: same moon/stars/vignette, greener air.
     /// The bastion theme (Level 3) burns it toward timber-ember amber:
     /// same shapes, furnace horizon, russet air.
+    /// The dawn theme (Level 4) breaks early morning over the dunes: a
+    /// touch brighter overall, pale-gold horizon, warm haze.
     static func buildSky(in layer: SKNode, sceneSize: CGSize) {
         let theme = Balance.active.theme
         let overgrown = theme == .overgrown
         let bastion = theme == .bastion
+        let dawn = theme == .dawn
         let gTop = overgrown ? UIColor(red: 0.02, green: 0.09, blue: 0.12, alpha: 1)
-            : bastion ? UIColor(red: 0.07, green: 0.04, blue: 0.10, alpha: 1) : skyTop
+            : bastion ? UIColor(red: 0.07, green: 0.04, blue: 0.10, alpha: 1)
+            : dawn ? UIColor(red: 0.08, green: 0.08, blue: 0.20, alpha: 1) : skyTop
         let gMid = overgrown ? UIColor(red: 0.05, green: 0.20, blue: 0.21, alpha: 1)
-            : bastion ? UIColor(red: 0.20, green: 0.09, blue: 0.12, alpha: 1) : skyMid
+            : bastion ? UIColor(red: 0.20, green: 0.09, blue: 0.12, alpha: 1)
+            : dawn ? UIColor(red: 0.22, green: 0.16, blue: 0.30, alpha: 1) : skyMid
         let gLow = overgrown ? UIColor(red: 0.13, green: 0.30, blue: 0.22, alpha: 1)
-            : bastion ? UIColor(red: 0.36, green: 0.17, blue: 0.10, alpha: 1) : skyLow
+            : bastion ? UIColor(red: 0.36, green: 0.17, blue: 0.10, alpha: 1)
+            : dawn ? UIColor(red: 0.42, green: 0.28, blue: 0.30, alpha: 1) : skyLow
         let gHorizon = overgrown ? UIColor(red: 0.38, green: 0.50, blue: 0.28, alpha: 1)
-            : bastion ? UIColor(red: 0.80, green: 0.50, blue: 0.22, alpha: 1) : horizonPink
+            : bastion ? UIColor(red: 0.80, green: 0.50, blue: 0.22, alpha: 1)
+            : dawn ? UIColor(red: 0.95, green: 0.70, blue: 0.45, alpha: 1) : horizonPink
         let gMist = overgrown ? UIColor(red: 0.15, green: 0.32, blue: 0.28, alpha: 1)
-            : bastion ? UIColor(red: 0.30, green: 0.20, blue: 0.15, alpha: 1) : mistBlue
+            : bastion ? UIColor(red: 0.30, green: 0.20, blue: 0.15, alpha: 1)
+            : dawn ? UIColor(red: 0.35, green: 0.30, blue: 0.32, alpha: 1) : mistBlue
         // Dithered vertical gradient: deep indigo -> purple -> dim pink band -> mist.
         let grad = render(w: 2, h: 256) { cg in
             for y in 0..<256 {
@@ -171,7 +179,7 @@ enum TwilightRuinsBG {
 
         // Horizon glow band: faint pink light sitting over the mountains
         // (lime-gold breath over the jungle for the overgrown theme,
-        // furnace amber for the bastion theme).
+        // furnace amber for the bastion theme, pale gold for dawn).
         let glowTex = render(w: 64, h: 8) { cg in
             for x in 0..<64 {
                 let edge = abs(CGFloat(x) - 32) / 32 // 0 center -> 1 edge
@@ -179,6 +187,8 @@ enum TwilightRuinsBG {
                     cg.setFillColor(UIColor(red: 0.55, green: 0.9, blue: 0.45, alpha: 0.16 * (1 - edge)).cgColor)
                 } else if bastion {
                     cg.setFillColor(UIColor(red: 1, green: 0.55, blue: 0.25, alpha: 0.20 * (1 - edge)).cgColor)
+                } else if dawn {
+                    cg.setFillColor(UIColor(red: 1, green: 0.75, blue: 0.45, alpha: 0.22 * (1 - edge)).cgColor)
                 } else {
                     cg.setFillColor(UIColor(red: 1, green: 0.42, blue: 0.66, alpha: 0.20 * (1 - edge)).cgColor)
                 }
@@ -196,13 +206,16 @@ enum TwilightRuinsBG {
         ])))
 
         // Drifting clouds: 5 long wispy streaks, pink-purple, very dim
-        // (teal-green for the overgrown theme, ember for the bastion theme).
+        // (teal-green for the overgrown theme, ember for the bastion theme,
+        // warm pale for dawn).
         for i in 0..<5 {
             let cw = W * rng.cgFloat(in: 0.35...0.6)
             let cloud = SKSpriteNode(color: overgrown
                 ? SKColor(red: 0.30, green: 0.48, blue: 0.38, alpha: 0.16)
                 : bastion
                 ? SKColor(red: 0.55, green: 0.35, blue: 0.25, alpha: 0.16)
+                : dawn
+                ? SKColor(red: 0.60, green: 0.50, blue: 0.45, alpha: 0.16)
                 : SKColor(red: 0.45, green: 0.32, blue: 0.55, alpha: 0.16),
                                      size: CGSize(width: cw, height: rng.cgFloat(in: 10...22)))
             cloud.position = CGPoint(x: rng.cgFloat(in: -W * 0.6...W * 0.6),
@@ -304,8 +317,8 @@ enum TwilightRuinsBG {
             }
             // Overgrown/bastion signature: a colossal world-tree rising behind
             // the range, canopy glowing faintly with spores (Level 2 identity,
-            // timber great-tree for Level 3's Thornwood).
-            if Balance.active.theme != .twilight {
+            // timber great-tree for Level 3's Thornwood). Dawn stays open.
+            if Balance.active.theme == .overgrown || Balance.active.theme == .bastion {
                 let tx = 400
                 fill(cg, tx - 6, 30, 12, 92, mtnNear) // trunk
                 fill(cg, tx - 6, 30, 3, 92, treeRim.withAlpha(0.5)) // moonlit edge
@@ -393,17 +406,22 @@ enum TwilightRuinsBG {
     /// Overgrown theme: lusher double canopy, hanging vines, heavier glow.
     /// Bastion theme: same dense timberline in russet-amber (thornwood
     /// autumn), amber fireflies instead of green.
+    /// Dawn theme: open dry treeline (single pass, olive-gold) — the
+    /// atoll feels airy after three night woods.
     static func buildMid(in layer: SKNode, sceneSize: CGSize) {
         let travel = Balance.levelWidth * Balance.parallaxMid
         let panoW: CGFloat = sceneSize.width + travel + 500
         let theme = Balance.active.theme
         let overgrown = theme == .overgrown
         let bastion = theme == .bastion
+        let dawn = theme == .dawn
         let wooded = overgrown || bastion
         let canopy = overgrown ? UIColor(red: 0.05, green: 0.22, blue: 0.14, alpha: 1)
-            : bastion ? UIColor(red: 0.22, green: 0.11, blue: 0.07, alpha: 1) : treeDark
+            : bastion ? UIColor(red: 0.22, green: 0.11, blue: 0.07, alpha: 1)
+            : dawn ? UIColor(red: 0.16, green: 0.18, blue: 0.10, alpha: 1) : treeDark
         let rim = overgrown ? UIColor(red: 0.30, green: 0.62, blue: 0.32, alpha: 1)
-            : bastion ? UIColor(red: 0.80, green: 0.48, blue: 0.20, alpha: 1) : treeRim
+            : bastion ? UIColor(red: 0.80, green: 0.48, blue: 0.20, alpha: 1)
+            : dawn ? UIColor(red: 0.85, green: 0.70, blue: 0.45, alpha: 1) : treeRim
         let PW = 800, PH = 90
         let tex = render(w: PW, h: PH) { cg in
             cg.clear(CGRect(x: 0, y: 0, width: PW, height: PH))

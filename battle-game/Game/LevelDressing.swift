@@ -323,4 +323,54 @@ enum LevelDressing {
             ])))
         }
     }
+
+    // MARK: - Dune wash (Level 4 Dune Atoll at dawn)
+
+    /// White-sand lane dressing: a pale gold wash over the turf band plus
+    /// sparse dry grass tufts swaying in the morning air. No glow flora —
+    /// the atoll is open sand, not jungle.
+    static func buildDuneWash(in world: SKNode) {
+        let gy = Balance.groundTopY
+        let width = Balance.levelWidth
+        // Sand wash: pale gold grade lying over the turf band.
+        let wash = SKSpriteNode(color: SKColor(red: 0.85, green: 0.72, blue: 0.48, alpha: 0.12),
+                                size: CGSize(width: width, height: 104))
+        wash.anchorPoint = CGPoint(x: 0, y: 1)
+        wash.position = CGPoint(x: 0, y: gy)
+        wash.zPosition = 2
+        world.addChild(wash)
+
+        var rng = DressingRNG(seed: 40404)
+        var placed = 0, guard_ = 0
+        while placed < 12, guard_ < 200 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 60...(width - 60))
+            guard isClear(x) else { continue }
+            let tuft = SKNode()
+            tuft.position = CGPoint(x: x, y: gy + 2)
+            tuft.zPosition = 2
+            world.addChild(tuft)
+            // Dry grass: 3-4 straw blades leaning downwind.
+            let blades = rng.int(in: 3...4)
+            for b in 0..<blades {
+                let h = rng.cgFloat(in: 10...20)
+                let ang = 0.25 + CGFloat(b) * 0.12
+                let blade = SKSpriteNode(
+                    color: SKColor(red: 0.62, green: 0.52, blue: 0.32, alpha: 1),
+                    size: CGSize(width: 3, height: h))
+                blade.anchorPoint = CGPoint(x: 0.5, y: 0)
+                blade.zRotation = ang
+                tuft.addChild(blade)
+                let tip = SKSpriteNode(
+                    color: SKColor(red: 0.90, green: 0.80, blue: 0.55, alpha: 1),
+                    size: CGSize(width: 3, height: 3))
+                tip.position = CGPoint(x: -sin(ang) * h, y: cos(ang) * h)
+                tuft.addChild(tip)
+            }
+            tuft.run(.repeatForever(.sequence([
+                .rotate(toAngle: 0.04, duration: 2.8), .rotate(toAngle: -0.04, duration: 2.8),
+            ])))
+            placed += 1
+        }
+    }
 }

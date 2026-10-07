@@ -3,14 +3,21 @@ import SpriteKit
 /// Enemy marcher kinds. .raider is the classic fast shooter (Levels 1+);
 /// .brute is the bulky siege crusher debuting in Level 3 — slow, tanky,
 /// hits like a tower bolt, pays a premium when dropped.
+/// .reaver is the axe rusher debuting in Level 4 — fast, closes to arm's
+/// length and chops for heavy melee damage (no bolts).
 enum EnemyKind: Int, CaseIterable {
     case raider
     case brute
+    case reaver
+
+    /// True for axe fighters (swing + direct damage); false for shooters.
+    var isMelee: Bool { self == .reaver }
 
     var hp: CGFloat {
         switch self {
         case .raider: return Balance.enemyHP
         case .brute: return Balance.bruteHP
+        case .reaver: return Balance.reaverHP
         }
     }
 
@@ -18,6 +25,7 @@ enum EnemyKind: Int, CaseIterable {
         switch self {
         case .raider: return Balance.enemySpeed
         case .brute: return Balance.bruteSpeed
+        case .reaver: return Balance.reaverSpeed
         }
     }
 
@@ -25,13 +33,16 @@ enum EnemyKind: Int, CaseIterable {
         switch self {
         case .raider: return Balance.enemySightRange
         case .brute: return Balance.bruteSightRange
+        case .reaver: return Balance.reaverSightRange
         }
     }
 
+    /// Shooters stop and fire here; reavers close to axe length here.
     var shootRange: CGFloat {
         switch self {
         case .raider: return Balance.enemyShootRange
         case .brute: return Balance.bruteShootRange
+        case .reaver: return Balance.reaverMeleeRange
         }
     }
 
@@ -39,6 +50,7 @@ enum EnemyKind: Int, CaseIterable {
         switch self {
         case .raider: return Balance.enemyFireCooldown
         case .brute: return Balance.bruteFireCooldown
+        case .reaver: return Balance.reaverSwingCooldown
         }
     }
 
@@ -46,6 +58,15 @@ enum EnemyKind: Int, CaseIterable {
         switch self {
         case .raider: return Balance.enemyBoltDamage
         case .brute: return Balance.bruteBoltDamage
+        case .reaver: return 0
+        }
+    }
+
+    /// Axe chop damage (reavers only).
+    var meleeDamage: CGFloat {
+        switch self {
+        case .reaver: return Balance.reaverMeleeDamage
+        case .raider, .brute: return 0
         }
     }
 
@@ -53,6 +74,7 @@ enum EnemyKind: Int, CaseIterable {
         switch self {
         case .raider: return Balance.killReward
         case .brute: return Balance.bruteReward
+        case .reaver: return Balance.reaverReward
         }
     }
 }
@@ -75,7 +97,14 @@ final class EnemyNode: SKSpriteNode {
     var shootRange: CGFloat
     var fireInterval: TimeInterval
     var boltDamage: CGFloat
+    var meleeDamage: CGFloat
     var reward: Int
+    /// Closing-burst state (reavers): fires once per life inside burst
+    /// range, then dashes at burst speed while the timer runs down.
+    var burstUsed: Bool = false
+    var burstTimer: TimeInterval = 0
+    /// Overhead-chop offset added to the arm angle (see swing()).
+    private var swingOffset: CGFloat = 0
 
     private var hpBarRoot = SKNode()
     private var hpBarBG = SKSpriteNode()
@@ -101,12 +130,20 @@ final class EnemyNode: SKSpriteNode {
         self.shootRange = kind.shootRange
         self.fireInterval = kind.fireInterval
         self.boltDamage = kind.boltDamage
+        self.meleeDamage = kind.meleeDamage
         self.reward = kind.reward
-        self.frames = UnitPixelArt.frames(for: kind == .brute ? .brute : .enemy)
+        self.frames = UnitPixelArt.frames(for: {
+            switch kind {
+            case .raider: return UnitPixelArt.Kind.enemy
+            case .brute: return .brute
+            case .reaver: return .reaver
+            }
+        }())
         let size: CGSize
         switch kind {
         case .raider: size = CGSize(width: 40, height: 64)
         case .brute: size = CGSize(width: 58, height: 88)
+        case .reaver: size = CGSize(width: 44, height: 68)
         }
         super.init(texture: nil, color: .clear, size: size)
         name = "enemy"
@@ -160,14 +197,27 @@ final class EnemyNode: SKSpriteNode {
         addChild(body)
 
         // Aimable spike-arm on the shoulder; the scene steers it via aimAt(_).
-        let armTex = UnitPixelArt.armTexture(for: kind == .brute ? .brute : .enemy)
+        // Reavers mount a great-axe on the same pivot (swung via swing()).
+        let armTex = UnitPixelArt.armTexture(for: {
+            switch kind {
+            case .raider: return UnitPixelArt.Kind.enemy
+            case .brute: return .brute
+            case .reaver: return .reaver
+            }
+        }())
         armTex.filteringMode = .nearest
         let s = size.height / 32
         spikeSprite = SKSpriteNode(texture: armTex)
         spikeSprite.setScale(s)
         spikeSprite.anchorPoint = CGPoint(x: CGFloat(UnitPixelArt.armGripX) / CGFloat(UnitPixelArt.armW),
                                           y: 0.5)
-        armPivot.position = kind == .brute ? CGPoint(x: 8, y: 10) : CGPoint(x: 6, y: 8)
+        armPivot.position = {
+            switch kind {
+            case .brute: return CGPoint(x: 8, y: 10)
+            case .reaver: return CGPoint(x: 7, y: 9)
+            case .raider: return CGPoint(x: 6, y: 8)
+            }
+        }()
         armPivot.addChild(spikeSprite)
         gunTip.position = CGPoint(x: CGFloat(UnitPixelArt.armTipX - UnitPixelArt.armGripX) * s,
                                   y: 0)
@@ -223,7 +273,25 @@ final class EnemyNode: SKSpriteNode {
         body.zRotation = advancing ? sin(marchPhase) * 0.03 : 0
         let target = desiredAim ?? 0
         aimAngle += (target - aimAngle) * min(1, 12 * dt)
-        armPivot.zRotation = aimAngle
+        armPivot.zRotation = aimAngle + swingOffset
+    }
+
+    /// Overhead axe chop for reavers: fast wind-up then slam. The offset
+    /// rides on top of the aim angle (see animateMarch) so the swing reads
+    /// without fighting the arm steering. Guarded so chops don't stack.
+    func swing() {
+        guard action(forKey: "swing") == nil else { return }
+        run(.sequence([
+            .customAction(withDuration: 0.12) { [weak self] _, t in
+                self?.swingOffset = -0.9 * CGFloat(t)
+            },
+            .customAction(withDuration: 0.10) { [weak self] _, t in
+                self?.swingOffset = -0.9 + 1.5 * CGFloat(t)
+            },
+            .customAction(withDuration: 0.25) { [weak self] _, t in
+                self?.swingOffset = 0.6 * (1 - CGFloat(t))
+            },
+        ]), withKey: "swing")
     }
 
     /// Small vertical offset applied by the scene on top of ground rest height.

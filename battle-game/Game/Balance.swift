@@ -14,7 +14,9 @@ enum Balance {
     /// Twilight Ruins (Level 1): indigo dusk. Overgrown Expanse (Level 2):
     /// alien jungle — teal-green grade, denser canopy, heavier glow flora.
     /// Thornwood Bastion (Level 3): ember-amber timber grade, russet canopy.
-    enum BGTheme { case twilight, overgrown, bastion }
+    /// Dune Atoll (Level 4): early dawn — a touch brighter, pale-gold
+    /// horizon, dry open treeline, sandy lane wash.
+    enum BGTheme { case twilight, overgrown, bastion, dawn }
 
     // MARK: - Per-level battlefield layout
     struct LevelLayout {
@@ -42,6 +44,9 @@ enum Balance {
         /// Every Nth summon marches out a Brute instead of a Raider
         /// (0 = never — Levels 1-2 field raiders only).
         var bruteEvery: Int
+        /// Every Nth summon rushes out a Reaver axe-fighter instead
+        /// (0 = never — Levels 1-3 never see axes; Brutes win ties).
+        var reaverEvery: Int
         // MARK: - Structure durability (matches the LevelDef dossier)
         var towerHP: CGFloat
         var baseHP: CGFloat
@@ -68,6 +73,7 @@ enum Balance {
         doubleChance: 0.0,
         maxEnemies: 6,
         bruteEvery: 0,
+        reaverEvery: 0,
         towerHP: 200,
         baseHP: 500
     )
@@ -96,6 +102,7 @@ enum Balance {
         doubleChance: 0.45,
         maxEnemies: 8,
         bruteEvery: 0,
+        reaverEvery: 0,
         towerHP: 220,
         baseHP: 550
     )
@@ -127,8 +134,41 @@ enum Balance {
         doubleChance: 0.35,
         maxEnemies: 9,
         bruteEvery: 4,
+        reaverEvery: 0,
         towerHP: 250,
         baseHP: 600
+    )
+
+    /// Level 4 Dune Atoll: open 7400pt white-sand crossing, 3 towers per
+    /// side pushed wider apart, and a low-high-low dune platform rhythm.
+    /// Dawn grade (see .dawn). Hotter flow: raiders every 5.5s with frequent
+    /// pairs, a Reaver axe-rush every 3rd summon, and a Brute every 6th
+    /// (Brutes win the 6th-summon tie) — plus the Scatter unlock in hand.
+    private static let layout4 = LevelLayout(
+        width: 7400,
+        playerBaseX: 220,
+        playerTowerXs: [700, 1400, 2100],
+        enemyTowerXs: [5200, 5900, 6600],
+        enemyBaseX: 7180,
+        heroSpawnX: 420,
+        platforms: [
+            CGRect(x: 2480, y: 300, width: 320, height: 36),
+            CGRect(x: 2980, y: 420, width: 280, height: 36),
+            CGRect(x: 3440, y: 300, width: 320, height: 36),
+            CGRect(x: 3920, y: 440, width: 280, height: 36),
+            CGRect(x: 4380, y: 320, width: 300, height: 36),
+        ],
+        theme: .dawn,
+        flags: true,
+        alienBirds: true,
+        lushFlora: false,
+        summonInterval: 5.5,
+        doubleChance: 0.40,
+        maxEnemies: 10,
+        bruteEvery: 6,
+        reaverEvery: 3,
+        towerHP: 260,
+        baseHP: 650
     )
 
     /// Active battlefield. GameScene sets this from the level id before
@@ -139,6 +179,7 @@ enum Balance {
         switch levelId {
         case 2: return layout2
         case 3: return layout3
+        case 4: return layout4
         default: return layout1
         }
     }
@@ -221,6 +262,7 @@ enum Balance {
     static var summonDoubleChance: Double { active.doubleChance }
     static var maxEnemies: Int { active.maxEnemies }
     static var bruteEvery: Int { active.bruteEvery }
+    static var reaverEvery: Int { active.reaverEvery }
     static let firstSummonDelay: Double = 5.0
     /// Raider (the classic marcher — Levels 1+).
     static let enemyHP: CGFloat = 40
@@ -240,6 +282,20 @@ enum Balance {
     static let bruteShootRange: CGFloat = 330
     static let bruteFireCooldown: Double = 2.2
     static let bruteBoltDamage: CGFloat = 16
+    /// Reaver (axe melee rusher — Level 4+): fast, closes to arm's length
+    /// and chops for heavy damage. No bolts — the axe is the weapon.
+    static let reaverHP: CGFloat = 90
+    static let reaverSpeed: CGFloat = 135
+    static let reaverReward: Int = 150
+    static let reaverSightRange: CGFloat = 560
+    static let reaverMeleeRange: CGFloat = 70
+    static let reaverSwingCooldown: Double = 1.9
+    static let reaverMeleeDamage: CGFloat = 25
+    /// Closing burst: triggers once per reaver inside this radius of its
+    /// victim — a short 1.8x dash so the last stretch explodes inward.
+    static let reaverBurstRange: CGFloat = 280
+    static let reaverBurstTime: Double = 0.6
+    static let reaverBurstSpeed: CGFloat = 1.8
     static let enemyBoltSpeed: CGFloat = 520
     static let enemyBoltLife: Double = 1.2     // range ≈ 624: outranged by the hero
 

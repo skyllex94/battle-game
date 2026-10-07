@@ -34,10 +34,28 @@ struct GameView: View {
     @State private var showWin = false
     @State private var winStars = 0
     @State private var winTime: Double = 0
+    /// Last victory's diamond split (shown on the win card).
+    @State private var winClearDiamonds = 0
+    @State private var winLeftoverDiamonds = 0
+    @State private var winWasRepeat = false
+    /// Animated diamond count-up (buttons unlock when it lands).
+    @State private var winDiamondsShown = 0
+    @State private var winCountDone = false
+    /// Continue pushes the next level's briefing onto the stack.
+    @State private var showNextLevel = false
     /// When the winning blow landed (wall clock). The card waits 2s while
     /// the battle keeps raging behind it.
     @State private var winDetectedAt: Date?
+    /// When the losing blow landed (wall clock). The card waits 1s while
+    /// the battlefield settles, then rises.
+    @State private var defeatDetectedAt: Date?
     @State private var showDefeat = false
+    /// One revive per run (ad or diamonds — player's choice, then gone).
+    @State private var revivedThisRun = false
+    /// Simulated-ad overlay while the stub ad "plays".
+    @State private var showAdOverlay = false
+    @State private var adProgress: Double = 0
+    @ObservedObject private var wallet = WalletStore.shared
     /// New-unit intel card: levels that debut a unit pause 1s after entry
     /// and brief the player (stats + portrait) until dismissed.
     @State private var showUnitIntro = false
@@ -65,6 +83,13 @@ struct GameView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 Spacer(minLength: 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+            // Continue pushes the next level's briefing (hidden link).
+            if let next = nextLevel {
+                NavigationLink(destination: LevelDetailView(level: next),
+                               isActive: $showNextLevel) { EmptyView() }
+                    .hidden()
             }
 
             // Top command strip, glued to the screen edge like the army tabs
@@ -186,7 +211,33 @@ struct GameView: View {
                             .foregroundStyle(.white)
                     }
                     .padding(.top, 2)
-                    PixelMenuButton(title: "Play Again", style: .primary) {
+                    // Diamond payout: clear reward + converted leftover gold
+                    // (dimmed tag on replays — repeats pay 30%). Counts up
+                    // with coin ticks; buttons unlock when it lands.
+                    HStack(spacing: 6) {
+                        PixelDiamondView()
+                            .scaleEffect(winCountDone ? 1.0 : 1.25)
+                            .animation(.easeInOut(duration: 0.3), value: winCountDone)
+                        Text("+\(winDiamondsShown) DIAMONDS")
+                            .font(.system(size: 16, weight: .black, design: .monospaced))
+                            .tracking(1)
+                            .monospacedDigit()
+                            .foregroundStyle(.cyan)
+                        if winWasRepeat {
+                            Text("REPLAY")
+                                .font(.system(size: 9, weight: .black, design: .monospaced))
+                                .tracking(1)
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(.gray)
+                        }
+                    }
+                    .padding(.top, 2)
+                    Text("CLEAR \(winClearDiamonds) · GOLD \(winLeftoverDiamonds)")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .tracking(2)
+                        .foregroundStyle(.white.opacity(0.5))
+                    PixelMenuButton(title: "Play Again", style: .ghost) {
                         SoundEngine.shared.uiTap()
                         scene.resetLevel()
                         scene.heroInputX = moveX
@@ -194,12 +245,29 @@ struct GameView: View {
                         weapon = scene.heroWeapon
                         showWin = false
                         winDetectedAt = nil
+                        winClearDiamonds = 0
+                        winLeftoverDiamonds = 0
+                        winDiamondsShown = 0
+                        winCountDone = false
+                        revivedThisRun = false
                         scene.isPaused = false
+                    }
+                    .disabled(!winCountDone)
+                    .opacity(winCountDone ? 1 : 0.4)
+                    if nextLevel != nil {
+                        PixelMenuButton(title: "Continue", style: .primary) {
+                            SoundEngine.shared.uiTap()
+                            showNextLevel = true
+                        }
+                        .disabled(!winCountDone)
+                        .opacity(winCountDone ? 1 : 0.4)
                     }
                     PixelMenuButton(title: "Map", style: .ghost) {
                         SoundEngine.shared.uiTap()
                         dismiss()
                     }
+                    .disabled(!winCountDone)
+                    .opacity(winCountDone ? 1 : 0.4)
                 }
                 .padding(.horizontal, 26)
                 .padding(.vertical, 24)
@@ -209,23 +277,25 @@ struct GameView: View {
                 .shadow(color: .yellow.opacity(0.2), radius: 18)
             }
 
-            // Defeat card: last heart lost. Retry restores all 3 hearts.
+            // Defeat card: last heart lost. Compact by design — landscape
+            // phones are short, so tight spacing, small type, and Retry /
+            // Map share a row. Retry restores all 3 hearts.
             if showDefeat {
                 Color.black.opacity(0.55)
                     .ignoresSafeArea()
-                VStack(spacing: 10) {
+                VStack(spacing: 6) {
                     Text("MISSION FAILED")
-                        .font(.system(size: 24, weight: .black, design: .monospaced))
-                        .tracking(4)
+                        .font(.system(size: 18, weight: .black, design: .monospaced))
+                        .tracking(3)
                         .foregroundStyle(.red)
                     Text(level.name.uppercased())
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .tracking(3)
                         .foregroundStyle(.white.opacity(0.7))
                     HStack(spacing: 6) {
-                        Rectangle().fill(.red.opacity(0.6)).frame(width: 52, height: 2)
+                        Rectangle().fill(.red.opacity(0.6)).frame(width: 36, height: 2)
                         Rectangle().fill(.red).frame(width: 8, height: 8)
-                        Rectangle().fill(.red.opacity(0.6)).frame(width: 52, height: 2)
+                        Rectangle().fill(.red.opacity(0.6)).frame(width: 36, height: 2)
                     }
                     // Spent hearts: all dimmed — the reason the run ended.
                     HStack(spacing: 6) {
@@ -235,31 +305,104 @@ struct GameView: View {
                                 .opacity(0.25)
                         }
                     }
-                    Text("ALL HEARTS LOST")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    // One revive per battle (ad or diamonds). Hidden once
+                    // spent — or when the HQ itself is rubble (reviving the
+                    // hero then would still be a defeat).
+                    if !revivedThisRun, scene.playerBaseAlive {
+                        Text("REVIVE — ONE PER BATTLE")
+                            .font(.system(size: 10, weight: .black, design: .monospaced))
+                            .tracking(2)
+                            .foregroundStyle(.yellow)
+                            .padding(.top, 2)
+                        PixelMenuButton(title: "Revive · Watch Ad", style: .primary) {
+                            SoundEngine.shared.uiTap()
+                            startAdRevive()
+                        }
+                        ReviveDiamondButton(cost: Economy.reviveDiamondCost(levelId: level.id),
+                                            balance: wallet.diamonds) {
+                            if WalletStore.shared.spend(Economy.reviveDiamondCost(levelId: level.id)) {
+                                SoundEngine.shared.uiTap()
+                                doRevive()
+                            }
+                        }
+                        HStack(spacing: 5) {
+                            PixelDiamondView()
+                            Text("BALANCE \(wallet.diamonds)")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .tracking(1)
+                                .monospacedDigit()
+                                .foregroundStyle(.cyan)
+                        }
+                    } else {
+                        Text("ALL HEARTS LOST")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .tracking(2)
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
+                    HStack(spacing: 8) {
+                        PixelMenuButton(title: "Retry", style: .primary, width: 140) {
+                            SoundEngine.shared.uiTap()
+                            scene.resetLevel()
+                            scene.heroInputX = moveX
+                            scene.heroJumpHeld = jumpHeld
+                            weapon = scene.heroWeapon
+                            showDefeat = false
+                            revivedThisRun = false
+                            scene.isPaused = false
+                        }
+                        PixelMenuButton(title: "Map", style: .ghost, width: 140) {
+                            SoundEngine.shared.uiTap()
+                            dismiss()
+                        }
+                    }
+                    .padding(.top, 2)
+                }
+                .padding(.horizontal, 22)
+                .padding(.vertical, 16)
+                .background(.black.opacity(0.9))
+                .clipShape(PixelPanelShape(cut: 10))
+                .overlay(PixelPanelShape(cut: 10).stroke(.red.opacity(0.6), lineWidth: 3))
+                .shadow(color: .red.opacity(0.2), radius: 18)
+            }
+
+            // Simulated rewarded ad: pixel progress bar over 3s, then the
+            // revive lands. No cancel — the stub always grants, and the
+            // real SDK will own this screen later.
+            if showAdOverlay {
+                Color.black.opacity(0.85)
+                    .ignoresSafeArea()
+                VStack(spacing: 12) {
+                    Text("SPONSORED MESSAGE")
+                        .font(.system(size: 11, weight: .black, design: .monospaced))
+                        .tracking(3)
+                        .foregroundStyle(.white.opacity(0.6))
+                    PixelDiamondView()
+                        .scaleEffect(2.0)
+                        .padding(.vertical, 8)
+                        .opacity(0.5 + 0.5 * adProgress)
+                    Text("REVIVE INCOMING…")
+                        .font(.system(size: 16, weight: .black, design: .monospaced))
                         .tracking(2)
-                        .foregroundStyle(.white.opacity(0.55))
-                        .padding(.top, 2)
-                    PixelMenuButton(title: "Retry", style: .primary) {
-                        SoundEngine.shared.uiTap()
-                        scene.resetLevel()
-                        scene.heroInputX = moveX
-                        scene.heroJumpHeld = jumpHeld
-                        weapon = scene.heroWeapon
-                        showDefeat = false
-                        scene.isPaused = false
+                        .foregroundStyle(.yellow)
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Rectangle()
+                                .fill(.white.opacity(0.12))
+                                .frame(height: 10)
+                            Rectangle()
+                                .fill(.cyan)
+                                .frame(width: geo.size.width * min(1, max(0, adProgress)),
+                                       height: 10)
+                        }
                     }
-                    PixelMenuButton(title: "Map", style: .ghost) {
-                        SoundEngine.shared.uiTap()
-                        dismiss()
-                    }
+                    .frame(width: 220, height: 10)
+                    .overlay(Rectangle().stroke(.white.opacity(0.25), lineWidth: 1))
                 }
                 .padding(.horizontal, 26)
                 .padding(.vertical, 24)
                 .background(.black.opacity(0.9))
                 .clipShape(PixelPanelShape(cut: 10))
-                .overlay(PixelPanelShape(cut: 10).stroke(.red.opacity(0.6), lineWidth: 3))
-                .shadow(color: .red.opacity(0.2), radius: 18)
+                .overlay(PixelPanelShape(cut: 10).stroke(.cyan.opacity(0.5), lineWidth: 3))
             }
 
             // New-unit intel: debut unit for THIS level (portrait + stats).
@@ -332,26 +475,46 @@ struct GameView: View {
                     scene.isPaused = true
                     winTime = minimap.winTime
                     winStars = starsFor(time: minimap.winTime)
+                    // Diamond payout: clear reward (diminished on repeats) +
+                    // leftover war gold auto-converts (gold resets per run).
+                    // Repeat-ness reads BEFORE banking the stars.
+                    winWasRepeat = CampaignData.stars(for: level.id) > 0
+                    winClearDiamonds = Economy.clearReward(levelId: level.id, stars: winStars,
+                                                          isRepeat: winWasRepeat)
+                    winLeftoverDiamonds = Economy.leftoverReward(gold: minimap.money)
+                    WalletStore.shared.earn(winClearDiamonds + winLeftoverDiamonds)
                     CampaignData.awardStars(winStars, for: level.id)
+                    winDiamondsShown = 0
+                    winCountDone = false
+                    startDiamondCountUp(total: winClearDiamonds + winLeftoverDiamonds)
                     SoundEngine.shared.stopBattleMusic()
                     SoundEngine.shared.victory()
                 }
             } else if !minimap.won {
                 winDetectedAt = nil
             }
-            // Last heart lost -> freeze the frame, raise the defeat card.
+            // Last heart lost -> let the dust settle 1s with the sim still
+            // running, then freeze the frame and raise the defeat card.
             if minimap.lost, !showDefeat {
-                showDefeat = true
-                showMenu = false
-                showWin = false
-                scene.isPaused = true
-                SoundEngine.shared.stopBattleMusic()
+                if defeatDetectedAt == nil {
+                    defeatDetectedAt = Date()
+                } else if Date().timeIntervalSince(defeatDetectedAt!) >= 1 {
+                    defeatDetectedAt = nil
+                    showDefeat = true
+                    showMenu = false
+                    showWin = false
+                    scene.isPaused = true
+                    SoundEngine.shared.stopBattleMusic()
+                }
+            } else if !minimap.lost {
+                defeatDetectedAt = nil
             }
         }
         .onAppear {
             scene.heroInputX = moveX
             scene.heroJumpHeld = jumpHeld
             weapon = scene.heroWeapon
+            revivedThisRun = false
             // New-unit briefing: let the battle breathe 1s, then freeze and brief.
             if debutUnit != nil {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -375,6 +538,35 @@ struct GameView: View {
         return 1
     }
 
+    /// Next campaign level, if any (Continue hides on the final level).
+    private var nextLevel: LevelDef? {
+        CampaignData.levels.first(where: { $0.id == level.id + 1 })
+    }
+
+    /// Diamond count-up: ticks 0 → total over ~1.2s with coin ticks, then
+    /// unlocks the win-card buttons.
+    private func startDiamondCountUp(total: Int) {
+        guard total > 0 else {
+            winDiamondsShown = 0
+            winCountDone = true
+            return
+        }
+        Task {
+            let steps = min(max(total, 1), 24)
+            for i in 1...steps {
+                try? await Task.sleep(nanoseconds: 50_000_000)
+                await MainActor.run {
+                    winDiamondsShown = Int((Double(total) * Double(i) / Double(steps)).rounded())
+                    if i % 4 == 0 { SoundEngine.shared.pickup() }
+                }
+            }
+            await MainActor.run {
+                winDiamondsShown = total
+                winCountDone = true
+            }
+        }
+    }
+
     /// Unit debuting on this level, if any (Ranger on Level 2, Heavy on
     /// Level 3). Nil keeps entry instant — no modal, no pause.
     private var debutUnit: ArmyKind? {
@@ -384,6 +576,39 @@ struct GameView: View {
     private func closeUnitIntro() {
         showUnitIntro = false
         scene.isPaused = false
+    }
+
+    /// Ad revive: raises the overlay, plays the stub ad with a 3s pixel
+    /// progress bar, then revives on grant. One per run — the flag is set
+    /// inside doRevive().
+    private func startAdRevive() {
+        showAdOverlay = true
+        adProgress = 0
+        withAnimation(.linear(duration: 3.0)) { adProgress = 1 }
+        Task {
+            let reward = await StubAdService.shared.showRewarded()
+            await MainActor.run {
+                showAdOverlay = false
+                adProgress = 0
+                if reward == .granted {
+                    SoundEngine.shared.uiTap()
+                    doRevive()
+                }
+            }
+        }
+    }
+
+    /// Applies the revive: one more heart + standard respawn drop, music
+    /// back on, defeat card down. The run continues where it fell.
+    private func doRevive() {
+        revivedThisRun = true
+        scene.reviveHero()
+        scene.heroInputX = moveX
+        scene.heroJumpHeld = jumpHeld
+        weapon = scene.heroWeapon
+        showDefeat = false
+        scene.isPaused = false
+        SoundEngine.shared.startBattleMusic()
     }
 
     private func formatTime(_ t: Double) -> String {
@@ -445,6 +670,17 @@ struct GameView: View {
             }
             .font(.system(size: 11, weight: .bold, design: .monospaced))
             .foregroundStyle(.yellow)
+
+            HUDDivider()
+
+            // Diamond wallet (live balance for revives / buyouts later).
+            HStack(spacing: 5) {
+                PixelDiamondView()
+                Text("\(wallet.diamonds)")
+                    .monospacedDigit()
+            }
+            .font(.system(size: 11, weight: .bold, design: .monospaced))
+            .foregroundStyle(.cyan)
 
             HUDDivider()
 
@@ -549,6 +785,7 @@ private struct PixelMenuButton: View {
     enum Style { case primary, ghost, danger }
     let title: String
     let style: Style
+    var width: CGFloat = 220
     let onTap: () -> Void
     private let shape = PixelPanelShape(cut: 6)
 
@@ -558,7 +795,7 @@ private struct PixelMenuButton: View {
                 .font(.system(size: 13, weight: .black, design: .monospaced))
                 .tracking(2)
                 .foregroundStyle(fg)
-                .frame(width: 220, height: 42)
+                .frame(width: width, height: 42)
                 .background(bg)
                 .clipShape(shape)
                 .overlay(shape.stroke(border, lineWidth: 2))
@@ -825,6 +1062,61 @@ private struct PixelCoinView: View {
             "D": Color(red: 0.55, green: 0.32, blue: 0.06),
         ], pixel: 1.75)
         .shadow(color: .yellow.opacity(0.35), radius: 2)
+    }
+}
+
+/// Diamond revive button: pixel-menu styling matching the defeat card —
+/// cyan fill when affordable, dimmed + disabled when broke.
+private struct ReviveDiamondButton: View {
+    let cost: Int
+    let balance: Int
+    let onTap: () -> Void
+    private let shape = PixelPanelShape(cut: 6)
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 8) {
+                PixelDiamondView()
+                Text("REVIVE · \(cost) DIAMONDS")
+                    .font(.system(size: 13, weight: .black, design: .monospaced))
+                    .tracking(2)
+                    .foregroundStyle(affordable ? .black : .gray)
+            }
+            .frame(width: 220, height: 42)
+            .background(affordable ? .cyan : .white.opacity(0.08))
+            .clipShape(shape)
+            .overlay(shape.stroke(affordable ? .white.opacity(0.65) : .gray.opacity(0.4),
+                                  lineWidth: 2))
+            .opacity(affordable ? 1.0 : 0.6)
+        }
+        .disabled(!affordable)
+    }
+
+    private var affordable: Bool { balance >= cost }
+}
+
+/// Pixel-art diamond for the wallet: faceted gem — wide crown, pointed
+/// pavilion, white glint on the left facets, deep-cyan shade on the right.
+private struct PixelDiamondView: View {
+    private let grid = [
+        "...OO...",
+        "..OaaO..",
+        ".OaLLdO.",
+        "OaaLLddO",
+        "OaLLLddO",
+        ".OaaddO.",
+        "..OaaO..",
+        "...OO...",
+        "....O...",
+    ]
+    var body: some View {
+        PixelSpriteView(grid: grid, palette: [
+            "O": Color(white: 0.08),
+            "a": .cyan,
+            "L": .white,
+            "d": Color(red: 0.05, green: 0.55, blue: 0.75),
+        ], pixel: 1.75)
+        .shadow(color: .cyan.opacity(0.35), radius: 2)
     }
 }
 

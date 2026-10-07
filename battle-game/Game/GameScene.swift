@@ -244,13 +244,15 @@ final class GameScene: SKScene {
     }
 
     // MARK: - Per-level set dressing (flags, alien sky-flocks, lush flora)
-    /// Levels opt in via Balance.LevelLayout (today: Level 2). Runs after
-    /// every layer exists so dressing can sit in world + sky alike.
+    /// Levels opt in via Balance.LevelLayout (Level 2+); Level 4's dawn
+    /// atoll swaps glow flora for the dune wash. Runs after every layer
+    /// exists so dressing can sit in world + sky alike.
     private func buildDressing() {
         let layout = Balance.active
         if layout.flags { LevelDressing.buildFlags(in: world) }
         if layout.alienBirds { LevelDressing.buildAlienBirds(in: skyLayer, sceneSize: size) }
         if layout.lushFlora { LevelDressing.buildGlowFlora(in: world) }
+        if Balance.active.theme == .dawn { LevelDressing.buildDuneWash(in: world) }
     }
 
     // MARK: - Layer 0: twilight ruins sky (static, factor 0.0)
@@ -748,7 +750,8 @@ final class GameScene: SKScene {
             // Summon marchers toward the player base, capped. Levels with a
             // doubleChance sometimes pop a PAIR out of the gate together.
             // Levels with a bruteEvery march a Brute out every Nth summon
-            // instead of a Raider (Level 3: every 4th).
+            // (Level 3: every 4th); reaverEvery rushes a Reaver axe-fighter
+            // out instead (Level 4: every 3rd, Brutes winning ties).
             bases[i].summonTimer -= dt
             if bases[i].summonTimer <= 0 {
                 bases[i].summonTimer = Balance.summonInterval
@@ -757,8 +760,14 @@ final class GameScene: SKScene {
                 var slot = 0
                 while batch > 0, enemies.count < Balance.maxEnemies {
                     summonCount += 1
-                    let kind: EnemyKind = (Balance.bruteEvery > 0
-                        && summonCount % Balance.bruteEvery == 0) ? .brute : .raider
+                    let kind: EnemyKind
+                    if Balance.bruteEvery > 0, summonCount % Balance.bruteEvery == 0 {
+                        kind = .brute
+                    } else if Balance.reaverEvery > 0, summonCount % Balance.reaverEvery == 0 {
+                        kind = .reaver
+                    } else {
+                        kind = .raider
+                    }
                     summonEnemy(from: bases[i], slot: slot, kind: kind)
                     slot += 1
                     batch -= 1
@@ -859,26 +868,28 @@ final class GameScene: SKScene {
             guard e.alive else { continue }
             e.fireCooldown -= dt
 
-            // Target priority: exposed hero in sight > nearest ally in sight
-            // > player tower > player base.
+            // Target priority: closest exposed body in sight (hero or ally)
+            // > player tower > player base. Marchers chew what's nearest
+            // instead of walking past your army to reach you.
             var target: CGPoint? = nil
-            if hero.alive, !heroProtected,
-               hypot(hero.position.x - e.position.x,
-                     hero.position.y - e.position.y) < e.sightRange {
-                target = hero.position
-            } else {
-                var bestAlly: CGPoint?
-                var bestDist = e.sightRange
-                for a in allies where a.alive {
-                    let d = hypot(a.position.x - e.position.x, a.position.y - e.position.y)
-                    if d < bestDist {
-                        bestDist = d
-                        bestAlly = a.position
-                    }
+            var bestDist = e.sightRange
+            if hero.alive, !heroProtected {
+                let d = hypot(hero.position.x - e.position.x,
+                              hero.position.y - e.position.y)
+                if d < bestDist {
+                    bestDist = d
+                    target = hero.position
                 }
-                if let bestAlly {
-                    target = bestAlly
-                } else if let tower = nearestTower(team: .player, toX: e.position.x) {
+            }
+            for a in allies where a.alive {
+                let d = hypot(a.position.x - e.position.x, a.position.y - e.position.y)
+                if d < bestDist {
+                    bestDist = d
+                    target = a.position
+                }
+            }
+            if target == nil {
+                if let tower = nearestTower(team: .player, toX: e.position.x) {
                     target = CGPoint(x: tower.node.position.x,
                                      y: Balance.groundTopY + 100)
                 } else if let base = playerBase, base.alive {
@@ -911,23 +922,113 @@ final class GameScene: SKScene {
             let dist = hypot(aim.x - e.position.x, aim.y - e.position.y)
             e.face(aim.x - e.position.x)
             e.aimAt(CGVector(dx: aim.x - e.position.x, dy: aim.y - e.position.y))
-            if dist > e.shootRange {
+            // Melee fighters range on the ground line (horizontal gap): their
+            // tower/HQ aim points float 100pt up, and the diagonal would let
+            // them push inside structures without ever swinging. Shooters
+            // keep the true distance so their stop line stays put.
+            let rangeDist = e.kind.isMelee ? abs(aim.x - e.position.x) : dist
+            if rangeDist > e.shootRange {
+                // Closing burst: once per life, when the opposing army is
+                // close, the reaver kicks up dust and dashes the last stretch.
+                if e.kind.isMelee, !e.burstUsed, dist < Balance.reaverBurstRange {
+                    e.burstUsed = true
+                    e.burstTimer = Balance.reaverBurstTime
+                    let dust = ProjectileFactory.makeImpactPuff()
+                    dust.position = e.position
+                    dust.setScale(1.4)
+                    world.addChild(dust)
+                    SoundEngine.shared.enemyFire(at: e.position.x)
+                }
                 // Advance on the target (never past the lane edge).
                 let dir: CGFloat = aim.x > e.position.x ? 1 : -1
-                e.position.x = max(40, e.position.x + dir * e.moveSpeed * CGFloat(dt))
+                let pace = e.burstTimer > 0 ? e.moveSpeed * Balance.reaverBurstSpeed : e.moveSpeed
+                e.burstTimer = max(0, e.burstTimer - dt)
+                e.position.x = max(40, e.position.x + dir * pace * CGFloat(dt))
                 e.animateMarch(dt: dt, advancing: true)
             } else {
-                // In range: stop and shoot.
+                // In range: stop and shoot — or stop and chop for reavers.
                 e.animateMarch(dt: dt, advancing: false)
                 if e.fireCooldown <= 0 {
                     e.fireCooldown = e.fireInterval
-                    fireEnemyBolt(from: e, to: aim)
+                    if e.kind.isMelee {
+                        e.swing()
+                        SoundEngine.shared.enemyFire(at: e.position.x)
+                        meleeStrike(from: e)
+                    } else {
+                        fireEnemyBolt(from: e, to: aim)
+                    }
                 }
             }
             e.position.y = Balance.groundTopY + e.size.height / 2 + e.yBob
         }
         // Sweep the dead (gold was already paid at kill time).
         enemies.removeAll { !$0.alive || $0.marchedOff }
+    }
+
+    /// Reaver axe chop: damages the closest player-side body in reach —
+    /// hero or ally, whichever is nearer — else tower, else HQ.
+    /// Heavy single-target damage with an impact burst on the victim.
+    private func meleeStrike(from e: EnemyNode) {
+        let dmg = e.meleeDamage
+        let reach = e.shootRange + 30
+        // Closest body in axe reach (ties go to the hero).
+        var strikeHero = false
+        var strikeAlly: AllyNode?
+        var best = reach
+        if hero.alive, !heroProtected {
+            let d = hypot(hero.position.x - e.position.x,
+                          hero.position.y - e.position.y)
+            if d <= best {
+                best = d
+                strikeHero = true
+            }
+        }
+        for a in allies where a.alive {
+            let d = hypot(a.position.x - e.position.x, a.position.y - e.position.y)
+            if d < best {
+                best = d
+                strikeHero = false
+                strikeAlly = a
+            }
+        }
+        if strikeHero {
+            damageHero(amount: dmg)
+            meleeImpact(at: hero.position)
+            return
+        }
+        if let victim = strikeAlly {
+            damageAlly(victim, amount: dmg)
+            meleeImpact(at: victim.position)
+            return
+        }
+        // Player tower in axe reach (towers are ~60pt half-width).
+        if let tower = nearestTower(team: .player, toX: e.position.x),
+           abs(tower.node.position.x - e.position.x) <= e.shootRange + 60,
+           let idx = towers.firstIndex(where: { $0.node === tower.node }) {
+            damageTower(at: idx, amount: dmg)
+            meleeImpact(at: CGPoint(x: tower.node.position.x,
+                                    y: Balance.groundTopY + 100))
+            return
+        }
+        // Player HQ in axe reach (HQ is ~110pt half-width).
+        if let base = bases.first(where: { $0.team == .player }), base.alive,
+           abs(base.node.position.x - e.position.x) <= e.shootRange + 110,
+           let idx = bases.firstIndex(where: { $0.node === base.node }) {
+            damageBase(at: idx, amount: dmg)
+            meleeImpact(at: CGPoint(x: base.node.position.x,
+                                    y: Balance.groundTopY + 100))
+        }
+    }
+
+    /// Axe-impact burst: oversized puff + hot flash on the victim.
+    private func meleeImpact(at pos: CGPoint) {
+        let puff = ProjectileFactory.makeImpactPuff()
+        puff.position = pos
+        puff.setScale(1.8)
+        world.addChild(puff)
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.position = pos
+        world.addChild(flash)
     }
 
     /// Enemy trooper bolt: from the rifle tip toward the target, enemy team.
@@ -953,7 +1054,8 @@ final class GameScene: SKScene {
 
     // MARK: - Player army: summon + march toward the enemy base
     /// Called by the SwiftUI cards. Returns false when broke, capped,
-    /// or the unit isn't fielded on this level yet (Heavy = Level 2+).
+    /// or the unit isn't fielded on this level yet (Ranger = Level 2+,
+    /// Heavy = Level 3+).
     @discardableResult
     func summonAlly(kind: ArmyKind) -> Bool {
         guard ArmyKind.isUnlocked(kind, levelId: levelId),
@@ -1069,20 +1171,27 @@ final class GameScene: SKScene {
         for a in allies where a.alive {
             if abs(pt.x - a.position.x) < a.size.width / 2 + 12,
                abs(pt.y - a.position.y) < a.size.height / 2 + 8 {
-                a.hp = max(0, a.hp - amount)
-                a.refreshHPBar()
-                if !a.alive {
-                    let puff = ProjectileFactory.makeImpactPuff()
-                    puff.position = a.position
-                    puff.setScale(1.4)
-                    world.addChild(puff)
-                    a.removeFromParent()
-                    SoundEngine.shared.troopDown(at: a.position.x)
-                }
+                damageAlly(a, amount: amount)
                 return true
             }
         }
         return false
+    }
+
+    /// Shared ally damage (bolts + reaver axes): drains HP, bursts + howls
+    /// on death. Removal from the field happens in updateAllies' sweep.
+    private func damageAlly(_ a: AllyNode, amount: CGFloat) {
+        guard a.alive else { return }
+        a.hp = max(0, a.hp - amount)
+        a.refreshHPBar()
+        if !a.alive {
+            let puff = ProjectileFactory.makeImpactPuff()
+            puff.position = a.position
+            puff.setScale(1.4)
+            world.addChild(puff)
+            a.removeFromParent()
+            SoundEngine.shared.troopDown(at: a.position.x)
+        }
     }
 
     private func damageBase(at index: Int, amount: CGFloat) {
@@ -1152,6 +1261,23 @@ final class GameScene: SKScene {
             puff.position = CGPoint(x: deathSpot.x + CGFloat(i * 10 - 5), y: deathSpot.y)
             world.addChild(puff)
         }
+    }
+
+    /// Ad/diamond revive: grants one more heart and schedules the standard
+    /// respawn drop with grace. Clears the defeat channel so the SwiftUI
+    /// card dismisses on the next poll. No-op unless the run is lost.
+    func reviveHero() {
+        guard lostAt != nil else { return }
+        lostAt = nil
+        heroLives = 1
+        heroHP = Balance.heroHP
+        respawnAt = sceneTime + Balance.respawnDelay
+    }
+
+    /// False when the player HQ is rubble — reviving the hero then would
+    /// still be a defeat, so the UI hides the revive buttons.
+    var playerBaseAlive: Bool {
+        bases.first(where: { $0.team == .player })?.alive ?? false
     }
 
     /// Shared cleanup when the aim touch ends (release or death).

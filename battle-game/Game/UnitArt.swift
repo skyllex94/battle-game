@@ -9,7 +9,7 @@ import UIKit
 /// advancing for a scuttling march cycle.
 enum UnitPixelArt {
 
-    enum Kind { case trooper, heavy, ranger, enemy, brute }
+    enum Kind { case trooper, heavy, ranger, enemy, brute, reaver }
 
     /// Walk frames for a kind: full 4-step stride
     /// (contact -> support -> toe-off -> swing). Generated once, shared.
@@ -20,6 +20,7 @@ enum UnitPixelArt {
         case .ranger: return (0...3).map { ranger(pose: $0) }
         case .enemy: return (0...3).map { enemy(pose: $0) }
         case .brute: return (0...3).map { brute(pose: $0) }
+        case .reaver: return (0...3).map { reaver(pose: $0) }
         }
     }
 
@@ -71,6 +72,9 @@ enum UnitPixelArt {
         case .brute:
             bodyKey = "body-brute-0"; armKey = "arm-brute"
             shoulder = CGPoint(x: 16, y: 15)
+        case .reaver:
+            bodyKey = "body-reaver-0"; armKey = "arm-reaver"
+            shoulder = CGPoint(x: 16, y: 14)
         }
         // Warm the cache (no-ops once textures exist).
         _ = frames(for: kind)
@@ -315,6 +319,63 @@ enum UnitPixelArt {
         }
     }
 
+    // MARK: - Enemy reaver (bone-plated axe executioner)
+
+    /// Deliberately outside the red raider/brute family: ivory bone plates
+    /// over dark ash flesh, twin ember eyes, great backward + forward swept
+    /// horns, hunched plated back. Reads as executioner at a glance.
+    /// Wields the double-bladed bone axe (see reaverArm) on the arm pivot.
+    private static func reaver(pose: Int) -> SKTexture {
+        canvas(key: "body-reaver-\(pose)") { cg in
+            let bone = UIColor(red: 0.82, green: 0.76, blue: 0.62, alpha: 1)
+            let boneD = UIColor(red: 0.55, green: 0.48, blue: 0.36, alpha: 1)
+            let flesh = UIColor(red: 0.16, green: 0.10, blue: 0.11, alpha: 1)
+            let glow = UIColor(red: 1.0, green: 0.55, blue: 0.10, alpha: 1)
+            let O = outline
+
+            // Rear horn sweeping up-back.
+            fill(cg, x: 4, y: 1, w: 3, h: 3, O)
+            fill(cg, x: 4, y: 1, w: 2, h: 2, bone)
+            fill(cg, x: 3, y: 0, w: 2, h: 1, bone)
+            // Front horn sweeping up-forward over the brow.
+            fill(cg, x: 17, y: 0, w: 4, h: 3, O)
+            fill(cg, x: 18, y: 0, w: 3, h: 2, bone)
+            fill(cg, x: 20, y: 0, w: 2, h: 1, bone)
+            // Low ash skull.
+            fill(cg, x: 8, y: 3, w: 10, h: 6, O)
+            fill(cg, x: 9, y: 4, w: 8, h: 4, flesh)
+            // Twin ember eyes.
+            fill(cg, x: 12, y: 5, w: 2, h: 2, O)
+            fill(cg, x: 12, y: 5, w: 2, h: 2, glow)
+            fill(cg, x: 15, y: 5, w: 2, h: 2, O)
+            fill(cg, x: 15, y: 5, w: 2, h: 2, glow)
+            // Fanged maw.
+            fill(cg, x: 13, y: 9, w: 1, h: 1, .white)
+            fill(cg, x: 15, y: 9, w: 1, h: 1, .white)
+            fill(cg, x: 17, y: 9, w: 1, h: 1, .white)
+            // Hunched bone back: stacked plates over the shoulders.
+            fill(cg, x: 4, y: 9, w: 8, h: 4, O)
+            fill(cg, x: 5, y: 9, w: 6, h: 3, bone)
+            fill(cg, x: 5, y: 9, w: 6, h: 1, .white.withAlphaComponent(0.5))
+            fill(cg, x: 5, y: 12, w: 6, h: 3, O)
+            fill(cg, x: 6, y: 12, w: 4, h: 2, boneD)
+            // Torso: dark flesh with bone rib guards + ember core.
+            fill(cg, x: 8, y: 13, w: 8, h: 7, O)
+            fill(cg, x: 9, y: 14, w: 6, h: 5, flesh)
+            fill(cg, x: 9, y: 14, w: 1, h: 5, bone)
+            fill(cg, x: 12, y: 14, w: 1, h: 5, bone)
+            fill(cg, x: 14, y: 15, w: 2, h: 3, O)
+            fill(cg, x: 14, y: 15, w: 2, h: 2, glow)
+            // Belt.
+            fill(cg, x: 8, y: 20, w: 8, h: 2, O)
+            // Axe hand at the chest — the bone axe mounts here.
+            fill(cg, x: 16, y: 14, w: 3, h: 3, flesh) // claw
+            // Digitigrade sprinter legs (4-frame stride).
+            legs(cg, frame: pose, cx: 12, top: 22, len: 6,
+                 pants: flesh, shade: boneD, boot: dark, outline: O)
+        }
+    }
+
     // MARK: - Marching legs (4-frame stride)
 
     /// Thick pixel line between two points (w-wide row per step).
@@ -384,6 +445,7 @@ enum UnitPixelArt {
         case .ranger: return rangerArm()
         case .enemy: return enemyArm()
         case .brute: return bruteArm()
+        case .reaver: return reaverArm()
         }
     }
 
@@ -486,6 +548,38 @@ enum UnitPixelArt {
             fill(cg, x: 12, y: 1, w: 2, h: 3, chitin)
             fill(cg, x: 18, y: 3, w: 3, h: 6, chitin)
             fill(cg, x: 18, y: 4, w: 3, h: 4, glow)
+        }
+    }
+
+    /// Reaver bone axe: haft pointing +x with twin crescent bone blades
+    /// (high + low) at the tip, ember cutting edges. Mounts on the arm
+    /// pivot; swung overhead via swing().
+    private static func reaverArm() -> SKTexture {
+        canvas(w: armW, h: armH, key: "arm-reaver") { cg in
+            let haft = UIColor(red: 0.30, green: 0.20, blue: 0.12, alpha: 1)
+            let bone = UIColor(red: 0.82, green: 0.76, blue: 0.62, alpha: 1)
+            let edge = UIColor(red: 1.0, green: 0.55, blue: 0.10, alpha: 1)
+            let flesh = UIColor(red: 0.16, green: 0.10, blue: 0.11, alpha: 1)
+            let guard_ = UIColor(red: 0.55, green: 0.48, blue: 0.36, alpha: 1)
+            let O = outline
+            // Ashen arm + claw wrapping the grip (x=5).
+            fill(cg, x: 2, y: 5, w: 6, h: 3, O)
+            fill(cg, x: 3, y: 5, w: 4, h: 2, flesh)
+            fill(cg, x: 5, y: 4, w: 3, h: 4, O)
+            fill(cg, x: 6, y: 5, w: 1, h: 2, guard_)
+            // Haft to the tip.
+            fill(cg, x: 8, y: 5, w: 10, h: 2, O)
+            fill(cg, x: 8, y: 5, w: 10, h: 1, haft)
+            // High crescent blade.
+            fill(cg, x: 16, y: 0, w: 6, h: 6, O)
+            fill(cg, x: 17, y: 1, w: 4, h: 4, bone)
+            fill(cg, x: 17, y: 1, w: 4, h: 1, edge) // hot upper edge
+            fill(cg, x: 17, y: 1, w: 1, h: 4, .white.withAlphaComponent(0.5))
+            // Low crescent blade.
+            fill(cg, x: 16, y: 6, w: 6, h: 6, O)
+            fill(cg, x: 17, y: 7, w: 4, h: 4, bone)
+            fill(cg, x: 17, y: 10, w: 4, h: 1, edge) // hot lower edge
+            fill(cg, x: 17, y: 7, w: 1, h: 4, .white.withAlphaComponent(0.5))
         }
     }
 }

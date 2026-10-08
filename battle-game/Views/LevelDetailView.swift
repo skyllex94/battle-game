@@ -9,6 +9,9 @@ import UIKit // UIImage gun portraits from PixelHeroArt
 /// everything fits a landscape phone screen with no scrolling.
 struct LevelDetailView: View {
     let level: LevelDef
+    /// Campaign path. BACK pops to the map — briefings are only ever
+    /// stacked on the map, never on a finished battle.
+    @Binding var path: NavigationPath
     @Environment(\.dismiss) private var dismiss
     @State private var selectedHero: HeroDef = HeroRoster.selectedHero
     @State private var selectedGun: HeroWeapon = GunLocker.selectedGun
@@ -97,8 +100,9 @@ struct LevelDetailView: View {
                             .clipShape(ShopPixelShape(cut: 8))
                             .overlay(ShopPixelShape(cut: 8).stroke(.yellow.opacity(0.55), lineWidth: 2))
                         }
-                        NavigationLink {
-                            GameView(level: level, hero: selectedHero)
+                        Button {
+                            SoundEngine.shared.uiTap()
+                            path.append(Route.game(levelId: level.id, heroId: selectedHero.id))
                         } label: {
                             HStack {
                                 PixelIcon.bolt
@@ -113,9 +117,6 @@ struct LevelDetailView: View {
                             .overlay(ShopPixelShape(cut: 8).stroke(.white.opacity(0.7), lineWidth: 3))
                             .shadow(color: .red.opacity(0.45), radius: 10)
                         }
-                        .simultaneousGesture(TapGesture().onEnded {
-                            SoundEngine.shared.uiTap()
-                        })
                     }
                     .frame(width: geo.size.width * 0.36)
                     .padding(14)
@@ -195,11 +196,17 @@ struct LevelDetailView: View {
                 .padding(.top, 54)
 
                 // Game-designed back button, top-left over everything.
+                // Always lands on the map: briefings sit on the map, and
+                // Continue swaps (never stacks) the finished battle away.
                 VStack {
                     HStack {
                         Button {
                             SoundEngine.shared.uiTap()
-                            dismiss()
+                            if !path.isEmpty {
+                                path.removeLast()
+                            } else {
+                                dismiss()
+                            }
                         } label: {
                             HStack(spacing: 7) {
                                 PixelIcon.back
@@ -363,6 +370,6 @@ private struct GunShopCard: View {
 
 #Preview {
     NavigationStack {
-        LevelDetailView(level: CampaignData.levels[0])
+        LevelDetailView(level: CampaignData.levels[0], path: .constant(NavigationPath()))
     }
 }

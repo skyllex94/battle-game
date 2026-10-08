@@ -44,16 +44,16 @@ final class GameScene: SKScene {
     /// Desperation trickle for fully-starved guns (mag 0 + reserve 0).
     private var regenAccumulator: TimeInterval = 0
 
-    /// Switches to the next UNLOCKED hero gun (locked guns are skipped).
+    /// Switches to the next LOADOUT hero gun (slot order, wraps around).
     /// Called by the HUD weapon button; the swapped gun fires instantly.
     /// A swapped-in gun with an empty mag starts reloading on the spot.
     /// Single-gun loadouts stay put (button hides in that case anyway).
     @discardableResult
     func cycleWeapon() -> HeroWeapon {
-        let unlocked = GunLocker.unlockedGuns
-        guard unlocked.count > 1,
-              let idx = unlocked.firstIndex(of: heroWeapon) else { return heroWeapon }
-        heroWeapon = unlocked[(idx + 1) % unlocked.count]
+        let slotted = LoadoutStore.loadout
+        guard slotted.count > 1,
+              let idx = slotted.firstIndex(of: heroWeapon) else { return heroWeapon }
+        heroWeapon = slotted[(idx + 1) % slotted.count]
         hero?.setWeapon(heroWeapon)
         fireCooldown = 0
         if mags[heroWeapon.rawValue] == 0 { startReload(gun: heroWeapon) }
@@ -552,6 +552,8 @@ final class GameScene: SKScene {
 
     private func updateShooting(dt: TimeInterval) {
         guard aimTouch != nil, hero.alive else { return }
+        // Bone-dry gun (mag 0 + reserve 0): hand a loaded gun over first.
+        autoSwitchWhenDry()
         // This gun is mid-reload, or the mag is dry (reload kicks in via
         // updateReload): hold fire until rounds are back.
         guard reloadingWeapon != heroWeapon,
@@ -560,6 +562,33 @@ final class GameScene: SKScene {
         guard fireCooldown <= 0 else { return }
         fireCooldown = heroWeapon.cooldown
         fireBullet()
+    }
+
+    /// Auto-switch: when the active gun is bone-dry (mag 0 + reserve 0 —
+    /// Blaster never qualifies), swaps to the next LOADED loadout gun in
+    /// slot order with wrap. A swapped-in gun with an empty mag starts
+    /// reloading on the spot. Returns false when nothing else is loaded
+    /// (the desperation trickle feeds the guns instead).
+    @discardableResult
+    private func autoSwitchWhenDry() -> Bool {
+        let i = heroWeapon.rawValue
+        guard !heroWeapon.hasInfiniteAmmo,
+              mags[i] == 0, reserves[i] == 0 else { return false }
+        let slotted = LoadoutStore.loadout
+        guard slotted.count > 1,
+              let idx = slotted.firstIndex(of: heroWeapon) else { return false }
+        for step in 1...slotted.count {
+            let gun = slotted[(idx + step) % slotted.count]
+            if gun.hasInfiniteAmmo || mags[gun.rawValue] > 0 || reserves[gun.rawValue] > 0 {
+                heroWeapon = gun
+                hero?.setWeapon(gun)
+                fireCooldown = 0
+                if mags[gun.rawValue] == 0 { startReload(gun: gun) }
+                SoundEngine.shared.weaponSwitch()
+                return true
+            }
+        }
+        return false
     }
 
     /// Reload sim: finishes the active reload, auto-reloads the dry active
@@ -598,27 +627,49 @@ final class GameScene: SKScene {
     }
 
     private func fireBullet() {
-        mags[heroWeapon.rawValue] -= 1 // one trigger pull = one round
-        SoundEngine.shared.heroShot(heroWeapon, at: hero.position.x)
+        let gun = heroWeapon
+        mags[gun.rawValue] -= 1 // one trigger pull = one round
+        SoundEngine.shared.heroShot(gun, at: hero.position.x)
         let muzzle = muzzlePosition(for: aimDir)
         let baseAngle = atan2(aimDir.dy, aimDir.dx)
-        let pellets = heroWeapon.pelletCount
+        let pellets = gun.pelletCount
         for k in 0..<pellets {
             // Symmetric fan: e.g. 3 pellets at -spread, 0, +spread.
-            let offset = (CGFloat(k) - CGFloat(pellets - 1) / 2) * heroWeapon.spread
+            let offset = (CGFloat(k) - CGFloat(pellets - 1) / 2) * gun.spread
             let a = baseAngle + offset
             let dir = CGVector(dx: cos(a), dy: sin(a))
-            let bolt = ProjectileFactory.makeBolt()
-            bolt.setScale(heroWeapon.boltScale)
-            bolt.position = muzzle
-            bolt.zRotation = a
-            world.addChild(bolt)
-            projectiles.append(Projectile(node: bolt, dir: dir, life: heroWeapon.bulletLife,
-                                          speed: heroWeapon.bulletSpeed, damage: heroWeapon.damage,
-                                          team: .neutral))
+            // Grenades arc from the aim line; rockets/weaves leave straight.
+            var launchDir = dir
+            var launchPos = muzzle
+            if gun.isGrenade {
+                let poor = CGVector(dx: dir.dx, dy: max(dir.dy, 0.25))
+                let len = max(0.01, hypot(poor.dx, poor.dy))
+                launchDir = CGVector(dx: poor.dx / len, dy: poor.dy / len)
+                launchPos = CGPoint(x: muzzle.x, y: max(muzzle.y, Balance.groundTopY + 20))
+            }
+            let node = ProjectileFactory.heroProjectile(gun)
+            node.position = launchPos
+            node.zRotation = atan2(launchDir.dy, launchDir.dx)
+            world.addChild(node)
+            var shell = Projectile(node: node, dir: launchDir, life: gun.bulletLife,
+                                   speed: gun.launchSpeed, damage: gun.damage,
+                                   team: .neutral)
+            shell.thrust = gun.thrustAccel
+            shell.gravity = gun.gravityPull
+            shell.blast = gun.blastRadius
+            shell.fuse = gun.fuseTime
+            shell.bounces = gun.bounceCount
+            shell.weaveAmp = gun.weaveAmp
+            shell.weaveFreq = gun.weaveFreq
+            shell.weavePhase = Double(k) * 1.3 // fan shards snake out of phase
+            shell.trail = gun.trail
+            projectiles.append(shell)
         }
         shotsFired += 1
         let flash = ProjectileFactory.makeMuzzleFlash()
+        if gun.blastRadius > 0 {
+            flash.setScale(1 + gun.blastRadius / 100)
+        }
         flash.position = muzzle
         world.addChild(flash)
     }
@@ -1291,20 +1342,92 @@ final class GameScene: SKScene {
         var alive: [Projectile] = []
         alive.reserveCapacity(projectiles.count)
         for var p in projectiles {
+            // Grenade fuse ticks from the muzzle.
+            if let fuse = p.fuse {
+                p.fuse = fuse - dt
+                if p.fuse! <= 0 {
+                    explode(p, at: p.node.position)
+                    p.node.removeFromParent()
+                    continue
+                }
+            }
+            // Rocket motors accelerate along the flight line.
+            if p.thrust > 0 {
+                p.speed = min(p.speed + p.thrust * CGFloat(dt), 1600)
+            }
+            // Gravity bends the velocity vector downward (grenade arcs).
+            if p.gravity > 0 {
+                var vx = p.dir.dx * p.speed, vy = p.dir.dy * p.speed
+                vy -= p.gravity * CGFloat(dt)
+                let s = max(1, hypot(vx, vy))
+                p.speed = min(s, 1700)
+                p.dir = CGVector(dx: vx / s, dy: vy / s)
+                p.node.zRotation = atan2(vy, vx)
+            }
             let step = p.speed * CGFloat(dt)
             p.node.position.x += p.dir.dx * step
             p.node.position.y += p.dir.dy * step
+            // Choir weave: snake perpendicular to the flight line.
+            if p.weaveAmp > 0 {
+                p.weavePhase += p.weaveFreq * dt
+                let wob = cos(p.weavePhase) * p.weaveAmp * CGFloat(p.weaveFreq) * CGFloat(dt)
+                p.node.position.x += -p.dir.dy * wob
+                p.node.position.y += p.dir.dx * wob
+            }
+            // Flight trails (smoke/embers shed on a cadence).
+            if p.trail != .none {
+                p.trailAcc += dt
+                if p.trailAcc >= 0.06 {
+                    p.trailAcc = 0
+                    let mote = ProjectileFactory.makeTrailPuff(p.trail)
+                    mote.position = p.node.position
+                    world.addChild(mote)
+                }
+            }
             p.life -= dt
             if p.life <= 0 {
-                p.node.removeFromParent() // expired mid-air: just fade, no puff
+                if p.blast > 0 {
+                    explode(p, at: p.node.position)
+                }
+                p.node.removeFromParent() // expired mid-air: no plain puff
                 continue
             }
             if hitsGroundOrPlatform(p.node.position) {
-                impact(at: p.node.position)
+                // Out of the lane sideways: always gone, never bounces.
+                if p.node.position.x < 0 || p.node.position.x > Balance.levelWidth {
+                    p.node.removeFromParent()
+                    continue
+                }
+                // Grenades skip off turf (damped vertical flip + a hop).
+                if p.bounces > 0, p.team == .neutral {
+                    p.bounces -= 1
+                    p.dir = CGVector(dx: p.dir.dx, dy: abs(p.dir.dy) * 0.45 + 0.05)
+                    let s = max(0.01, hypot(p.dir.dx, p.dir.dy))
+                    p.dir = CGVector(dx: p.dir.dx / s, dy: p.dir.dy / s)
+                    p.speed *= 0.7
+                    p.node.zRotation = atan2(p.dir.dy, p.dir.dx)
+                    p.node.position.y = max(p.node.position.y, Balance.groundTopY + 6)
+                    impact(at: p.node.position)
+                    alive.append(p)
+                    continue
+                }
+                if p.blast > 0 {
+                    explode(p, at: p.node.position)
+                } else {
+                    impact(at: p.node.position)
+                }
                 p.node.removeFromParent()
                 continue
             }
-            if hitEnemy(p) {
+            // Blast shells detonate on contact (AoE covers the victim);
+            // plain bolts deal their point damage.
+            if p.blast > 0 {
+                if touchesFoe(p) {
+                    explode(p, at: p.node.position)
+                    p.node.removeFromParent()
+                    continue
+                }
+            } else if hitEnemy(p) {
                 impact(at: p.node.position)
                 p.node.removeFromParent()
                 continue
@@ -1312,6 +1435,55 @@ final class GameScene: SKScene {
             alive.append(p)
         }
         projectiles = alive
+    }
+
+    /// Contact-only foe test for blast shells (no point damage — the
+    /// detonation's AoE covers the victim). Mirrors hitEnemy's geometry.
+    private func touchesFoe(_ p: Projectile) -> Bool {
+        guard p.team == .neutral || p.team == .player else { return false }
+        let pt = p.node.position
+        for e in enemies where e.alive {
+            if abs(pt.x - e.position.x) < e.size.width / 2 + 22,
+               abs(pt.y - e.position.y) < e.size.height / 2 + 8 {
+                return true
+            }
+        }
+        if towerIndex(at: pt, team: .enemy) != nil { return true }
+        if baseIndex(at: pt, team: .enemy) != nil { return true }
+        return false
+    }
+
+    /// Detonation: shockwave FX + boom scaled to the blast, full damage to
+    /// every enemy marcher in the radius, splash to towers/HQ in reach.
+    private func explode(_ p: Projectile, at pos: CGPoint) {
+        let r = p.blast
+        let boom = ProjectileFactory.makeExplosion(radius: r)
+        boom.position = pos
+        world.addChild(boom)
+        if r >= 80 {
+            SoundEngine.shared.explosionBig(at: pos.x)
+        } else {
+            SoundEngine.shared.impact(at: pos.x)
+        }
+        guard p.team == .neutral || p.team == .player else { return }
+        let fromHero = p.team == .neutral
+        for e in enemies where e.alive {
+            if hypot(e.position.x - pos.x, e.position.y - pos.y) <= r + e.size.width / 2 {
+                damageMarcher(e, amount: p.damage, fromHero: fromHero)
+            }
+        }
+        for (i, t) in towers.enumerated() where t.team == .enemy && t.alive {
+            if hypot(t.node.position.x - pos.x,
+                     (Balance.groundTopY + 100) - pos.y) <= r + 62 {
+                damageTower(at: i, amount: p.damage)
+            }
+        }
+        if let base = bases.first(where: { $0.team == .enemy }), base.alive,
+           let idx = bases.firstIndex(where: { $0.node === base.node }),
+           hypot(base.node.position.x - pos.x,
+                 (Balance.groundTopY + 100) - pos.y) <= r + 110 {
+            damageBase(at: idx, amount: p.damage)
+        }
     }
 
     /// Team-aware hit test. Hero (neutral) + ally (player) bolts hit marchers,
@@ -1370,27 +1542,35 @@ final class GameScene: SKScene {
         for e in enemies where e.alive {
             if abs(pt.x - e.position.x) < e.size.width / 2 + 22,
                abs(pt.y - e.position.y) < e.size.height / 2 + 8 {
-                e.hp = max(0, e.hp - amount)
-                e.refreshHPBar()
-                if !e.alive {
-                    money += e.reward
-                    if fromHero {
-                        let i = heroWeapon.rawValue
-                        reserves[i] = min(reserves[i] + heroWeapon.killAmmo,
-                                          heroWeapon.startReserve * 2)
-                    }
-                    maybeSpawnDrop(at: e.position)
-                    let puff = ProjectileFactory.makeImpactPuff()
-                    puff.position = e.position
-                    puff.setScale(1.6)
-                    world.addChild(puff)
-                    e.removeFromParent()
-                    SoundEngine.shared.enemyDown(at: e.position.x)
-                }
+                damageMarcher(e, amount: amount, fromHero: fromHero)
                 return true
             }
         }
         return false
+    }
+
+    /// Shared marcher damage (bolts, blasts, axes): drains HP, pays bounty
+    /// + ammo + drops + death FX on the kill. Removal from the field
+    /// happens in updateEnemies' sweep.
+    private func damageMarcher(_ e: EnemyNode, amount: CGFloat, fromHero: Bool) {
+        guard e.alive else { return }
+        e.hp = max(0, e.hp - amount)
+        e.refreshHPBar()
+        if !e.alive {
+            money += e.reward
+            if fromHero {
+                let i = heroWeapon.rawValue
+                reserves[i] = min(reserves[i] + heroWeapon.killAmmo,
+                                  heroWeapon.startReserve * 2)
+            }
+            maybeSpawnDrop(at: e.position)
+            let puff = ProjectileFactory.makeImpactPuff()
+            puff.position = e.position
+            puff.setScale(1.6)
+            world.addChild(puff)
+            e.removeFromParent()
+            SoundEngine.shared.enemyDown(at: e.position.x)
+        }
     }
 
     /// Point-in-tower test for one team's alive towers.

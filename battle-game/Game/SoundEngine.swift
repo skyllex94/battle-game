@@ -62,6 +62,14 @@ final class SoundEngine {
         case .blaster: play(.blaster, volume: 0.50, at: x)
         case .scatter: play(.scatter, volume: 0.55, at: x)
         case .cannon: play(.cannon, volume: 0.85, at: x)
+        // New guns reuse the nearest existing voice by feel: rapid guns
+        // crack, rails/siege boom. (Dedicated synths can land later.)
+        case .repeater, .shredder, .hornet, .tempest, .requiem:
+            play(.scatter, volume: 0.55, at: x)
+        case .piercer, .sunder:
+            play(.blaster, volume: 0.55, at: x)
+        case .lancer, .mauler, .nova, .oblivion:
+            play(.cannon, volume: 0.85, at: x)
         }
     }
 

@@ -67,6 +67,17 @@ enum PixelHeroArt {
         case .blaster: return imageCache["gun-blaster"] ?? UIImage()
         case .scatter: return imageCache["gun-scatter"] ?? UIImage()
         case .cannon: return imageCache["gun-cannon"] ?? UIImage()
+        case .repeater: return imageCache["gun-repeater"] ?? UIImage()
+        case .piercer: return imageCache["gun-piercer"] ?? UIImage()
+        case .shredder: return imageCache["gun-shredder"] ?? UIImage()
+        case .sunder: return imageCache["gun-sunder"] ?? UIImage()
+        case .hornet: return imageCache["gun-hornet"] ?? UIImage()
+        case .lancer: return imageCache["gun-lancer"] ?? UIImage()
+        case .tempest: return imageCache["gun-tempest"] ?? UIImage()
+        case .mauler: return imageCache["gun-mauler"] ?? UIImage()
+        case .nova: return imageCache["gun-nova"] ?? UIImage()
+        case .requiem: return imageCache["gun-requiem"] ?? UIImage()
+        case .oblivion: return imageCache["gun-oblivion"] ?? UIImage()
         }
     }
 
@@ -234,6 +245,17 @@ enum PixelHeroArt {
         case .blaster: return 32
         case .scatter: return 30
         case .cannon: return 33
+        case .repeater: return 32
+        case .piercer: return 34
+        case .shredder: return 30
+        case .sunder: return 31
+        case .hornet: return 29
+        case .lancer: return 35
+        case .tempest: return 31
+        case .mauler: return 30
+        case .nova: return 32
+        case .requiem: return 33
+        case .oblivion: return 35
         }
     }
 
@@ -266,6 +288,17 @@ enum PixelHeroArt {
         case .blaster: return blasterTex
         case .scatter: return scatterTex
         case .cannon: return cannonTex
+        case .repeater: return repeaterTex
+        case .piercer: return piercerTex
+        case .shredder: return shredderTex
+        case .sunder: return sunderTex
+        case .hornet: return hornetTex
+        case .lancer: return lancerTex
+        case .tempest: return tempestTex
+        case .mauler: return maulerTex
+        case .nova: return novaTex
+        case .requiem: return requiemTex
+        case .oblivion: return oblivionTex
         }
     }
 
@@ -273,14 +306,22 @@ enum PixelHeroArt {
         // Stock.
         fill(cg, 1, 5, 8, 5, metalD)
         fill(cg, 1, 5, 8, 1, metalM)
+        // Top sight nub.
+        fill(cg, 12, 3, 2, 2, metalD)
+        fill(cg, 12, 3, 2, 1, metalL)
         // Slim barrel + top highlight.
         fill(cg, 9, 5, 21, 4, outline)
         fill(cg, 10, 6, 20, 2, metalD)
         fill(cg, 10, 6, 20, 1, metalM)
-        // Cyan energy stripe + yellow muzzle tip.
-        fill(cg, 14, 7, 7, 1, tank)
+        // Hot energy core + spark.
+        fill(cg, 14, 6, 7, 2, tank)
+        fill(cg, 16, 6, 2, 1, .white)
+        // Gold muzzle crown + yellow mouth.
+        fill(cg, 29, 5, 1, 4, goldD)
         fill(cg, 30, 5, 2, 4, yellow)
         fill(cg, 30, 5, 2, 1, .white)
+        // Brass underbarrel weight.
+        fill(cg, 20, 14, 3, 2, goldD)
         // Arms over the stock, gloves wrapping the gun.
         drawGunArms(cg)
     }
@@ -289,6 +330,10 @@ enum PixelHeroArt {
         // Stock.
         fill(cg, 1, 5, 8, 5, metalD)
         fill(cg, 1, 5, 8, 1, metalM)
+        // Top sight bridge + nubs.
+        fill(cg, 12, 1, 8, 2, metalD)
+        fill(cg, 13, 0, 2, 1, metalM)
+        fill(cg, 18, 0, 2, 1, metalM)
         fill(cg, 15, 10, 5, 2, goldD) // pump
         // Triple barrels.
         fill(cg, 9, 3, 19, 8, outline)
@@ -297,9 +342,13 @@ enum PixelHeroArt {
         fill(cg, 10, 7, 18, 2, metalD)
         fill(cg, 10, 7, 18, 1, metalL)
         fill(cg, 10, 10, 18, 1, metalD)
-        // Wide orange muzzle mouth.
+        // Belly pump grip below the arms.
+        fill(cg, 15, 14, 5, 3, outline)
+        fill(cg, 16, 15, 3, 1, goldD)
+        // Wide orange muzzle mouth + inner slit.
         fill(cg, 28, 3, 2, 8, orange)
-        fill(cg, 28, 3, 2, 1, .white)
+        fill(cg, 28, 3, 2, 2, .white)
+        fill(cg, 29, 5, 1, 4, suitD)
         drawGunArms(cg)
     }
 
@@ -307,19 +356,335 @@ enum PixelHeroArt {
         // Heavy stock.
         fill(cg, 0, 4, 9, 6, metalD)
         fill(cg, 0, 4, 9, 1, metalM)
-        // Scope hump.
-        fill(cg, 12, 2, 6, 3, metalD)
-        fill(cg, 13, 2, 2, 1, eye)
+        // Big scope + glinting eye.
+        fill(cg, 11, 1, 8, 4, metalD)
+        fill(cg, 12, 2, 6, 1, metalL)
+        fill(cg, 13, 2, 2, 2, eye)
+        fill(cg, 13, 2, 1, 1, .white)
         // Thick barrel + highlight.
         fill(cg, 9, 5, 20, 5, outline)
         fill(cg, 10, 6, 19, 3, metalD)
         fill(cg, 10, 6, 19, 1, metalL)
-        // Red muzzle rings + heavy mouth.
+        // Hazard band on the barrel.
+        fill(cg, 16, 8, 2, 2, goldD)
+        fill(cg, 18, 8, 2, 2, suitD)
+        fill(cg, 20, 8, 2, 2, goldD)
+        // Red muzzle rings + heavy mouth with a tall core.
         fill(cg, 23, 5, 2, 5, goldD)
         fill(cg, 27, 4, 2, 7, red)
         fill(cg, 30, 4, 3, 7, outline)
         fill(cg, 31, 5, 1, 5, suitD)
-        fill(cg, 31, 5, 1, 1, red)
+        fill(cg, 31, 5, 1, 3, red)
+        drawGunArms(cg)
+    }
+
+    // Tier accent inks (later guns burn brighter).
+    private static let plasma = UIColor(red: 0.35, green: 1.0, blue: 0.5, alpha: 1)
+    private static let violet = UIColor(red: 0.7, green: 0.45, blue: 1.0, alpha: 1)
+
+    private static let repeaterTex: SKTexture = render(w: gunW, h: gunH, key: "gun-repeater") { cg in
+        // Stock.
+        fill(cg, 1, 5, 8, 5, metalD)
+        fill(cg, 1, 5, 8, 1, metalM)
+        // Top ammo drum + cyan round dot.
+        fill(cg, 12, 0, 7, 5, outline)
+        fill(cg, 13, 1, 5, 3, metalM)
+        fill(cg, 13, 1, 5, 1, metalL)
+        fill(cg, 15, 2, 2, 1, tank)
+        // Slim twin barrels + cyan twin stripes.
+        fill(cg, 9, 4, 21, 3, outline)
+        fill(cg, 10, 5, 20, 1, metalD)
+        fill(cg, 14, 5, 8, 1, tank)
+        fill(cg, 9, 8, 21, 3, outline)
+        fill(cg, 10, 9, 20, 1, metalM)
+        fill(cg, 14, 9, 8, 1, tank)
+        // Brass ejector below the arms.
+        fill(cg, 20, 14, 3, 3, outline)
+        fill(cg, 21, 15, 1, 1, goldD)
+        // Twin yellow mouths.
+        fill(cg, 30, 4, 2, 3, yellow)
+        fill(cg, 30, 8, 2, 3, yellow)
+        fill(cg, 30, 4, 2, 1, .white)
+        fill(cg, 30, 8, 2, 1, .white)
+        drawGunArms(cg)
+    }
+
+    private static let piercerTex: SKTexture = render(w: gunW, h: gunH, key: "gun-piercer") { cg in
+        // Stock.
+        fill(cg, 1, 5, 8, 5, metalD)
+        fill(cg, 1, 5, 8, 1, metalM)
+        // Belly power cell with a hot core.
+        fill(cg, 12, 14, 6, 3, outline)
+        fill(cg, 13, 15, 4, 1, goldD)
+        fill(cg, 14, 15, 2, 1, eye)
+        // Needle rail + full-length hot slit with white dashes.
+        fill(cg, 9, 6, 23, 2, outline)
+        fill(cg, 10, 6, 22, 1, tank)
+        fill(cg, 12, 6, 2, 1, .white)
+        fill(cg, 20, 6, 2, 1, .white)
+        fill(cg, 28, 6, 1, 1, .white)
+        // Tall teal rail fins.
+        fill(cg, 14, 2, 2, 4, tank)
+        fill(cg, 20, 2, 2, 4, tank)
+        fill(cg, 26, 2, 2, 4, tank)
+        fill(cg, 14, 2, 2, 1, .white)
+        fill(cg, 20, 2, 2, 1, .white)
+        fill(cg, 26, 2, 2, 1, .white)
+        // Gold needle tip + sparkles.
+        fill(cg, 32, 6, 2, 2, eye)
+        fill(cg, 32, 6, 2, 1, .white)
+        fill(cg, 31, 5, 1, 1, .white)
+        fill(cg, 31, 8, 1, 1, .white)
+        drawGunArms(cg)
+    }
+
+    private static let shredderTex: SKTexture = render(w: gunW, h: gunH, key: "gun-shredder") { cg in
+        // Big top ammo box + brass-tipped belt.
+        fill(cg, 8, 0, 12, 4, outline)
+        fill(cg, 9, 1, 10, 2, metalM)
+        fill(cg, 9, 1, 10, 1, orange)
+        fill(cg, 10, 2, 1, 1, yellow)
+        fill(cg, 13, 2, 1, 1, yellow)
+        fill(cg, 16, 2, 1, 1, yellow)
+        // Rotary triple cluster.
+        fill(cg, 9, 5, 19, 3, outline)
+        fill(cg, 10, 6, 18, 1, metalD)
+        fill(cg, 9, 9, 19, 3, outline)
+        fill(cg, 10, 10, 18, 1, metalM)
+        fill(cg, 9, 13, 19, 3, outline)
+        fill(cg, 10, 14, 18, 1, metalD)
+        // Side spin motor with a hot dot.
+        fill(cg, 20, 15, 5, 3, outline)
+        fill(cg, 21, 16, 3, 1, metalM)
+        fill(cg, 22, 16, 1, 1, orange)
+        // Triple orange mouths, all glinting.
+        fill(cg, 28, 5, 2, 3, orange)
+        fill(cg, 28, 9, 2, 3, orange)
+        fill(cg, 28, 13, 2, 3, orange)
+        fill(cg, 28, 5, 2, 1, .white)
+        fill(cg, 28, 9, 2, 1, .white)
+        fill(cg, 28, 13, 2, 1, .white)
+        drawGunArms(cg)
+    }
+
+    private static let sunderTex: SKTexture = render(w: gunW, h: gunH, key: "gun-sunder") { cg in
+        // Heavy stock.
+        fill(cg, 0, 4, 9, 6, metalD)
+        fill(cg, 0, 4, 9, 1, metalM)
+        // Top barrel spikes.
+        fill(cg, 12, 2, 2, 2, metalM)
+        fill(cg, 17, 2, 2, 2, metalM)
+        fill(cg, 22, 1, 2, 3, metalM)
+        // Twin heavy barrels + gold rings.
+        fill(cg, 9, 4, 20, 3, outline)
+        fill(cg, 10, 5, 19, 1, metalD)
+        fill(cg, 24, 4, 2, 3, goldD)
+        fill(cg, 9, 8, 20, 3, outline)
+        fill(cg, 10, 9, 19, 1, metalM)
+        fill(cg, 24, 8, 2, 3, goldD)
+        // Glowing vent between the barrels.
+        fill(cg, 15, 7, 5, 1, outline)
+        fill(cg, 16, 7, 3, 1, orange)
+        // Twin yellow mouths.
+        fill(cg, 29, 4, 2, 3, yellow)
+        fill(cg, 29, 8, 2, 3, yellow)
+        fill(cg, 29, 4, 2, 1, .white)
+        fill(cg, 29, 8, 2, 1, .white)
+        drawGunArms(cg)
+    }
+
+    private static let hornetTex: SKTexture = render(w: gunW, h: gunH, key: "gun-hornet") { cg in
+        // Stock + rear stinger.
+        fill(cg, 1, 5, 8, 5, metalD)
+        fill(cg, 1, 5, 8, 1, metalM)
+        fill(cg, 4, 1, 3, 3, metalD)
+        fill(cg, 4, 1, 2, 1, plasma)
+        // Hive comb rail with plasma cells.
+        fill(cg, 10, 3, 16, 2, metalD)
+        fill(cg, 12, 3, 2, 1, plasma)
+        fill(cg, 16, 3, 2, 1, plasma)
+        fill(cg, 20, 3, 2, 1, plasma)
+        fill(cg, 24, 3, 1, 1, plasma)
+        // Compact quad body + green stripes.
+        fill(cg, 9, 5, 17, 7, outline)
+        fill(cg, 10, 6, 16, 5, metalD)
+        fill(cg, 10, 6, 16, 1, metalM)
+        fill(cg, 13, 8, 6, 1, plasma)
+        // Belly stinger below the arms.
+        fill(cg, 14, 14, 2, 3, outline)
+        fill(cg, 14, 15, 2, 1, plasma)
+        // Quad plasma mouths + crown glow.
+        fill(cg, 26, 5, 3, 2, plasma)
+        fill(cg, 26, 9, 3, 2, plasma)
+        fill(cg, 26, 5, 3, 1, .white)
+        fill(cg, 26, 9, 3, 1, .white)
+        fill(cg, 26, 3, 3, 1, plasma)
+        drawGunArms(cg)
+    }
+
+    private static let lancerTex: SKTexture = render(w: gunW, h: gunH, key: "gun-lancer") { cg in
+        // Stock.
+        fill(cg, 1, 5, 8, 5, metalD)
+        fill(cg, 1, 5, 8, 1, metalM)
+        // War pennant on a pole.
+        fill(cg, 20, 1, 1, 4, metalM)
+        fill(cg, 21, 1, 5, 3, red)
+        fill(cg, 24, 2, 2, 1, suitD)
+        // Spear barrel + silver rings + gold filigree.
+        fill(cg, 9, 6, 24, 2, outline)
+        fill(cg, 10, 6, 23, 1, metalL)
+        fill(cg, 10, 7, 23, 1, goldD)
+        fill(cg, 16, 5, 2, 4, metalL)
+        fill(cg, 22, 5, 2, 4, metalL)
+        // Long bayonet under the tip.
+        fill(cg, 28, 8, 6, 1, metalL)
+        fill(cg, 33, 8, 1, 1, .white)
+        // Gold muzzle eye.
+        fill(cg, 33, 5, 2, 4, outline)
+        fill(cg, 33, 6, 2, 2, eye)
+        fill(cg, 33, 6, 2, 1, .white)
+        drawGunArms(cg)
+    }
+
+    private static let tempestTex: SKTexture = render(w: gunW, h: gunH, key: "gun-tempest") { cg in
+        // Stock.
+        fill(cg, 1, 5, 8, 5, metalD)
+        fill(cg, 1, 5, 8, 1, metalM)
+        // Lightning zigzag above the block.
+        fill(cg, 14, 1, 2, 1, .white)
+        fill(cg, 16, 0, 3, 1, .white)
+        fill(cg, 20, 1, 2, 1, .white)
+        // Triple storm barrels.
+        fill(cg, 9, 4, 20, 8, outline)
+        fill(cg, 10, 5, 19, 2, metalD)
+        fill(cg, 10, 5, 19, 1, metalM)
+        fill(cg, 10, 8, 19, 2, metalD)
+        fill(cg, 10, 8, 19, 1, metalL)
+        // Twin violet storm tanks with glinting caps.
+        fill(cg, 13, 2, 3, 11, outline)
+        fill(cg, 14, 3, 1, 9, violet)
+        fill(cg, 14, 3, 1, 2, .white)
+        fill(cg, 21, 2, 3, 11, outline)
+        fill(cg, 22, 3, 1, 9, violet)
+        fill(cg, 22, 3, 1, 2, .white)
+        // Wide orange storm mouth.
+        fill(cg, 29, 4, 2, 8, orange)
+        fill(cg, 29, 4, 2, 1, .white)
+        drawGunArms(cg)
+    }
+
+    private static let maulerTex: SKTexture = render(w: gunW, h: gunH, key: "gun-mauler") { cg in
+        // Heavy stock.
+        fill(cg, 0, 4, 9, 6, metalD)
+        fill(cg, 0, 4, 9, 1, metalM)
+        // Top armor spikes.
+        fill(cg, 12, 1, 2, 2, metalD)
+        fill(cg, 17, 1, 2, 2, metalD)
+        fill(cg, 22, 1, 2, 2, metalD)
+        fill(cg, 12, 1, 2, 1, metalL)
+        fill(cg, 17, 1, 2, 1, metalL)
+        fill(cg, 22, 1, 2, 1, metalL)
+        // Fat quad body + gold bands.
+        fill(cg, 9, 3, 19, 10, outline)
+        fill(cg, 10, 4, 18, 8, metalD)
+        fill(cg, 10, 4, 18, 1, metalL)
+        fill(cg, 15, 3, 2, 10, goldD)
+        fill(cg, 21, 3, 2, 10, goldD)
+        // Heat halo + quad red-hot mouths with white cores.
+        fill(cg, 24, 2, 6, 1, yellow)
+        fill(cg, 27, 4, 3, 3, red)
+        fill(cg, 27, 9, 3, 3, red)
+        fill(cg, 28, 5, 1, 1, .white)
+        fill(cg, 28, 10, 1, 1, .white)
+        fill(cg, 27, 7, 3, 2, orange)
+        drawGunArms(cg)
+    }
+
+    private static let novaTex: SKTexture = render(w: gunW, h: gunH, key: "gun-nova") { cg in
+        // Stock.
+        fill(cg, 1, 5, 8, 5, metalD)
+        fill(cg, 1, 5, 8, 1, metalM)
+        // Sun rays around the chamber.
+        fill(cg, 13, 1, 2, 2, gold)
+        fill(cg, 17, 0, 2, 2, gold)
+        fill(cg, 21, 1, 2, 2, gold)
+        fill(cg, 13, 15, 2, 2, goldD)
+        fill(cg, 17, 16, 2, 2, goldD)
+        fill(cg, 21, 15, 2, 2, goldD)
+        // Rising heat sparks.
+        fill(cg, 15, 2, 1, 1, orange)
+        fill(cg, 19, 1, 1, 1, orange)
+        // Sun chamber + burning core.
+        fill(cg, 12, 4, 10, 10, outline)
+        fill(cg, 13, 5, 8, 8, goldD)
+        fill(cg, 15, 7, 4, 4, yellow)
+        fill(cg, 16, 7, 2, 2, .white)
+        // Short fat barrel + dawn mouth.
+        fill(cg, 22, 6, 8, 3, outline)
+        fill(cg, 23, 7, 7, 1, metalD)
+        fill(cg, 30, 6, 2, 3, orange)
+        fill(cg, 30, 6, 2, 1, .white)
+        drawGunArms(cg)
+    }
+
+    private static let requiemTex: SKTexture = render(w: gunW, h: gunH, key: "gun-requiem") { cg in
+        // Stock.
+        fill(cg, 1, 5, 8, 5, metalD)
+        fill(cg, 1, 5, 8, 1, armorL)
+        // Gold halo ring above the barrel.
+        fill(cg, 12, 1, 14, 2, gold)
+        fill(cg, 12, 1, 14, 1, .white)
+        fill(cg, 12, 1, 2, 4, goldD)
+        fill(cg, 24, 1, 2, 4, goldD)
+        // Five choir orbs with glints.
+        fill(cg, 11, 3, 2, 2, gold)
+        fill(cg, 15, 3, 2, 2, gold)
+        fill(cg, 19, 3, 2, 2, gold)
+        fill(cg, 23, 3, 2, 2, gold)
+        fill(cg, 27, 3, 2, 2, gold)
+        fill(cg, 11, 3, 1, 1, .white)
+        fill(cg, 15, 3, 1, 1, .white)
+        fill(cg, 19, 3, 1, 1, .white)
+        fill(cg, 23, 3, 1, 1, .white)
+        fill(cg, 27, 3, 1, 1, .white)
+        // Elegant white barrel.
+        fill(cg, 9, 6, 22, 2, outline)
+        fill(cg, 10, 6, 21, 1, armorL)
+        // White choir mouth in a gold ring.
+        fill(cg, 30, 5, 1, 4, goldD)
+        fill(cg, 31, 5, 2, 4, outline)
+        fill(cg, 31, 6, 2, 2, .white)
+        drawGunArms(cg)
+    }
+
+    private static let oblivionTex: SKTexture = render(w: gunW, h: gunH, key: "gun-oblivion") { cg in
+        // Massive stock.
+        fill(cg, 0, 3, 9, 8, metalD)
+        fill(cg, 0, 3, 9, 1, metalM)
+        // Five-spire war crown with a red gem.
+        fill(cg, 14, 1, 1, 2, gold)
+        fill(cg, 16, 0, 1, 3, gold)
+        fill(cg, 18, 0, 1, 3, gold)
+        fill(cg, 20, 0, 1, 3, gold)
+        fill(cg, 22, 1, 1, 2, gold)
+        fill(cg, 18, 2, 1, 1, red)
+        // Massive black-gold barrel + gold filigree.
+        fill(cg, 9, 4, 22, 7, outline)
+        fill(cg, 10, 5, 21, 5, metalD)
+        fill(cg, 10, 5, 21, 1, metalM)
+        fill(cg, 10, 9, 21, 1, goldD)
+        // Void core: violet band, black slit, red spark.
+        fill(cg, 12, 6, 16, 1, violet)
+        fill(cg, 14, 7, 12, 1, suitD)
+        fill(cg, 20, 7, 4, 1, red)
+        fill(cg, 27, 3, 4, 9, goldD)
+        fill(cg, 27, 4, 2, 7, red)
+        // Heavy dark mouth with red core + jagged teeth.
+        fill(cg, 32, 4, 1, 2, red)
+        fill(cg, 32, 9, 1, 2, red)
+        fill(cg, 33, 4, 2, 7, outline)
+        fill(cg, 33, 5, 2, 5, suitD)
+        fill(cg, 33, 6, 2, 3, red)
         drawGunArms(cg)
     }
 }

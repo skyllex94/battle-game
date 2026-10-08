@@ -8,6 +8,8 @@ import Combine // Timer publisher for joystick pan integration
 /// node to open its briefing (LevelDetailView).
 struct LevelMapView: View {
     @Environment(\.dismiss) private var dismiss
+    /// Campaign path (map pushes briefings by id).
+    @Binding var path: NavigationPath
     /// Free pan across the 3-page world, in full-bleed points (0 = west edge).
     @State private var panX: CGFloat = 0
     /// Full-bleed screen size (under notch/home bar), measured by the map layer.
@@ -53,7 +55,7 @@ struct LevelMapView: View {
                         }
                         .frame(width: fullW * 3, height: fullH)
                         ForEach(CampaignData.levels) { level in
-                            EmraNodeView(level: level)
+                            EmraNodeView(level: level, path: $path)
                                 .position(x: EmraMap.worldX(level.id) * fullW,
                                           y: EmraMap.nodeY(level.id) * fullH)
                         }
@@ -224,6 +226,7 @@ private struct MapJoystick: View {
 
 private struct EmraNodeView: View {
     let level: LevelDef
+    @Binding var path: NavigationPath
     @State private var tick = false
 
     private var unlocked: Bool { CampaignData.isUnlocked(level) }
@@ -233,10 +236,10 @@ private struct EmraNodeView: View {
     var body: some View {
         Group {
             if unlocked {
-                NavigationLink { LevelDetailView(level: level) } label: { content }
-                    .simultaneousGesture(TapGesture().onEnded {
-                        SoundEngine.shared.uiTap()
-                    })
+                Button {
+                    SoundEngine.shared.uiTap()
+                    path.append(Route.detail(levelId: level.id))
+                } label: { content }
             } else {
                 content.opacity(0.55).allowsHitTesting(false)
             }
@@ -861,5 +864,5 @@ enum EmraMap {
 }
 
 #Preview {
-    NavigationStack { LevelMapView() }
+    NavigationStack { LevelMapView(path: .constant(NavigationPath())) }
 }

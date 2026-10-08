@@ -28,4 +28,15 @@ enum Economy {
     /// War-chest rate (phase 2): diamonds buy starting gold. Deliberately
     /// worse than the sell rate (150g → 1💎) so there's no arbitrage loop.
     static let goldPerDiamond: Int = 50
+
+    /// Loadout slot prices (slots 3…6; slots 1–2 are free).
+    static func slotCost(_ slot: Int) -> Int {
+        switch slot {
+        case 3: return 100
+        case 4: return 250
+        case 5: return 500
+        case 6: return 1000
+        default: return 0
+        }
+    }
 }

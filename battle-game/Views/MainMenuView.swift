@@ -9,6 +9,10 @@ struct MainMenuView: View {
     @StateObject private var settings = SettingsStore()
     @State private var showSettings = false
     @State private var blink = false
+    /// Campaign navigation path: menu → map → briefing → battle.
+    /// Continue swaps the finished battle for the next briefing, so BACK
+    /// from a briefing always lands on the map.
+    @State private var path = NavigationPath()
 
     // One shared scene so the battlefield doesn't restart on redraw.
     private static let battleScene: MainMenuBattleScene = {
@@ -17,7 +21,7 @@ struct MainMenuView: View {
     }()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ZStack {
                 // Living battlefield, edge-to-edge: this layer ignores the
                 // safe area so there are no black bars at the notch / home
@@ -90,15 +94,13 @@ struct MainMenuView: View {
                         // Right: command buttons
                         VStack(spacing: 14) {
                             Spacer()
-                            NavigationLink {
-                                LevelMapView()
+                            Button {
+                                SoundEngine.shared.uiTap()
+                                path.append(Route.map)
                             } label: {
                                 PixelCommandButton(title: "CAMPAIGN", systemIcon: "flag.fill",
                                                    style: .war)
                             }
-                            .simultaneousGesture(TapGesture().onEnded {
-                                SoundEngine.shared.uiTap()
-                            })
                             Button { showSettings = true } label: {
                                 PixelCommandButton(title: "SETTINGS", systemIcon: "gearshape.fill",
                                                    style: .ghost)
@@ -128,6 +130,20 @@ struct MainMenuView: View {
             }
             .sheet(isPresented: $showSettings) {
                 SettingsSheet(settings: settings)
+            }
+            .navigationDestination(for: Route.self) { route in
+                switch route {
+                case .map:
+                    LevelMapView(path: $path)
+                case .detail(let id):
+                    LevelDetailView(level: CampaignData.levels.first(where: { $0.id == id })
+                        ?? CampaignData.levels[0], path: $path)
+                case .game(let lid, let hid):
+                    GameView(level: CampaignData.levels.first(where: { $0.id == lid })
+                        ?? CampaignData.levels[0],
+                             hero: HeroRoster.heroes.first(where: { $0.id == hid })
+                        ?? HeroRoster.selectedHero, path: $path)
+                }
             }
         }
     }

@@ -9,15 +9,19 @@ import UIKit // UIImage portraits from UnitPixelArt
 struct GameView: View {
     let level: LevelDef
     let hero: HeroDef
+    /// Campaign path. Continue swaps the finished battle for the next
+    /// briefing (releasing the scene); Map buttons pop back to the map.
+    @Binding var path: NavigationPath
 
     @Environment(\.dismiss) private var dismiss
 
     /// Builds the scene pinned to this level's battlefield layout (width,
     /// towers, theme) before anything reads Balance. The hero deploys with
     /// the level-screen gun pick (clamped to unlocked inside the scene).
-    init(level: LevelDef, hero: HeroDef) {
+    init(level: LevelDef, hero: HeroDef, path: Binding<NavigationPath>) {
         self.level = level
         self.hero = hero
+        _path = path
         Balance.active = Balance.layout(for: level.id)
         let gun = GunLocker.selectedGun
         _scene = State(initialValue: GameScene(size: CGSize(width: 1334,
@@ -38,11 +42,16 @@ struct GameView: View {
     @State private var winClearDiamonds = 0
     @State private var winLeftoverDiamonds = 0
     @State private var winWasRepeat = false
-    /// Animated diamond count-up (buttons unlock when it lands).
+    /// Animated diamond count-up (flight starts when it lands).
     @State private var winDiamondsShown = 0
     @State private var winCountDone = false
-    /// Continue pushes the next level's briefing onto the stack.
-    @State private var showNextLevel = false
+    /// Diamond flight to the HUD wallet (buttons unlock when it lands).
+    @State private var winFlyT: Double = 0
+    @State private var flyingDiamonds = false
+    @State private var flyCount = 5
+    @State private var winFlyDone = false
+    /// HUD wallet pop when the flight lands and fills it.
+    @State private var hudPop = false
     /// When the winning blow landed (wall clock). The card waits 2s while
     /// the battle keeps raging behind it.
     @State private var winDetectedAt: Date?
@@ -83,13 +92,6 @@ struct GameView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 Spacer(minLength: 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-
-            // Continue pushes the next level's briefing (hidden link).
-            if let next = nextLevel {
-                NavigationLink(destination: LevelDetailView(level: next),
-                               isActive: $showNextLevel) { EmptyView() }
-                    .hidden()
             }
 
             // Top command strip, glued to the screen edge like the army tabs
@@ -159,7 +161,7 @@ struct GameView: View {
                     }
                     PixelMenuButton(title: "Quit to Menu", style: .danger) {
                         SoundEngine.shared.uiTap()
-                        dismiss()
+                        path = NavigationPath()
                     }
                     Text("TAP OUTSIDE TO RESUME")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
@@ -211,9 +213,9 @@ struct GameView: View {
                             .foregroundStyle(.white)
                     }
                     .padding(.top, 2)
-                    // Diamond payout: clear reward + converted leftover gold
-                    // (dimmed tag on replays — repeats pay 30%). Counts up
-                    // with coin ticks; buttons unlock when it lands.
+                    // Diamond payout: clear reward + converted leftover gold.
+                    // Counts up with coin ticks, then flies up to the HUD
+                    // wallet; buttons unlock when the flight lands.
                     HStack(spacing: 6) {
                         PixelDiamondView()
                             .scaleEffect(winCountDone ? 1.0 : 1.25)
@@ -223,15 +225,8 @@ struct GameView: View {
                             .tracking(1)
                             .monospacedDigit()
                             .foregroundStyle(.cyan)
-                        if winWasRepeat {
-                            Text("REPLAY")
-                                .font(.system(size: 9, weight: .black, design: .monospaced))
-                                .tracking(1)
-                                .foregroundStyle(.black)
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(.gray)
-                        }
                     }
+                    .anchorPreference(key: WinDiamondsAnchorKey.self, value: .center) { $0 }
                     .padding(.top, 2)
                     Text("CLEAR \(winClearDiamonds) · GOLD \(winLeftoverDiamonds)")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
@@ -239,35 +234,34 @@ struct GameView: View {
                         .foregroundStyle(.white.opacity(0.5))
                     PixelMenuButton(title: "Play Again", style: .ghost) {
                         SoundEngine.shared.uiTap()
+                        resetWinState()
                         scene.resetLevel()
                         scene.heroInputX = moveX
                         scene.heroJumpHeld = jumpHeld
                         weapon = scene.heroWeapon
                         showWin = false
                         winDetectedAt = nil
-                        winClearDiamonds = 0
-                        winLeftoverDiamonds = 0
-                        winDiamondsShown = 0
-                        winCountDone = false
                         revivedThisRun = false
                         scene.isPaused = false
                     }
-                    .disabled(!winCountDone)
-                    .opacity(winCountDone ? 1 : 0.4)
+                    .disabled(!winFlyDone)
+                    .opacity(winFlyDone ? 1 : 0.4)
                     if nextLevel != nil {
                         PixelMenuButton(title: "Continue", style: .primary) {
                             SoundEngine.shared.uiTap()
-                            showNextLevel = true
+                            continueToNextLevel()
                         }
-                        .disabled(!winCountDone)
-                        .opacity(winCountDone ? 1 : 0.4)
+                        .disabled(!winFlyDone)
+                        .opacity(winFlyDone ? 1 : 0.4)
+                    } else {
+                        // Final level: Continue heads back to the map.
+                        PixelMenuButton(title: "Continue", style: .primary) {
+                            SoundEngine.shared.uiTap()
+                            popToMap()
+                        }
+                        .disabled(!winFlyDone)
+                        .opacity(winFlyDone ? 1 : 0.4)
                     }
-                    PixelMenuButton(title: "Map", style: .ghost) {
-                        SoundEngine.shared.uiTap()
-                        dismiss()
-                    }
-                    .disabled(!winCountDone)
-                    .opacity(winCountDone ? 1 : 0.4)
                 }
                 .padding(.horizontal, 26)
                 .padding(.vertical, 24)
@@ -352,7 +346,7 @@ struct GameView: View {
                         }
                         PixelMenuButton(title: "Map", style: .ghost, width: 140) {
                             SoundEngine.shared.uiTap()
-                            dismiss()
+                            popToMap()
                         }
                     }
                     .padding(.top, 2)
@@ -457,12 +451,45 @@ struct GameView: View {
                 .overlay(PixelPanelShape(cut: 10).stroke(.yellow.opacity(0.6), lineWidth: 3))
                 .shadow(color: .yellow.opacity(0.2), radius: 18)
             }
+
+            // Diamond flight layer: after the win-card count-up, gems arc
+            // from the card to the HUD wallet (which fills as they land).
+            // Anchors bridge the two spots; nothing renders when idle.
+            Color.clear
+                .allowsHitTesting(false)
+                .overlayPreferenceValue(HudDiamondsAnchorKey.self) { hud in
+                    Color.clear
+                        .overlayPreferenceValue(WinDiamondsAnchorKey.self) { card in
+                            GeometryReader { geo in
+                                if flyingDiamonds, let from = card, let to = hud {
+                                    let start = geo[from]
+                                    let end = geo[to]
+                                    ForEach(0..<flyCount, id: \.self) { i in
+                                        // Staggered takeoffs along the same arc.
+                                        let t = min(1, max(0, winFlyT * 1.5 - Double(i) * 0.07))
+                                        let eased = t * t * (3 - 2 * t)
+                                        let pos = CGPoint(
+                                            x: start.x + (end.x - start.x) * eased,
+                                            y: start.y + (end.y - start.y) * eased
+                                                - sin(eased * .pi) * 40)
+                                        PixelDiamondView()
+                                            .position(pos)
+                                            .scaleEffect(1.1 - 0.5 * eased)
+                                            .opacity(t >= 1 ? 0 : 1)
+                                    }
+                                }
+                            }
+                        }
+                }
         }
         .toolbar(.hidden, for: .navigationBar)
         .onChange(of: moveX) { scene.heroInputX = $0 }
         .onChange(of: jumpHeld) { scene.heroJumpHeld = $0 }
         .onReceive(debugTimer) { _ in
             minimap = scene.minimap
+            // Auto-switches in the scene change the active gun behind our
+            // back — mirror it so the HUD portrait stays honest.
+            if weapon != scene.heroWeapon { weapon = scene.heroWeapon }
             // Enemy HQ down -> let the win breathe 2s with the sim still
             // running, then freeze the frame, bank it, raise the card.
             if minimap.won, !showWin, !showDefeat {
@@ -482,10 +509,8 @@ struct GameView: View {
                     winClearDiamonds = Economy.clearReward(levelId: level.id, stars: winStars,
                                                           isRepeat: winWasRepeat)
                     winLeftoverDiamonds = Economy.leftoverReward(gold: minimap.money)
-                    WalletStore.shared.earn(winClearDiamonds + winLeftoverDiamonds)
                     CampaignData.awardStars(winStars, for: level.id)
-                    winDiamondsShown = 0
-                    winCountDone = false
+                    resetWinState()
                     startDiamondCountUp(total: winClearDiamonds + winLeftoverDiamonds)
                     SoundEngine.shared.stopBattleMusic()
                     SoundEngine.shared.victory()
@@ -543,12 +568,31 @@ struct GameView: View {
         CampaignData.levels.first(where: { $0.id == level.id + 1 })
     }
 
+    /// Continue: pops the finished battle (its scene is released) and
+    /// pushes the next briefing in a single path update — BACK from that
+    /// briefing lands on the map, never on this battle.
+    private func continueToNextLevel() {
+        var p = path
+        if !p.isEmpty { p.removeLast() }
+        p.append(Route.detail(levelId: level.id + 1))
+        path = p
+    }
+
+    /// Pops battle + briefing back to the map.
+    private func popToMap() {
+        var p = path
+        if !p.isEmpty { p.removeLast() }
+        if !p.isEmpty { p.removeLast() }
+        path = p
+    }
+
     /// Diamond count-up: ticks 0 → total over ~1.2s with coin ticks, then
-    /// unlocks the win-card buttons.
+    /// launches the HUD flight (the wallet fills when it lands).
     private func startDiamondCountUp(total: Int) {
         guard total > 0 else {
             winDiamondsShown = 0
             winCountDone = true
+            startDiamondFlight(total: 0)
             return
         }
         Task {
@@ -563,8 +607,46 @@ struct GameView: View {
             await MainActor.run {
                 winDiamondsShown = total
                 winCountDone = true
+                startDiamondFlight(total: total)
             }
         }
+    }
+
+    /// Diamond flight: gems arc from the win card up to the HUD wallet.
+    /// The wallet fills (with a pop) exactly when they land — that's also
+    /// when the win-card buttons unlock.
+    private func startDiamondFlight(total: Int) {
+        flyCount = min(9, max(4, total / 4))
+        winFlyT = 0
+        flyingDiamonds = total > 0
+        guard total > 0 else {
+            winFlyDone = true
+            return
+        }
+        withAnimation(.easeInOut(duration: 0.9)) { winFlyT = 1 }
+        Task {
+            try? await Task.sleep(nanoseconds: 950_000_000)
+            await MainActor.run {
+                WalletStore.shared.earn(total)
+                SoundEngine.shared.pickup()
+                flyingDiamonds = false
+                winFlyDone = true
+                hudPop = true
+            }
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            await MainActor.run { hudPop = false }
+        }
+    }
+
+    /// Clears all win-card animation state (fresh count on every victory).
+    private func resetWinState() {
+        winDiamondsShown = 0
+        winCountDone = false
+        winFlyT = 0
+        flyingDiamonds = false
+        flyCount = 5
+        winFlyDone = false
+        hudPop = false
     }
 
     /// Unit debuting on this level, if any (Ranger on Level 2, Heavy on
@@ -622,9 +704,8 @@ struct GameView: View {
     @ViewBuilder
     private func commandBar(minimapWidth: CGFloat) -> some View {
         HStack(alignment: .center, spacing: 6) {
-            // Weapon switch: tap to rotate through UNLOCKED guns (Blaster ->
-            // Scatter -> Cannon as milestones claim them). Single-gun
-            // loadouts show a static chip: nothing to switch to yet.
+            // Weapon switch: tap to rotate through the LOADOUT slots.
+            // Single-gun loadouts show a static chip: nothing to switch to.
             Button { weapon = scene.cycleWeapon() } label: {
                 HStack(spacing: 5) {
                     // Little square with the actual pixel gun of the active
@@ -648,7 +729,7 @@ struct GameView: View {
                         .monospacedDigit()
                         .foregroundStyle(minimap.ammoMag == 0 ? .red
                             : minimap.reloading ? .gray : .white.opacity(0.85))
-                    if GunLocker.unlockedGuns.count > 1 {
+                    if LoadoutStore.loadout.count > 1 {
                         Image(systemName: "arrow.2.circlepath")
                             .foregroundStyle(.white.opacity(0.55))
                     }
@@ -658,7 +739,7 @@ struct GameView: View {
                 .background(.cyan.opacity(0.12))
                 .overlay(Rectangle().stroke(.cyan.opacity(0.45), lineWidth: 1))
             }
-            .disabled(GunLocker.unlockedGuns.count < 2)
+            .disabled(LoadoutStore.loadout.count < 2)
 
             HUDDivider()
 
@@ -681,6 +762,9 @@ struct GameView: View {
             }
             .font(.system(size: 11, weight: .bold, design: .monospaced))
             .foregroundStyle(.cyan)
+            .scaleEffect(hudPop ? 1.35 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: hudPop)
+            .anchorPreference(key: HudDiamondsAnchorKey.self, value: .center) { $0 }
 
             HUDDivider()
 
@@ -721,7 +805,8 @@ struct GameView: View {
 
 #Preview {
     NavigationStack {
-        GameView(level: CampaignData.levels[0], hero: HeroRoster.selectedHero)
+        GameView(level: CampaignData.levels[0], hero: HeroRoster.selectedHero,
+                 path: .constant(NavigationPath()))
     }
 }
 
@@ -909,9 +994,23 @@ private struct UnitStatChip: View {
     }
 }
 
+/// Anchor bridges for the diamond flight: win-card row → HUD wallet.
+private struct WinDiamondsAnchorKey: PreferenceKey {
+    static var defaultValue: Anchor<CGPoint>?
+    static func reduce(value: inout Anchor<CGPoint>?, nextValue: () -> Anchor<CGPoint>?) {
+        value = nextValue() ?? value
+    }
+}
+
+private struct HudDiamondsAnchorKey: PreferenceKey {
+    static var defaultValue: Anchor<CGPoint>?
+    static func reduce(value: inout Anchor<CGPoint>?, nextValue: () -> Anchor<CGPoint>?) {
+        value = nextValue() ?? value
+    }
+}
+
 /// Thin vertical separator between command-bar sections.
-private struct HUDDivider: View {
-    var body: some View {
+private struct HUDDivider: View {    var body: some View {
         Rectangle()
             .fill(.white.opacity(0.14))
             .frame(width: 1, height: 20)

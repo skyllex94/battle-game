@@ -27,7 +27,8 @@ struct GameView: View {
         _scene = State(initialValue: GameScene(size: CGSize(width: 1334,
                                                             height: Balance.viewHeight),
                                                levelId: level.id,
-                                               weapon: gun))
+                                               weapon: gun,
+                                               heroId: hero.id))
         _weapon = State(initialValue: gun)
     }
 
@@ -770,7 +771,8 @@ struct GameView: View {
 
             // Hero vitals: 3 life-hearts + HP bar + live numbers.
             HeroVitalsView(lives: minimap.heroLives, maxLives: minimap.heroMaxLives,
-                           hp: minimap.heroHP, maxHP: minimap.heroMaxHP)
+                           hp: minimap.heroHP, maxHP: minimap.heroMaxHP,
+                           shield: minimap.shieldHP, shieldMax: minimap.shieldMax)
                 .allowsHitTesting(false)
 
             Spacer(minLength: 2)
@@ -1018,20 +1020,28 @@ private struct HUDDivider: View {    var body: some View {
     }
 }
 
-/// Hero vitals: life-hearts + HP bar + live numbers (e.g. 78/100).
-/// Each death costs one heart — spent hearts render desaturated and almost
-/// transparent so the remaining attempts read at a glance. The HP bar tracks
-/// the current life (green -> red). Bare (no pill background) — it lives
-/// inside the command bar.
+/// Hero vitals: life-hearts + HP bar + live numbers (e.g. 78/100) +
+/// shield bar when the hero runs a shield. Each death costs one heart —
+/// spent hearts render desaturated and almost transparent so the remaining
+/// attempts read at a glance. The HP bar tracks the current life
+/// (green -> red). Bare (no pill background) — it lives inside the
+/// command bar.
 private struct HeroVitalsView: View {
     let lives: Int
     let maxLives: Int
     let hp: CGFloat
     let maxHP: CGFloat
+    var shield: CGFloat = 0
+    var shieldMax: CGFloat = 0
 
     private var frac: CGFloat {
         guard maxHP > 0 else { return 0 }
         return min(1, max(0, hp / maxHP))
+    }
+
+    private var shieldFrac: CGFloat {
+        guard shieldMax > 0 else { return 0 }
+        return min(1, max(0, shield / shieldMax))
     }
 
     private var color: Color {
@@ -1054,7 +1064,12 @@ private struct HeroVitalsView: View {
                     }
                 }
             }
-            PixelHPBarView(frac: frac, color: color)
+            VStack(spacing: 2) {
+                PixelHPBarView(frac: frac, color: color)
+                if shieldMax > 0 {
+                    PixelShieldBarView(frac: shieldFrac)
+                }
+            }
             Text("\(Int(hp))/\(Int(maxHP))")
                 .font(.caption2.bold())
                 .monospacedDigit()
@@ -1062,6 +1077,31 @@ private struct HeroVitalsView: View {
                 .fixedSize(horizontal: true, vertical: false)
                 .foregroundStyle(.white)
         }
+    }
+}
+
+/// Thin cyan shield bar under the HP bar: chunky twin of the HP meter.
+private struct PixelShieldBarView: View {
+    let frac: CGFloat
+    private let chunks = 10
+    private let chunkW: CGFloat = 6
+    private let chunkH: CGFloat = 4
+    private let gap: CGFloat = 1
+    private let pad: CGFloat = 2
+
+    private var lit: Int { Int((min(1, max(0, frac)) * CGFloat(chunks)).rounded()) }
+
+    var body: some View {
+        HStack(spacing: gap) {
+            ForEach(0..<chunks, id: \.self) { i in
+                Rectangle()
+                    .fill(i < lit ? .cyan : .white.opacity(0.12))
+                    .frame(width: chunkW, height: chunkH)
+            }
+        }
+        .padding(.horizontal, pad)
+        .background(.black.opacity(0.65))
+        .overlay(Rectangle().stroke(.cyan.opacity(0.35), lineWidth: 1))
     }
 }
 

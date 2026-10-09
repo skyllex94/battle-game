@@ -204,17 +204,25 @@ enum Balance {
     static var heroSpawnX: CGFloat { active.heroSpawnX }
     static let heroHeight: CGFloat = 78
 
-    // MARK: - Hero movement feel (smooth, not snappy: eased drive in,
-    // long glide out, floaty variable jumps)
+    // MARK: - Hero movement feel (snappy, not floaty: fast drive in,
+    // fast stop, turn boost for reversals, fall-faster-than-rise jumps
+    // with an apex hang so landings are easy to line up — Celeste/GMTK
+    // rules: ~6 frames to full speed, ~3-5 to stop, no ice)
     static let heroRunSpeed: CGFloat = 520
     static let heroJumpVelocity: CGFloat = 1000
-    static let heroGravity: CGFloat = -1850   // jump apex ≈ 270pt: clears the 216pt rise to platform 1
-    static let heroAccelGround: CGFloat = 2600 // driving (stick held): eager but not instant
-    static let heroDecelGround: CGFloat = 2000 // stick released: long glide to a stop
-    static let heroAccelAir: CGFloat = 1700   // air steering: present but soft
-    static let heroAirDrag: CGFloat = 350     // no-input air drift: momentum mostly preserved
+    static let heroGravity: CGFloat = -2100   // rise: crisp, apex ≈ 238pt + speed bonus clears the 216pt platform rise
+    static let heroFallMultiplier: CGFloat = 1.5 // fall faster than rise: snappy, precise landings
+    static let heroApexWindow: CGFloat = 140  // |vy| below this = apex hang zone
+    static let heroApexScale: CGFloat = 0.55  // gravity inside the hang zone (floaty top, easy to steer)
+    static let heroCutGravityScale: CGFloat = 2.0 // extra gravity while rising with jump released (variable height)
+    static let heroJumpSpeedBonus: CGFloat = 0.12 // full-run takeoff jumps 12% higher (Mario-tiered feel)
+    static let heroAccelGround: CGFloat = 4200 // driving (stick held): full speed in ~7 frames
+    static let heroDecelGround: CGFloat = 4800 // stick released: stopped in ~6 frames, no ice
+    static let heroTurnAccel: CGFloat = 6400 // reversing at speed: instant flip, tiny skid instead of slide
+    static let heroAccelAir: CGFloat = 3000   // air steering: strong but not teleporty
+    static let heroAirDrag: CGFloat = 1400    // no-input air drift: bleeds fast so drops land where aimed (Celeste air friction)
     static let heroStopThreshold: CGFloat = 12 // below this grounded drift, just rest
-    static let heroJumpCutFraction: CGFloat = 0.5 // early release bleeds half the rise (tap = hop)
+    static let heroJumpCutFraction: CGFloat = 0.55 // early release bleeds the rise once (tap = hop)
     static let heroCoyoteTime: Double = 0.12
     static let heroJumpBuffer: Double = 0.15  // taps just before landing still jump
 

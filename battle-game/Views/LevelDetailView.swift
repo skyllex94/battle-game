@@ -139,10 +139,7 @@ struct LevelDetailView: View {
                         } label: {
                             HStack(spacing: 10) {
                                 ZStack(alignment: .bottomTrailing) {
-                                    ImportedArt.image(named: selectedHero.iconArtName)
-                                        .resizable()
-                                        .interpolation(.none)
-                                        .scaledToFit()
+                                    HeroIdleView(kind: selectedHero.pixelKind, height: 56)
                                         .frame(width: 56, height: 56)
                                         .clipShape(ShopPixelShape(cut: 6))
                                         .overlay(ShopPixelShape(cut: 6).stroke(.yellow, lineWidth: 2))
@@ -156,8 +153,16 @@ struct LevelDetailView: View {
                                         .tracking(1)
                                         .foregroundStyle(.white)
                                         .lineLimit(1)
+                                    Text(selectedHero.trait)
+                                        .font(.system(size: 8, weight: .black, design: .monospaced))
+                                        .tracking(1)
+                                        .foregroundStyle(.cyan)
                                     StatPips(label: "HP", value: selectedHero.maxHealth, maxValue: 200, color: .green)
                                     StatPips(label: "SPD", value: Int(selectedHero.speed), maxValue: 12, color: .cyan)
+                                    let shield = Int(HeroUpgrades.shieldMax(heroId: selectedHero.id))
+                                    if shield > 0 {
+                                        StatPips(label: "SHD", value: shield, maxValue: 80, color: .cyan)
+                                    }
                                 }
                                 Spacer()
                             }

@@ -17,6 +17,9 @@ struct MinimapSnapshot {
     var heroMaxHP: CGFloat
     var heroLives: Int = 3
     var heroMaxLives: Int = 3
+    /// Energy shield pool (0 max hides the bar).
+    var shieldHP: CGFloat = 0
+    var shieldMax: CGFloat = 0
     var money: Int
     // Unit dots: player army (blue) + enemy marchers (red).
     var allyXs: [CGFloat] = []

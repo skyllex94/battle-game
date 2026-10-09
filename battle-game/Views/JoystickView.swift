@@ -10,9 +10,9 @@ struct JoystickView: View {
     @Binding var moveX: CGFloat
     @Binding var jumpHeld: Bool
 
-    private let radius: CGFloat = 60
-    private let deadzone: CGFloat = 0.15
-    private let jumpThreshold: CGFloat = -20 // points of upward deflection
+    private let radius: CGFloat = 70
+    private let deadzone: CGFloat = 0.12
+    private let jumpThreshold: CGFloat = -16 // points of upward deflection
 
     @State private var origin: CGPoint? = nil
     @State private var knob: CGSize = .zero
@@ -56,16 +56,17 @@ struct JoystickView: View {
                         knob = CGSize(width: dx, height: dy)
 
                         let rawX = dx / radius
-                        // Eased response: rescale past the deadzone, then bend
-                        // the curve (gentle near center, full throw at the edge)
-                        // so small thumb moves don't slam the hero around.
+                        // Snappy response: rescale past a tight deadzone, then
+                        // a near-linear curve (gentle near center, full throw
+                        // at the edge) so the hero obeys instantly without
+                        // tiny thumb tremors slamming him around.
                         let mag = min(1, abs(rawX))
                         let shaped: CGFloat
                         if mag <= deadzone {
                             shaped = 0
                         } else {
                             let t = (mag - deadzone) / (1 - deadzone)
-                            shaped = pow(t, 1.6)
+                            shaped = pow(t, 1.35)
                         }
                         moveX = (rawX >= 0 ? 1 : -1) * shaped
                         jumpHeld = dy < jumpThreshold

@@ -105,6 +105,16 @@ final class SoundEngine {
     func uiTap() { play(.ui, volume: 0.40) }
     func weaponSwitch() { play(.weaponSwitch, volume: 0.45) }
 
+    // MARK: - Hero movement foley (sells weight: whoosh out, thump in)
+    /// Takeoff whoosh: airy rising sweep, quiet so it never fights gunfire.
+    func heroJump() { play(.heroJump, volume: 0.30) }
+    /// Touchdown thump scaled by fall impact 0...1 (soft hops whisper).
+    func heroLand(_ impact: CGFloat) {
+        play(.heroLand, volume: 0.25 + Float(min(1, max(0, impact))) * 0.45)
+    }
+    /// Running footfall + skid tick: very quiet, heavily rate-limited.
+    func heroStep() { play(.heroStep, volume: 0.16) }
+
     /// Victory sting: triumphant major run over a war-drum thump.
     func victory() { play(.victory, volume: 0.70) }
 
@@ -336,6 +346,7 @@ final class SoundEngine {
         case dry, reloadStart, reloadDone
         case impact, enemyDown, heroHurt, heroDeath, bigBoom
         case summon, pickup, ui, weaponSwitch, victory
+        case heroJump, heroLand, heroStep
 
         /// Minimum seconds between re-triggers of the same voice.
         var minInterval: Double {
@@ -358,6 +369,9 @@ final class SoundEngine {
             case .ui: return 0.05
             case .weaponSwitch: return 0.08
             case .victory: return 1.0
+            case .heroJump: return 0.18
+            case .heroLand: return 0.12
+            case .heroStep: return 0.22
             }
         }
     }
@@ -503,6 +517,9 @@ final class SoundEngine {
         made[.victory] = triumph()
         made[.ui] = uiClick()
         made[.weaponSwitch] = rackPair(up: true, light: true)
+        made[.heroJump] = jumpWhoosh()
+        made[.heroLand] = landThump()
+        made[.heroStep] = stepTick()
 
         lock.lock()
         buffers = made
@@ -665,6 +682,64 @@ final class SoundEngine {
             let raw = Double.random(in: -1...1)
             lp += 0.25 * (raw - lp)
             data[i] = Float(grit((sin(phase) + lp * 0.8) * env * 0.6, 1.5) * 0.8)
+        }
+        return buffer
+    }
+
+    // MARK: - Movement foley synthesis (soft, never fights gunfire)
+
+    /// Takeoff whoosh: short rising air sweep (noise + swelling sine up).
+    private func jumpWhoosh() -> AVAudioPCMBuffer? {
+        let dur = 0.16
+        guard let (buffer, _) = pcm(dur),
+              let data = buffer.floatChannelData?[0] else { return nil }
+        let n = Int(buffer.frameLength)
+        var phase = 0.0
+        var lp = 0.0
+        for i in 0..<n {
+            let t = Double(i) / sampleRate
+            let k = t / dur
+            let freq = 220.0 + 480.0 * k
+            phase += 2.0 * .pi * freq / sampleRate
+            let raw = Double.random(in: -1...1)
+            lp += 0.35 * (raw - lp)
+            let swell = sin(.pi * min(1, k * 1.15))
+            data[i] = Float((sin(phase) * 0.35 + lp * 0.5) * swell * 0.5)
+        }
+        return buffer
+    }
+
+    /// Touchdown thump: soft low sine + dirt grit. Volume scales impact.
+    private func landThump() -> AVAudioPCMBuffer? {
+        let dur = 0.12
+        guard let (buffer, _) = pcm(dur),
+              let data = buffer.floatChannelData?[0] else { return nil }
+        let n = Int(buffer.frameLength)
+        var phase = 0.0
+        var lp = 0.0
+        for i in 0..<n {
+            let t = Double(i) / sampleRate
+            phase += 2.0 * .pi * 95.0 / sampleRate
+            let env = exp(-t * 42.0)
+            let raw = Double.random(in: -1...1)
+            lp += 0.22 * (raw - lp)
+            data[i] = Float(grit((sin(phase) * 0.9 + lp * 0.7) * env * 0.6, 1.6) * 0.8)
+        }
+        return buffer
+    }
+
+    /// Footfall tick: tiny filtered tap, felt more than heard.
+    private func stepTick() -> AVAudioPCMBuffer? {
+        let dur = 0.05
+        guard let (buffer, _) = pcm(dur),
+              let data = buffer.floatChannelData?[0] else { return nil }
+        let n = Int(buffer.frameLength)
+        var lp = 0.0
+        for i in 0..<n {
+            let t = Double(i) / sampleRate
+            let raw = Double.random(in: -1...1)
+            lp += 0.30 * (raw - lp)
+            data[i] = Float(lp * exp(-t * 120.0) * 0.5)
         }
         return buffer
     }

@@ -105,6 +105,29 @@ struct HeroDef: Identifiable {
     let displayName: String
     /// Imported art basename, e.g. "Hero_icon1".
     let iconArtName: String
+    /// Detailed pixel-art kind: the armory + briefing twin of the fighter
+    /// you play in battle (Vanguard matches the battle hero exactly).
+    var pixelKind: HeroPixelArt.Kind {
+        switch id {
+        case "scout": return .scout
+        case "bulwark": return .bulwark
+        case "ranger": return .ranger
+        case "saboteur": return .saboteur
+        case "warlord": return .warlord
+        default: return .vanguard
+        }
+    }
+    /// One-word battlefield role for dossiers.
+    var trait: String {
+        switch id {
+        case "scout": return "FAST SKIRMISH"
+        case "bulwark": return "HEAVY TANK"
+        case "ranger": return "MARKSMAN"
+        case "saboteur": return "STRUCTURE KILLER"
+        case "warlord": return "BRUISER"
+        default: return "BALANCED FRONTLINE"
+        }
+    }
     let maxHealth: Int
     let speed: Double
     let blurb: String
@@ -138,10 +161,14 @@ struct HeroRoster {
 
     private static let selectedKey = "campaign.selectedHero"
 
+    /// DEBUG — explore mode: every hero selectable while we tune.
+    /// Flip to false for release (milestones take over again).
+    static let debugUnlockAll = true
+
     /// A hero is selectable when its milestone is claimed. Until the
     /// UnlockStore lands, only unlockLevel 0 (Vanguard) is available.
     static func isUnlocked(_ hero: HeroDef) -> Bool {
-        hero.unlockLevel <= 0
+        debugUnlockAll || hero.unlockLevel <= 0
     }
 
     static var unlockedHeroes: [HeroDef] { heroes.filter(isUnlocked) }

@@ -86,6 +86,13 @@ final class GameScene: SKScene {
     }
     private var towers: [Tower] = []
     private var heroHP: CGFloat = Balance.heroHP
+    /// Effective max HP from hero HP tiers (100 stock — today's value).
+    private var heroMaxHP: CGFloat = Balance.heroHP
+    /// Energy shield pool (0 max = no shield mechanic). Absorbs damage
+    /// first, recharges after 4s without a hit.
+    private var shieldHP: CGFloat = 0
+    private var shieldMax: CGFloat = 0
+    private var lastShieldHitAt: TimeInterval = -10
     /// Spendable gold for the army (unit shop lands next). Starts at your Unity value.
     private var money: Int = Balance.startingGold
 
@@ -115,6 +122,9 @@ final class GameScene: SKScene {
     /// Hearts remaining this attempt. Each death costs one; at zero the
     /// hero stays down and the run ends in defeat (see lostAt).
     private var heroLives: Int = Balance.heroLives
+    /// Medkit packs left this attempt (health-booster add-on). Each pack
+    /// cheats one lethal hit; refilled every attempt, not every respawn.
+    private var heroMedkits: Int = 0
     // MARK: - Victory (enemy HQ destroyed -> level won)
     /// sceneTime of the winning blow; nil until the enemy HQ falls.
     private(set) var wonAt: TimeInterval?
@@ -127,6 +137,8 @@ final class GameScene: SKScene {
     private var didBuild = false
     /// Level this scene is pinned to (drives Balance.active on every entry).
     private var levelId: Int = 1
+    /// Hero id driving upgrade tiers (effective HP/speed/damage/shield).
+    private var heroId: String = "vanguard"
 
     // MARK: - Setup
     override init(size: CGSize) {
@@ -137,8 +149,10 @@ final class GameScene: SKScene {
 
     /// Designated entry: pins the battlefield layout for this level before
     /// anything builds or simulates (all Balance layout reads follow it).
-    init(size: CGSize, levelId: Int, weapon: HeroWeapon = .blaster) {
+    init(size: CGSize, levelId: Int, weapon: HeroWeapon = .blaster,
+         heroId: String = "vanguard") {
         self.levelId = levelId
+        self.heroId = heroId
         // Never start on a locked gun (stale picks, future grants).
         let pick = GunLocker.isUnlocked(weapon) ? weapon : .blaster
         self.startingWeapon = pick
@@ -192,6 +206,22 @@ final class GameScene: SKScene {
             if !isPaused { lastUpdate = 0 }
         }
     }
+
+    /// Reads hero upgrade tiers into battle stats. Full restores refill HP
+    /// + shield (reset/revive); respawns refill through the same path.
+    private func applyHeroUpgrades(fullRestore: Bool) {
+        heroMaxHP = HeroUpgrades.maxHP(heroId: heroId)
+        shieldMax = HeroUpgrades.shieldMax(heroId: heroId)
+        if fullRestore {
+            heroHP = heroMaxHP
+            shieldHP = shieldMax
+            lastShieldHitAt = -10
+        } else {
+            heroHP = min(heroHP, heroMaxHP)
+            shieldHP = min(shieldHP, shieldMax)
+        }
+        hero.speedMultiplier = HeroUpgrades.speedMultiplier(heroId: heroId)
+    }
     func resetLevel() {
         isPaused = false
         world.removeAllChildren()
@@ -207,8 +237,9 @@ final class GameScene: SKScene {
         allies = []
         drops = []
         summonCount = 0
-        heroHP = Balance.heroHP
-        heroLives = Balance.heroLives
+        applyHeroUpgrades(fullRestore: true)
+        heroLives = HeroAddons.maxLives(heroId: heroId)
+        heroMedkits = HeroAddons.boosterPacks(heroId: heroId)
         money = Balance.startingGold
         sceneTime = 0
         lastUpdate = 0
@@ -353,10 +384,17 @@ final class GameScene: SKScene {
 
     private func buildHero() {
         hero = HeroNode()
+        hero.setHero(HeroPixelArt.kind(for: heroId))
         hero.setWeapon(heroWeapon)
+        // Lives per attempt (second-heart add-on included) + a fresh
+        // stock of medkit packs (health-booster add-on).
+        heroLives = HeroAddons.maxLives(heroId: heroId)
+        heroMedkits = HeroAddons.boosterPacks(heroId: heroId)
         hero.position = CGPoint(x: Balance.heroSpawnX,
                                 y: Balance.groundTopY + Balance.heroHeight / 2 + 4)
         world.addChild(hero)
+        // Fresh node needs the speed tier (HP/shield were set at reset).
+        hero.speedMultiplier = HeroUpgrades.speedMultiplier(heroId: heroId)
     }
 
     // MARK: - Foreground layer (factor 1.15, subtle)
@@ -384,10 +422,12 @@ final class GameScene: SKScene {
         // Follow the hero vertically a little so jumps stay framed, but never
         // show below the ground or above the sky.
         // Camera rides high: ground line sits ~22% up from the bottom so
-        // more of the action reads above it.
+        // more of the action reads above it. Hard landings dip the frame
+        // a touch (hero.landDip decays in HeroNode.step) — impact you feel.
         let baseY: CGFloat = Balance.groundTopY + halfViewHeight * 0.55
         let lift = max(0, hero.position.y - (Balance.groundTopY + Balance.heroHeight)) * 0.35
-        let y = min(baseY + lift, size.height - halfViewHeight)
+        let dip = (hero?.landDip ?? 0) * 22
+        let y = min(baseY + lift - dip, size.height - halfViewHeight)
         return CGPoint(x: x, y: max(y, halfViewHeight * 0.6))
     }
 
@@ -443,6 +483,7 @@ final class GameScene: SKScene {
         updateDrops(dt: dt)
         stepProjectiles(dt: dt)
         updateGraceBlink()
+        updateShield(dt: dt)
         smoothCamera(dt: dt)
         updateParallax()
     }
@@ -453,7 +494,7 @@ final class GameScene: SKScene {
         respawnAt = -1
         hero.respawn(at: CGPoint(x: Balance.playerBaseX + Balance.respawnOffsetX,
                                  y: Balance.groundTopY + Balance.respawnDropHeight))
-        heroHP = Balance.heroHP
+        applyHeroUpgrades(fullRestore: true)
         graceUntil = sceneTime + Balance.respawnGrace
         let puff = ProjectileFactory.makeImpactPuff()
         puff.position = hero.position
@@ -630,6 +671,8 @@ final class GameScene: SKScene {
         let gun = heroWeapon
         mags[gun.rawValue] -= 1 // one trigger pull = one round
         SoundEngine.shared.heroShot(gun, at: hero.position.x)
+        // Recoil: the hero's rifle + body absorb the shot (blast guns shove).
+        hero.kick(gun.blastRadius > 0 ? 0.9 : 0.45)
         let muzzle = muzzlePosition(for: aimDir)
         let baseAngle = atan2(aimDir.dy, aimDir.dx)
         let pellets = gun.pelletCount
@@ -652,7 +695,8 @@ final class GameScene: SKScene {
             node.zRotation = atan2(launchDir.dy, launchDir.dx)
             world.addChild(node)
             var shell = Projectile(node: node, dir: launchDir, life: gun.bulletLife,
-                                   speed: gun.launchSpeed, damage: gun.damage,
+                                   speed: gun.launchSpeed,
+                                   damage: gun.damage * HeroUpgrades.damageMultiplier(heroId: heroId),
                                    team: .neutral)
             shell.thrust = gun.thrustAccel
             shell.gravity = gun.gravityPull
@@ -1280,8 +1324,33 @@ final class GameScene: SKScene {
 
     private func damageHero(amount: CGFloat) {
         guard hero.alive, heroHP > 0 else { return }
-        heroHP = max(0, heroHP - amount)
+        var rest = amount
+        // Energy shield absorbs first (cyan flash reads the save).
+        if shieldHP > 0 {
+            let absorbed = min(shieldHP, rest)
+            shieldHP -= absorbed
+            rest -= absorbed
+            lastShieldHitAt = sceneTime
+            hero.run(.sequence([.fadeAlpha(to: 0.6, duration: 0.05),
+                                .fadeAlpha(to: 1.0, duration: 0.1)]))
+        }
+        heroHP = max(0, heroHP - rest)
         if heroHP <= 0 {
+            // Health-booster medkit: cheat death — burn one pack, rejoin
+            // the fight at half HP with a fresh shield instead of dying.
+            if heroMedkits > 0 {
+                heroMedkits -= 1
+                heroHP = heroMaxHP * 0.5
+                shieldHP = shieldMax
+                lastShieldHitAt = -10
+                SoundEngine.shared.pickup()
+                floatText("MEDKIT!",
+                          color: SKColor(red: 0.3, green: 1.0, blue: 0.5, alpha: 1),
+                          at: hero.position)
+                hero.run(.sequence([.fadeAlpha(to: 0.35, duration: 0.06),
+                                    .fadeAlpha(to: 1.0, duration: 0.12)]))
+                return
+            }
             killHero()
             return
         }
@@ -1289,6 +1358,13 @@ final class GameScene: SKScene {
         // Hit flash so damage reads instantly.
         hero.run(.sequence([.fadeAlpha(to: 0.35, duration: 0.06),
                             .fadeAlpha(to: 1.0, duration: 0.12)]))
+    }
+
+    /// Shield recharge: 10/s after 4s without a shield hit.
+    private func updateShield(dt: TimeInterval) {
+        guard shieldMax > 0, shieldHP < shieldMax,
+              sceneTime - lastShieldHitAt > 4 else { return }
+        shieldHP = min(shieldMax, shieldHP + 10 * CGFloat(dt))
     }
 
     private func killHero() {
@@ -1321,7 +1397,7 @@ final class GameScene: SKScene {
         guard lostAt != nil else { return }
         lostAt = nil
         heroLives = 1
-        heroHP = Balance.heroHP
+        applyHeroUpgrades(fullRestore: true)
         respawnAt = sceneTime + Balance.respawnDelay
     }
 
@@ -1627,9 +1703,11 @@ final class GameScene: SKScene {
             enemyTowerXs: Balance.enemyTowerXs,
             enemyBaseX: Balance.enemyBaseX,
             heroHP: heroHP,
-            heroMaxHP: Balance.heroHP,
+            heroMaxHP: heroMaxHP,
             heroLives: heroLives,
-            heroMaxLives: Balance.heroLives,
+            heroMaxLives: HeroAddons.maxLives(heroId: heroId),
+            shieldHP: shieldHP,
+            shieldMax: shieldMax,
             money: money,
             allyXs: allies.filter { $0.alive }.map { $0.position.x },
             enemyXs: enemies.filter { $0.alive }.map { $0.position.x },
@@ -1666,7 +1744,7 @@ final class GameScene: SKScene {
     private func maybeSpawnDrop(at pos: CGPoint) {
         guard Double.random(in: 0..<1) < Balance.dropChance else { return }
         let kind: DropKind
-        if heroHP >= Balance.heroHP {
+        if heroHP >= heroMaxHP {
             kind = Bool.random() ? .ammo : .money
         } else {
             switch Int.random(in: 0..<3) {
@@ -1740,7 +1818,7 @@ final class GameScene: SKScene {
         SoundEngine.shared.pickup()
         switch d.kind {
         case .health:
-            heroHP = min(Balance.heroHP, heroHP + Balance.dropHeal)
+            heroHP = min(heroMaxHP, heroHP + Balance.dropHeal)
             floatText("+\(Int(Balance.dropHeal)) HP",
                       color: SKColor(red: 0.3, green: 1.0, blue: 0.5, alpha: 1),
                       at: d.node.position)

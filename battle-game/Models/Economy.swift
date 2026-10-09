@@ -39,4 +39,22 @@ enum Economy {
         default: return 0
         }
     }
+
+    /// Hero upgrade tier prices (per track: HP/SPD/SHIELD/DMG I/II/III).
+    static func heroUpgradeCost(_ tier: Int) -> Int {
+        switch tier {
+        case 1: return 30
+        case 2: return 70
+        case 3: return 130
+        default: return 0
+        }
+    }
+
+    /// Hero add-on prices: health boosters follow the upgrade curve
+    /// (I/II/III); the second heart is a one-time premium buyout per hero.
+    static func heroBoosterCost(_ tier: Int) -> Int {
+        heroUpgradeCost(tier)
+    }
+
+    static let heroHeartCost = 120
 }

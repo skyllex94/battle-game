@@ -25,7 +25,7 @@ enum HeroUpgradeTrack: String, CaseIterable {
     func effect(tier: Int) -> String {
         switch self {
         case .hp: return "+\(25 * tier) MAX HP"
-        case .speed: return "+\(Int(8 * Double(tier)))% MOVE SPEED"
+        case .speed: return tier == 0 ? "STOCK SPEED" : "+\(tier) SPEED"
         case .shield:
             return tier == 0 ? "NO SHIELD" : "\(HeroUpgrades.shieldCapacity(tier: tier)) SHIELD"
         case .damage: return "+\(10 * tier)% DAMAGE"
@@ -63,14 +63,31 @@ enum HeroUpgrades {
 
     // MARK: - Effective battle stats (base behavior untouched at tier 0)
 
-    /// Battle max HP: 100 stock (today's value for every hero) +25/tier.
+    /// Roster stock HP for a hero (100 scout … 580 warlord).
+    static func baseHP(heroId: String) -> Int {
+        HeroRoster.heroes.first(where: { $0.id == heroId })?.maxHealth ?? 100
+    }
+
+    /// Battle max HP: roster stock +25/tier.
     static func maxHP(heroId: String) -> CGFloat {
-        CGFloat(100 + 25 * tier(heroId: heroId, track: .hp))
+        CGFloat(baseHP(heroId: heroId) + 25 * tier(heroId: heroId, track: .hp))
     }
 
     /// Move-speed multiplier.
     static func speedMultiplier(heroId: String) -> CGFloat {
-        CGFloat(1 + 0.08 * Double(tier(heroId: heroId, track: .speed)))
+        CGFloat(speedValue(heroId: heroId)) / 10.0
+    }
+
+    /// Roster stock speed for a hero (10 scout … 20 ranger).
+    static func baseSpeed(heroId: String) -> Double {
+        HeroRoster.heroes.first(where: { $0.id == heroId })?.speed ?? 10
+    }
+
+    /// Effective speed: roster stock +1 per SPEED tier. Battle run speed
+    /// is Balance.heroRunSpeed scaled by value/10, so scout (10) runs the
+    /// classic 520 and every +1 tier reads exactly on the stat sheet.
+    static func speedValue(heroId: String) -> Double {
+        baseSpeed(heroId: heroId) + Double(tier(heroId: heroId, track: .speed))
     }
 
     /// Damage multiplier for hero bolts.

@@ -348,10 +348,10 @@ private struct UpgradeColumn: View {
     /// One-line live combat summary for the inspected hero.
     private var summary: String {
         let hp = Int(HeroUpgrades.maxHP(heroId: hero.id))
-        let spd = Int(round((HeroUpgrades.speedMultiplier(heroId: hero.id) - 1) * 100))
+        let spd = Int(HeroUpgrades.speedValue(heroId: hero.id))
         let sh = Int(HeroUpgrades.shieldMax(heroId: hero.id))
         let dmg = Int(round((HeroUpgrades.damageMultiplier(heroId: hero.id) - 1) * 100))
-        return "HP \(hp) · SPD +\(spd)% · SH \(sh) · DMG +\(dmg)%"
+        return "HP \(hp) · SPD \(spd) · SH \(sh) · DMG +\(dmg)%"
     }
 
     var body: some View {
@@ -899,6 +899,7 @@ private struct ShowcaseColumn: View {
                     Spacer()
                     StageArrow(system: "chevron.right", action: onNext)
                 }
+                .padding(.horizontal, 10)
                 VStack {
                     Spacer()
                     HStack {
@@ -940,11 +941,11 @@ private struct ShowcaseColumn: View {
                     .frame(height: 1)
                 DossierStatRow(icon: .hp, label: "HEALTH",
                                value: "\(Int(HeroUpgrades.maxHP(heroId: hero.id)))",
-                               lit: pips(Int(HeroUpgrades.maxHP(heroId: hero.id)), 275),
+                               lit: pips(Int(HeroUpgrades.maxHP(heroId: hero.id)), 660),
                                color: .green)
                 DossierStatRow(icon: .speed, label: "SPEED",
-                               value: "+\(Int(round((HeroUpgrades.speedMultiplier(heroId: hero.id) - 1) * 100)))%",
-                               lit: HeroUpgrades.tier(heroId: hero.id, track: .speed) * 2,
+                               value: "\(Int(HeroUpgrades.speedValue(heroId: hero.id)))",
+                               lit: pips(Int(HeroUpgrades.speedValue(heroId: hero.id)), 23),
                                color: .cyan)
                 DossierStatRow(icon: .shield, label: "SHIELD",
                                value: "\(Int(HeroUpgrades.shieldMax(heroId: hero.id)))",

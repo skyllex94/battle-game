@@ -386,6 +386,9 @@ final class GameScene: SKScene {
         hero = HeroNode()
         hero.setHero(HeroPixelArt.kind(for: heroId))
         hero.setWeapon(heroWeapon)
+        // Full battle stats from the first frame (roster HP + upgrades) —
+        // otherwise the opening attempt runs on the 100 HP default.
+        applyHeroUpgrades(fullRestore: true)
         // Lives per attempt (second-heart add-on included) + a fresh
         // stock of medkit packs (health-booster add-on).
         heroLives = HeroAddons.maxLives(heroId: heroId)

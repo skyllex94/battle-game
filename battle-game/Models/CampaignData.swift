@@ -140,22 +140,22 @@ struct HeroDef: Identifiable {
 struct HeroRoster {
     static let heroes: [HeroDef] = [
         HeroDef(id: "scout", displayName: "Scout", iconArtName: "Hero_icon1",
-                maxHealth: 100, speed: 12, blurb: "Fast feet, light frame. Your Unity starting build.",
+                maxHealth: 100, speed: 10, blurb: "Fast feet, light frame. Your Unity starting build.",
                 unlockLevel: 2),
         HeroDef(id: "vanguard", displayName: "Vanguard", iconArtName: "Hero_Icon2",
-                maxHealth: 140, speed: 10, blurb: "Balanced fighter for the first push.",
+                maxHealth: 300, speed: 13, blurb: "Balanced fighter for the first push.",
                 unlockLevel: 0),
         HeroDef(id: "bulwark", displayName: "Bulwark", iconArtName: "Hero_Icon3",
-                maxHealth: 180, speed: 8, blurb: "Slow tank. Holds the lane under tower fire.",
+                maxHealth: 480, speed: 11, blurb: "Slow tank. Holds the lane under tower fire.",
                 unlockLevel: 10),
         HeroDef(id: "ranger", displayName: "Ranger", iconArtName: "Hero_icon4",
-                maxHealth: 110, speed: 11, blurb: "Gun-ready skirmisher.",
+                maxHealth: 220, speed: 20, blurb: "Gun-ready skirmisher.",
                 unlockLevel: 4),
         HeroDef(id: "saboteur", displayName: "Saboteur", iconArtName: "Hero_icon5",
-                maxHealth: 120, speed: 11, blurb: "Tower-killer. Bonus vs structures (stage 2).",
+                maxHealth: 380, speed: 17, blurb: "Tower-killer. Bonus vs structures (stage 2).",
                 unlockLevel: 8),
         HeroDef(id: "warlord", displayName: "Warlord", iconArtName: "Hero_Icon6",
-                maxHealth: 200, speed: 9, blurb: "Late-campaign bruiser. Locked feel for now, playable in MVP.",
+                maxHealth: 580, speed: 14, blurb: "Late-campaign bruiser. Locked feel for now, playable in MVP.",
                 unlockLevel: 13),
     ]
 

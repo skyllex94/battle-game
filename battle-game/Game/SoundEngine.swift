@@ -81,6 +81,8 @@ final class SoundEngine {
 
     func reloadStart() { play(.reloadStart, volume: 0.50) }
     func reloadDone() { play(.reloadDone, volume: 0.55) }
+    /// Mid-reload mag-seat clack: keeps long reloads audible throughout.
+    func reloadTick() { play(.reloadTick, volume: 0.45) }
 
     func impact(at x: CGFloat) { play(.impact, volume: 0.30, at: x) }
     func enemyDown(at x: CGFloat) { play(.enemyDown, volume: 0.55, at: x) }
@@ -343,7 +345,7 @@ final class SoundEngine {
     private enum Voice: String, CaseIterable {
         case blaster, scatter, cannon
         case tower, baseFan, enemy, ally
-        case dry, reloadStart, reloadDone
+        case dry, reloadStart, reloadDone, reloadTick
         case impact, enemyDown, heroHurt, heroDeath, bigBoom
         case summon, pickup, ui, weaponSwitch, victory
         case heroJump, heroLand, heroStep
@@ -359,6 +361,7 @@ final class SoundEngine {
             case .enemy, .ally: return 0.09
             case .dry: return 0.25
             case .reloadStart, .reloadDone: return 0.20
+            case .reloadTick: return 0.30
             case .impact: return 0.03
             case .enemyDown: return 0.08
             case .heroHurt: return 0.15
@@ -507,6 +510,7 @@ final class SoundEngine {
         made[.dry] = metalTick()
         made[.reloadStart] = rackPair(up: false)
         made[.reloadDone] = rackPair(up: true)
+        made[.reloadTick] = metalTick()
         made[.impact] = groundThud()
         made[.enemyDown] = actionShot(bodyF0: 150, bodyF1: 50, dur: 0.30, crack: 0.7, sub: 0.9, drive: 2.2)
         made[.heroHurt] = actionShot(bodyF0: 130, bodyF1: 62, dur: 0.22, crack: 0.6, sub: 1.0, drive: 3.0)

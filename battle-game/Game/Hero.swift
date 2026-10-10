@@ -51,6 +51,8 @@ final class HeroNode: SKSpriteNode {
     private var wasGrounded = true
     /// Run-stride dust + footstep cadence.
     private var strideAcc: TimeInterval = 0
+    /// Rising-trail cadence while climbing fast.
+    private var trailAcc: TimeInterval = 0
     /// Idle blink timer (visor life).
     private var blinkT: TimeInterval = 2.5
     private var blinking: TimeInterval = 0
@@ -71,8 +73,6 @@ final class HeroNode: SKSpriteNode {
     /// toe-off frame, idle/fall park on contact.
     private var heroKind: HeroPixelArt.Kind = .vanguard
     private var heroFrames: [SKTexture] = []
-    /// Body canvas is 30x40; render at battle height to match the hero.
-    private static let heroBodySize = CGSize(width: 60, height: 80)
     /// Frame player: run index + timers. Pose cache avoids texture churn.
     private var animT: TimeInterval = 0
     private var runFrame = 0
@@ -97,7 +97,7 @@ final class HeroNode: SKSpriteNode {
     // MARK: - Visual construction (pixel body + rifle, facing +x)
     private func buildVisuals() {
         body = SKSpriteNode(texture: nil)
-        body.size = Self.heroBodySize
+        body.size = HeroPixelArt.displaySize(for: .vanguard)
         body.zPosition = 0
         visual.addChild(body)
         setHero(.vanguard)
@@ -118,7 +118,8 @@ final class HeroNode: SKSpriteNode {
         heroFrames = HeroPixelArt.frames(for: kind)
         heroFrames.forEach { $0.filteringMode = .nearest }
         body.texture = heroFrames[0]
-        body.size = Self.heroBodySize
+        // Big frames truly loom (collision box stays put — presence only).
+        body.size = HeroPixelArt.displaySize(for: kind)
         shownPose = -1
     }
 
@@ -223,10 +224,10 @@ final class HeroNode: SKSpriteNode {
             lastGroundedTime = -10 // consume coyote so we don't double-jump
             lastJumpPressedTime = -10 // consume buffer
             fallPeak = 0
-            // Takeoff pop: stretch tall + kick dust + whoosh.
+            // Takeoff pop: stretch tall + burst + whoosh.
             squashX = 0.82
             squashY = 1.18
-            spawnDust(count: 6, spread: 26, up: 60, color: groundDustColor())
+            spawnJumpBurst()
             SoundEngine.shared.heroJump()
         }
         // Variable jump height: releasing mid-rise bleeds lift once, so a tap
@@ -238,6 +239,18 @@ final class HeroNode: SKSpriteNode {
 
         // Track the fall for landing weight.
         if !grounded { fallPeak = min(fallPeak, velocity.dy) }
+
+        // Rising trail: faint motes shed while climbing fast, so big
+        // jumps read as powerful instead of floaty.
+        if !grounded, velocity.dy > 500 {
+            trailAcc += dt
+            if trailAcc >= 0.09 {
+                trailAcc = 0
+                spawnRiseMote()
+            }
+        } else {
+            trailAcc = 0
+        }
 
         // Integrate.
         let prevPos = position
@@ -257,6 +270,8 @@ final class HeroNode: SKSpriteNode {
             landDip = max(landDip, max(0.25, impact))
             spawnDust(count: 4 + Int(impact * 8), spread: 30 + impact * 30,
                       up: 50 + impact * 90, color: groundDustColor())
+            // Hard drops slam a shockwave ring out across the ground.
+            if impact > 0.45 { spawnLandRing(scale: 1 + impact) }
             SoundEngine.shared.heroLand(impact)
             fallPeak = 0
             strideAcc = 0
@@ -500,6 +515,93 @@ final class HeroNode: SKSpriteNode {
                 .removeFromParent(),
             ]))
         }
+    }
+
+    /// Takeoff burst: ground dust + an expanding shockwave ring + white
+    /// streaks shooting skyward. The jump reads as an explosion upward,
+    /// not a float away.
+    private func spawnJumpBurst() {
+        spawnDust(count: 6, spread: 26, up: 60, color: groundDustColor())
+        guard let parent else { return }
+        let feetY = -bodyHeight / 2 + 4
+        let origin = visual.convert(CGPoint(x: 0, y: feetY), to: parent)
+        // Shockwave ring hugging the ground.
+        let ring = SKShapeNode(circleOfRadius: 14)
+        ring.strokeColor = SKColor(white: 1, alpha: 0.7)
+        ring.lineWidth = 3
+        ring.fillColor = .clear
+        ring.position = origin
+        ring.zPosition = 9
+        parent.addChild(ring)
+        ring.run(.sequence([
+            .group([.scale(to: 2.6, duration: 0.35),
+                    .fadeOut(withDuration: 0.35)]),
+            .removeFromParent(),
+        ]))
+        // Rising light streaks.
+        for _ in 0..<5 {
+            let streak = SKSpriteNode(
+                color: SKColor(white: 1, alpha: 0.8),
+                size: CGSize(width: CGFloat.random(in: 2...3.5),
+                             height: CGFloat.random(in: 10...20)))
+            streak.position = origin + CGVector(
+                dx: CGFloat.random(in: -24...24),
+                dy: CGFloat.random(in: 0...6))
+            streak.zPosition = 9
+            parent.addChild(streak)
+            let dur = TimeInterval.random(in: 0.25...0.4)
+            streak.run(.sequence([
+                .group([
+                    .moveBy(x: CGFloat.random(in: -10...10),
+                            y: CGFloat.random(in: 50...90), duration: dur),
+                    .fadeOut(withDuration: dur),
+                ]),
+                .removeFromParent(),
+            ]))
+        }
+    }
+
+    /// Landing shockwave for hard drops: a wide ring racing outward.
+    private func spawnLandRing(scale: CGFloat) {
+        guard let parent else { return }
+        let feetY = -bodyHeight / 2 + 4
+        let origin = visual.convert(CGPoint(x: 0, y: feetY), to: parent)
+        let ring = SKShapeNode(circleOfRadius: 16 * scale)
+        ring.strokeColor = SKColor(white: 1, alpha: 0.65)
+        ring.lineWidth = 4
+        ring.fillColor = .clear
+        ring.position = origin
+        ring.zPosition = 9
+        parent.addChild(ring)
+        ring.run(.sequence([
+            .group([.scale(to: 2.2, duration: 0.4),
+                    .fadeOut(withDuration: 0.4)]),
+            .removeFromParent(),
+        ]))
+    }
+
+    /// Faint mote shed while climbing fast: drifts down past the body so
+    /// the rise feels speedy against the world.
+    private func spawnRiseMote() {
+        guard let parent else { return }
+        let origin = visual.convert(
+            CGPoint(x: CGFloat.random(in: -10...10),
+                    y: CGFloat.random(in: -20...20)), to: parent)
+        let side = CGFloat.random(in: 2.5...4.5)
+        let mote = SKSpriteNode(color: SKColor(white: 1, alpha: 0.55),
+                                size: CGSize(width: side, height: side))
+        mote.position = origin
+        mote.zPosition = 9
+        parent.addChild(mote)
+        let dur = TimeInterval.random(in: 0.25...0.4)
+        mote.run(.sequence([
+            .group([
+                .moveBy(x: -velocity.dx * 0.1 * CGFloat(dur),
+                        y: CGFloat.random(in: -60...(-30)), duration: dur),
+                .fadeOut(withDuration: dur),
+            ]),
+            .removeFromParent(),
+        ]))
     }
 }
 

@@ -10,6 +10,7 @@ enum HeroPixelArt {
 
     enum Kind: CaseIterable {
         case vanguard, scout, bulwark, ranger, saboteur, warlord
+        case titan, wraith, paladin, juggernaut, spectre, inferno
     }
 
     /// Hero id (roster / scene) → pixel kind.
@@ -20,6 +21,12 @@ enum HeroPixelArt {
         case "ranger": return .ranger
         case "saboteur": return .saboteur
         case "warlord": return .warlord
+        case "titan": return .titan
+        case "wraith": return .wraith
+        case "paladin": return .paladin
+        case "juggernaut": return .juggernaut
+        case "spectre": return .spectre
+        case "inferno": return .inferno
         default: return .vanguard
         }
     }
@@ -44,7 +51,13 @@ enum HeroPixelArt {
 
     private static let W = 30, H = 40
 
-    private static func canvas(key: String, draw: (CGContext) -> Void) -> SKTexture {
+    /// Battle display size: 2pt per pixel — every fighter shares one
+    /// frame so the roster reads as a unit (bulk comes from the art).
+    static func displaySize(for kind: Kind) -> CGSize {
+        CGSize(width: CGFloat(W) * 2, height: CGFloat(H) * 2)
+    }
+
+    private static func canvas(kind: Kind, key: String, draw: (CGContext) -> Void) -> SKTexture {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = false
@@ -90,6 +103,12 @@ enum HeroPixelArt {
         case .ranger: return "ranger"
         case .saboteur: return "saboteur"
         case .warlord: return "warlord"
+        case .titan: return "titan"
+        case .wraith: return "wraith"
+        case .paladin: return "paladin"
+        case .juggernaut: return "juggernaut"
+        case .spectre: return "spectre"
+        case .inferno: return "inferno"
         }
     }
 
@@ -166,7 +185,7 @@ enum HeroPixelArt {
     }
 
     private static func body(_ kind: Kind, pose: Int, marching: Bool) -> SKTexture {
-        canvas(key: "hero-\(key(kind))-\(marching ? "w" : "i")\(pose)") { cg in
+        canvas(kind: kind, key: "hero-\(key(kind))-\(marching ? "w" : "i")\(pose)") { cg in
             // Walk frames bob every other step; idle breathes on frame 1.
             // Visors blink mid-stride (walk frame 2) or on breathe (idle 1).
             let bob = marching ? (pose % 2 == 1 ? -1 : 0) : (pose == 1 ? -1 : 0)
@@ -179,6 +198,12 @@ enum HeroPixelArt {
             case .ranger: ranger(cg, bob: bob, blink: blink, step: step)
             case .saboteur: saboteur(cg, bob: bob, blink: blink, step: step)
             case .warlord: warlord(cg, bob: bob, blink: blink, step: step)
+            case .titan: titan(cg, bob: bob, blink: blink, step: step)
+            case .wraith: wraith(cg, bob: bob, blink: blink, step: step)
+            case .paladin: paladin(cg, bob: bob, blink: blink, step: step)
+            case .juggernaut: juggernaut(cg, bob: bob, blink: blink, step: step)
+            case .spectre: spectre(cg, bob: bob, blink: blink, step: step)
+            case .inferno: inferno(cg, bob: bob, blink: blink, step: step)
             }
         }
     }
@@ -475,5 +500,344 @@ enum HeroPixelArt {
         fill(cg, x: 13, y: 26 + bob, w: 4, h: 2, bronze)
         marchLegs(cg, step: step, cx: 13, top: 28 + bob, len: 6, main: armorD,
                   shade: suitD, pad: bronze, boot: suitD, sole: bronze, wide: true)
+    }
+
+    // MARK: - Titan (siege wall: granite bulk + magma seams)
+
+    private static func titan(_ cg: CGContext, bob: Int, blink: Bool, step: Int) {
+        let stone = UIColor(red: 0.38, green: 0.38, blue: 0.44, alpha: 1)
+        let stoneD = UIColor(red: 0.22, green: 0.22, blue: 0.28, alpha: 1)
+        let magma = UIColor(red: 1.0, green: 0.45, blue: 0.10, alpha: 1)
+        let ember = UIColor(red: 1.0, green: 0.80, blue: 0.30, alpha: 1)
+        let O = outline
+        // Reactor block with a live ember line.
+        pack(cg, x: 1, top: 18 + bob, w: 5, h: 11, shell: stoneD, stripe: magma)
+        fill(cg, x: 2, y: 23 + bob, w: 3, h: 1, ember)
+        // Wall pauldrons bleeding off both edges, magma studs.
+        fill(cg, x: 0, y: 11 + bob, w: 10, h: 8, O)
+        fill(cg, x: 1, y: 12 + bob, w: 8, h: 6, stone)
+        fill(cg, x: 1, y: 12 + bob, w: 8, h: 1, white.withAlphaComponent(0.3))
+        fill(cg, x: 3, y: 15 + bob, w: 2, h: 2, magma)
+        fill(cg, x: 6, y: 15 + bob, w: 2, h: 2, magma)
+        fill(cg, x: 20, y: 11 + bob, w: 10, h: 8, O)
+        fill(cg, x: 21, y: 12 + bob, w: 8, h: 6, stone)
+        fill(cg, x: 22, y: 15 + bob, w: 2, h: 2, magma)
+        fill(cg, x: 25, y: 15 + bob, w: 2, h: 2, magma)
+        // Heavy-brow helm sunk deep + ember slit.
+        fill(cg, x: 11, y: 3 + bob, w: 9, h: 8, O)
+        fill(cg, x: 12, y: 4 + bob, w: 7, h: 6, stoneD)
+        fill(cg, x: 12, y: 4 + bob, w: 7, h: 2, stone) // brow shelf
+        fill(cg, x: 13, y: 7 + bob, w: 5, h: blink ? 1 : 2, O)
+        if !blink { fill(cg, x: 14, y: 7 + bob, w: 3, h: 1, magma) }
+        fill(cg, x: 9, y: 11 + bob, w: 12, h: 3, stone) // gorget
+        fill(cg, x: 14, y: 12 + bob, w: 3, h: 1, ember)  // throat glow
+        // Chest bridge: solid stone from gorget to torso, no gap.
+        fill(cg, x: 10, y: 14 + bob, w: 11, h: 4, stone)
+        fill(cg, x: 10, y: 14 + bob, w: 2, h: 4, stoneD)
+        fill(cg, x: 15, y: 15 + bob, w: 1, h: 2, magma)
+        // Broad torso wall + magma seams + big furnace core.
+        fill(cg, x: 6, y: 18 + bob, w: 18, h: 10, O)
+        fill(cg, x: 7, y: 19 + bob, w: 16, h: 8, stone)
+        fill(cg, x: 7, y: 19 + bob, w: 3, h: 8, stoneD)
+        fill(cg, x: 10, y: 20 + bob, w: 1, h: 6, magma)
+        fill(cg, x: 19, y: 20 + bob, w: 1, h: 6, magma)
+        fill(cg, x: 12, y: 21 + bob, w: 6, h: 5, O)
+        fill(cg, x: 12, y: 21 + bob, w: 6, h: 4, magma)
+        fill(cg, x: 12, y: 21 + bob, w: 6, h: 1, ember)
+        // Belt + thick siege-stump legs.
+        fill(cg, x: 6, y: 28 + bob, w: 18, h: 2, stoneD)
+        fill(cg, x: 12, y: 28 + bob, w: 6, h: 2, magma)
+        marchLegs(cg, step: step, cx: 14, top: 30 + bob, len: 6, main: stone,
+                  shade: stoneD, pad: stone, boot: stoneD, sole: magma, wide: true)
+    }
+
+    // MARK: - Wraith (ghost infiltrator: tattered teal cloak, ember eyes)
+
+    private static func wraith(_ cg: CGContext, bob: Int, blink: Bool, step: Int) {
+        let shroud = UIColor(red: 0.16, green: 0.38, blue: 0.42, alpha: 1)
+        let shroudD = UIColor(red: 0.08, green: 0.20, blue: 0.24, alpha: 1)
+        let mist = UIColor(red: 0.55, green: 0.95, blue: 0.95, alpha: 1)
+        let O = outline
+        // Ragged hood + deep cowl + burning eyes.
+        fill(cg, x: 10, y: 2 + bob, w: 12, h: 9, O)
+        fill(cg, x: 11, y: 3 + bob, w: 10, h: 7, shroud)
+        fill(cg, x: 11, y: 3 + bob, w: 2, h: 7, shroudD)
+        fill(cg, x: 10, y: 9 + bob, w: 2, h: 3, shroudD) // hood tear
+        fill(cg, x: 21, y: 8 + bob, w: 2, h: 4, shroudD) // hood tear
+        fill(cg, x: 15, y: 6 + bob, w: 6, h: blink ? 1 : 3, O)
+        if !blink {
+            fill(cg, x: 16, y: 6 + bob, w: 2, h: 2, mist)
+            fill(cg, x: 19, y: 6 + bob, w: 1, h: 2, mist)
+        }
+        // Tattered cloak: layered tails that shred toward the legs.
+        fill(cg, x: 8, y: 11 + bob, w: 14, h: 14, O)
+        fill(cg, x: 9, y: 12 + bob, w: 12, h: 12, shroud)
+        fill(cg, x: 9, y: 12 + bob, w: 2, h: 12, shroudD)
+        fill(cg, x: 13, y: 14 + bob, w: 2, h: 6, mist) // spirit seam
+        fill(cg, x: 9, y: 24 + bob, w: 3, h: 4, shroudD)
+        fill(cg, x: 13, y: 25 + bob, w: 3, h: 3, shroudD)
+        fill(cg, x: 18, y: 24 + bob, w: 3, h: 4, shroudD)
+        // Wisp clasp + faint chest glow.
+        fill(cg, x: 14, y: 13 + bob, w: 3, h: 2, mist)
+        fill(cg, x: 15, y: 17 + bob, w: 2, h: 3, mist)
+        // Wisp-thin striding legs fading into mist.
+        marchLegs(cg, step: step, cx: 14, top: 26 + bob, len: 7, main: shroudD,
+                  shade: shroudD, pad: shroud, boot: shroudD, sole: mist)
+    }
+
+    // MARK: - Paladin (oathbound guard: winged helm, gold + white plate)
+
+    private static func paladin(_ cg: CGContext, bob: Int, blink: Bool, step: Int) {
+        let plate = UIColor(red: 0.90, green: 0.90, blue: 0.94, alpha: 1)
+        let plateD = UIColor(red: 0.58, green: 0.60, blue: 0.68, alpha: 1)
+        let gold = UIColor(red: 1.0, green: 0.78, blue: 0.30, alpha: 1)
+        let tabard = UIColor(red: 0.20, green: 0.35, blue: 0.75, alpha: 1)
+        let lens = UIColor(red: 0.55, green: 0.9, blue: 1.0, alpha: 1)
+        let O = outline
+        // Reliquary pack with a gold seal.
+        pack(cg, x: 7, top: 15 + bob, w: 4, h: 9, shell: plateD, stripe: gold)
+        // Winged helm: white wings fanning both sides.
+        fill(cg, x: 3, y: 4 + bob, w: 7, h: 3, plate)
+        fill(cg, x: 3, y: 4 + bob, w: 7, h: 1, white)
+        fill(cg, x: 20, y: 4 + bob, w: 7, h: 3, plate)
+        fill(cg, x: 20, y: 4 + bob, w: 7, h: 1, white)
+        fill(cg, x: 10, y: 2 + bob, w: 11, h: 9, O)
+        fill(cg, x: 11, y: 3 + bob, w: 9, h: 7, plate)
+        fill(cg, x: 11, y: 3 + bob, w: 2, h: 7, plateD)
+        fill(cg, x: 14, y: 6 + bob, w: 6, h: blink ? 1 : 3, O)
+        if !blink { fill(cg, x: 15, y: 6 + bob, w: 4, h: 2, lens) }
+        fill(cg, x: 14, y: 2 + bob, w: 3, h: 2, gold) // crest
+        // Gilded pauldrons.
+        fill(cg, x: 5, y: 12 + bob, w: 7, h: 6, O)
+        fill(cg, x: 6, y: 13 + bob, w: 5, h: 4, plate)
+        fill(cg, x: 6, y: 13 + bob, w: 5, h: 1, gold)
+        fill(cg, x: 19, y: 12 + bob, w: 7, h: 6, O)
+        fill(cg, x: 20, y: 13 + bob, w: 5, h: 4, plate)
+        fill(cg, x: 20, y: 13 + bob, w: 5, h: 1, gold)
+        // Gorget bridge: armor from collar to torso with no gap.
+        fill(cg, x: 11, y: 15 + bob, w: 9, h: 3, plate)
+        fill(cg, x: 11, y: 15 + bob, w: 9, h: 1, gold)
+        fill(cg, x: 14, y: 16 + bob, w: 3, h: 1, gold)
+        // White plate + blue tabard + broad gold cross.
+        fill(cg, x: 10, y: 18 + bob, w: 11, h: 9, O)
+        fill(cg, x: 11, y: 19 + bob, w: 9, h: 7, plate)
+        fill(cg, x: 11, y: 19 + bob, w: 1, h: 7, plateD)
+        fill(cg, x: 19, y: 19 + bob, w: 1, h: 7, plateD)
+        fill(cg, x: 13, y: 19 + bob, w: 5, h: 7, tabard)
+        fill(cg, x: 14, y: 20 + bob, w: 3, h: 5, gold)
+        fill(cg, x: 13, y: 21 + bob, w: 5, h: 1, gold)
+        fill(cg, x: 11, y: 20 + bob, w: 1, h: 1, gold)
+        fill(cg, x: 11, y: 24 + bob, w: 1, h: 1, gold)
+        fill(cg, x: 19, y: 20 + bob, w: 1, h: 1, gold)
+        fill(cg, x: 19, y: 24 + bob, w: 1, h: 1, gold)
+        // Chain connectors + belt + fauld tassets over the hips.
+        fill(cg, x: 10, y: 17 + bob, w: 2, h: 1, gold)
+        fill(cg, x: 18, y: 17 + bob, w: 2, h: 1, gold)
+        // Belt + buckle + fauld tassets guarding the hips.
+        fill(cg, x: 10, y: 27 + bob, w: 11, h: 2, plateD)
+        fill(cg, x: 14, y: 27 + bob, w: 3, h: 2, gold)
+        fill(cg, x: 11, y: 29 + bob, w: 4, h: 2, plate)
+        fill(cg, x: 11, y: 30 + bob, w: 4, h: 1, gold)
+        fill(cg, x: 16, y: 29 + bob, w: 4, h: 2, plate)
+        fill(cg, x: 16, y: 30 + bob, w: 4, h: 1, gold)
+        marchLegs(cg, step: step, cx: 14, top: 29 + bob, len: 6, main: plateD,
+                  shade: plateD, pad: plate, boot: plateD, sole: gold)
+    }
+
+    // MARK: - Juggernaut (demolitions: fat hazard bulk, blast shield)
+
+    private static func juggernaut(_ cg: CGContext, bob: Int, blink: Bool, step: Int) {
+        let rust = UIColor(red: 0.55, green: 0.33, blue: 0.15, alpha: 1)
+        let rustD = UIColor(red: 0.32, green: 0.19, blue: 0.09, alpha: 1)
+        let hazard = UIColor(red: 0.95, green: 0.75, blue: 0.15, alpha: 1)
+        let suit = UIColor(red: 0.15, green: 0.13, blue: 0.12, alpha: 1)
+        let suitD = UIColor(red: 0.08, green: 0.07, blue: 0.06, alpha: 1)
+        let lens = UIColor(red: 1.0, green: 0.55, blue: 0.15, alpha: 1)
+        let O = outline
+        // Blast helm + wide shield visor + grille jaw.
+        fill(cg, x: 9, y: 3 + bob, w: 12, h: 9, O)
+        fill(cg, x: 10, y: 4 + bob, w: 10, h: 7, rust)
+        fill(cg, x: 10, y: 4 + bob, w: 10, h: 1, hazard)
+        fill(cg, x: 13, y: 6 + bob, w: 7, h: blink ? 1 : 3, O)
+        if !blink { fill(cg, x: 14, y: 6 + bob, w: 5, h: 2, lens) }
+        fill(cg, x: 11, y: 10 + bob, w: 8, h: 2, suitD)
+        fill(cg, x: 12, y: 10 + bob, w: 1, h: 2, lens)
+        fill(cg, x: 15, y: 10 + bob, w: 1, h: 2, lens)
+        fill(cg, x: 18, y: 10 + bob, w: 1, h: 2, lens)
+        // Hazard-chevron pauldrons.
+        fill(cg, x: 1, y: 12 + bob, w: 9, h: 7, O)
+        fill(cg, x: 2, y: 13 + bob, w: 7, h: 5, rust)
+        fill(cg, x: 2, y: 16 + bob, w: 2, h: 2, hazard)
+        fill(cg, x: 4, y: 14 + bob, w: 2, h: 2, suitD)
+        fill(cg, x: 6, y: 16 + bob, w: 2, h: 2, hazard)
+        fill(cg, x: 21, y: 12 + bob, w: 8, h: 7, O)
+        fill(cg, x: 22, y: 13 + bob, w: 6, h: 5, rust)
+        fill(cg, x: 22, y: 13 + bob, w: 6, h: 1, hazard)
+        fill(cg, x: 25, y: 15 + bob, w: 2, h: 2, lens)
+        // Upper chest bridge: armor from pauldron to gut with no
+        // background gap between (the old hollow read as a hole).
+        fill(cg, x: 8, y: 14 + bob, w: 14, h: 5, O)
+        fill(cg, x: 9, y: 15 + bob, w: 12, h: 3, rust)
+        fill(cg, x: 9, y: 15 + bob, w: 12, h: 1, hazard)
+        fill(cg, x: 9, y: 17 + bob, w: 2, h: 1, rustD)
+        fill(cg, x: 19, y: 17 + bob, w: 2, h: 1, rustD)
+        fill(cg, x: 13, y: 16 + bob, w: 4, h: 1, rustD)
+        // Demo charge block + ammo drum strapped OVER the armor.
+        fill(cg, x: 2, y: 15 + bob, w: 6, h: 11, O)
+        fill(cg, x: 3, y: 16 + bob, w: 4, h: 9, rustD)
+        fill(cg, x: 3, y: 18 + bob, w: 4, h: 2, hazard)
+        fill(cg, x: 3, y: 22 + bob, w: 4, h: 1, hazard)
+        fill(cg, x: 3, y: 24 + bob, w: 4, h: 1, hazard)
+        fill(cg, x: 4, y: 13 + bob, w: 1, h: 3, hazard)
+        if !blink { fill(cg, x: 4, y: 13 + bob, w: 1, h: 1, white) }
+        fill(cg, x: 24, y: 17 + bob, w: 5, h: 9, O)
+        fill(cg, x: 25, y: 18 + bob, w: 3, h: 7, rust)
+        fill(cg, x: 25, y: 21 + bob, w: 3, h: 2, hazard)
+        fill(cg, x: 25, y: 22 + bob, w: 1, h: 1, suitD)
+        // FAT gut: plated belly with seams, rivets, gauge cluster,
+        // charge blocks and lamp — dressed on every row.
+        fill(cg, x: 5, y: 19 + bob, w: 20, h: 9, O)
+        fill(cg, x: 6, y: 20 + bob, w: 18, h: 7, rust)
+        fill(cg, x: 6, y: 20 + bob, w: 3, h: 7, rustD)
+        fill(cg, x: 21, y: 20 + bob, w: 3, h: 7, rustD)
+        // Belly plate seams.
+        fill(cg, x: 9, y: 22 + bob, w: 12, h: 1, rustD)
+        fill(cg, x: 9, y: 25 + bob, w: 12, h: 1, rustD)
+        // Flank rivets.
+        fill(cg, x: 6, y: 21 + bob, w: 1, h: 1, hazard)
+        fill(cg, x: 6, y: 24 + bob, w: 1, h: 1, hazard)
+        fill(cg, x: 23, y: 21 + bob, w: 1, h: 1, hazard)
+        fill(cg, x: 23, y: 24 + bob, w: 1, h: 1, hazard)
+        // Collar hazard band + ribs so the upper chest never sits flat.
+        fill(cg, x: 9, y: 20 + bob, w: 12, h: 1, hazard)
+        fill(cg, x: 11, y: 21 + bob, w: 1, h: 3, rustD)
+        fill(cg, x: 20, y: 22 + bob, w: 1, h: 1, hazard)
+        // Gauge cluster: bright live dial (dark read as a hollow).
+        fill(cg, x: 12, y: 21 + bob, w: 6, h: 4, O)
+        fill(cg, x: 13, y: 22 + bob, w: 4, h: 2, lens)
+        fill(cg, x: 13, y: 22 + bob, w: 2, h: 1, white)
+        fill(cg, x: 19, y: 21 + bob, w: 1, h: 2, hazard)
+        fill(cg, x: 10, y: 24 + bob, w: 3, h: 2, hazard)
+        fill(cg, x: 10, y: 24 + bob, w: 3, h: 1, white.withAlphaComponent(0.5))
+        fill(cg, x: 18, y: 24 + bob, w: 3, h: 2, hazard)
+        // Thick hazard belt + demolition stump legs.
+        fill(cg, x: 5, y: 28 + bob, w: 20, h: 2, suitD)
+        fill(cg, x: 6, y: 28 + bob, w: 2, h: 2, hazard)
+        fill(cg, x: 10, y: 28 + bob, w: 2, h: 2, hazard)
+        fill(cg, x: 14, y: 28 + bob, w: 2, h: 2, hazard)
+        fill(cg, x: 18, y: 28 + bob, w: 2, h: 2, hazard)
+        fill(cg, x: 22, y: 28 + bob, w: 2, h: 2, hazard)
+        marchLegs(cg, step: step, cx: 14, top: 30 + bob, len: 6, main: suit,
+                  shade: suitD, pad: rust, boot: suitD, sole: hazard, wide: true)
+    }
+
+    // MARK: - Spectre (RIG engineer: spine health bar, slit visor)
+
+    private static func spectre(_ cg: CGContext, bob: Int, blink: Bool, step: Int) {
+        let metal = UIColor(red: 0.36, green: 0.34, blue: 0.31, alpha: 1)
+        let metalD = UIColor(red: 0.20, green: 0.19, blue: 0.18, alpha: 1)
+        let bronze = UIColor(red: 0.66, green: 0.43, blue: 0.22, alpha: 1)
+        let rig = UIColor(red: 0.35, green: 0.85, blue: 1.0, alpha: 1)
+        let visor = UIColor(red: 1.0, green: 0.65, blue: 0.20, alpha: 1)
+        let O = outline
+        // Helm + the iconic horizontal visor slit.
+        fill(cg, x: 10, y: 2 + bob, w: 11, h: 9, O)
+        fill(cg, x: 11, y: 3 + bob, w: 9, h: 7, metal)
+        fill(cg, x: 11, y: 3 + bob, w: 2, h: 7, metalD)
+        fill(cg, x: 11, y: 9 + bob, w: 9, h: 1, metalD)
+        fill(cg, x: 14, y: 5 + bob, w: 6, h: blink ? 1 : 3, O)
+        if !blink {
+            fill(cg, x: 15, y: 6 + bob, w: 4, h: 1, visor)
+        }
+        fill(cg, x: 15, y: 3 + bob, w: 2, h: 1, bronze) // helm crest
+        // Collar seal.
+        fill(cg, x: 13, y: 11 + bob, w: 6, h: 2, metalD)
+        fill(cg, x: 14, y: 11 + bob, w: 1, h: 2, rig)
+        // Pauldrons with bronze trim + shoulder lamp.
+        fill(cg, x: 5, y: 12 + bob, w: 7, h: 6, O)
+        fill(cg, x: 6, y: 13 + bob, w: 5, h: 4, metal)
+        fill(cg, x: 6, y: 13 + bob, w: 5, h: 1, bronze)
+        fill(cg, x: 19, y: 12 + bob, w: 7, h: 6, O)
+        fill(cg, x: 20, y: 13 + bob, w: 5, h: 4, metal)
+        fill(cg, x: 20, y: 13 + bob, w: 5, h: 1, bronze)
+        fill(cg, x: 23, y: 14 + bob, w: 2, h: 2, white) // lamp
+        // Upper chest: solid armor from collar to gut (no hollow), with
+        // a bronze yoke line and a RIG seal at the throat.
+        fill(cg, x: 10, y: 13 + bob, w: 11, h: 5, O)
+        fill(cg, x: 11, y: 14 + bob, w: 9, h: 3, metal)
+        fill(cg, x: 11, y: 14 + bob, w: 9, h: 1, bronze)
+        fill(cg, x: 11, y: 14 + bob, w: 1, h: 3, metalD)
+        fill(cg, x: 14, y: 15 + bob, w: 3, h: 1, rig)
+        fill(cg, x: 14, y: 15 + bob, w: 1, h: 1, white)
+        // Spine health bar hugging the ribs: dark slot tight to the torso
+        // with four glowing segments, clear of the pauldron above.
+        fill(cg, x: 8, y: 18 + bob, w: 2, h: 8, metalD)
+        for i in 0..<4 {
+            fill(cg, x: 8, y: 18 + bob + i * 2, w: 2, h: 1, rig)
+        }
+        fill(cg, x: 8, y: 18 + bob, w: 2, h: 1, white) // top segment hot
+        // Segmented engineering torso + bronze edges + chest projector.
+        fill(cg, x: 10, y: 18 + bob, w: 11, h: 9, O)
+        fill(cg, x: 11, y: 19 + bob, w: 9, h: 7, metal)
+        fill(cg, x: 11, y: 19 + bob, w: 1, h: 7, metalD)
+        fill(cg, x: 19, y: 19 + bob, w: 1, h: 7, bronze)
+        fill(cg, x: 12, y: 20 + bob, w: 7, h: 1, metalD)
+        fill(cg, x: 12, y: 21 + bob, w: 7, h: 1, bronze)
+        fill(cg, x: 12, y: 24 + bob, w: 7, h: 1, metalD)
+        fill(cg, x: 12, y: 25 + bob, w: 1, h: 1, bronze)
+        fill(cg, x: 18, y: 25 + bob, w: 1, h: 1, bronze)
+        fill(cg, x: 14, y: 20 + bob, w: 2, h: 2, O)
+        fill(cg, x: 14, y: 20 + bob, w: 2, h: 1, rig) // projector
+        // Belt + heavy armored legs.
+        fill(cg, x: 10, y: 27 + bob, w: 11, h: 2, metalD)
+        fill(cg, x: 14, y: 27 + bob, w: 3, h: 2, bronze)
+        marchLegs(cg, step: step, cx: 14, top: 29 + bob, len: 6, main: metal,
+                  shade: metalD, pad: bronze, boot: metalD, sole: bronze, wide: true)
+    }
+
+    // MARK: - Inferno (pyro veteran: furnace visor, pilot tank, fuel hose)
+
+    private static func inferno(_ cg: CGContext, bob: Int, blink: Bool, step: Int) {
+        let rust = UIColor(red: 0.62, green: 0.30, blue: 0.12, alpha: 1)
+        let rustD = UIColor(red: 0.36, green: 0.17, blue: 0.07, alpha: 1)
+        let soot = UIColor(red: 0.12, green: 0.10, blue: 0.10, alpha: 1)
+        let flame = UIColor(red: 1.0, green: 0.55, blue: 0.10, alpha: 1)
+        let core = UIColor(red: 1.0, green: 0.85, blue: 0.35, alpha: 1)
+        let O = outline
+        // Fuel tank with a live pilot flame.
+        fill(cg, x: 4, y: 13 + bob, w: 5, h: 11, O)
+        fill(cg, x: 5, y: 14 + bob, w: 3, h: 9, rustD)
+        fill(cg, x: 5, y: 16 + bob, w: 3, h: 4, flame)
+        fill(cg, x: 6, y: 17 + bob, w: 1, h: 2, core)
+        fill(cg, x: 5, y: 11 + bob, w: 2, h: 3, flame)
+        fill(cg, x: 5, y: 11 + bob, w: 1, h: 1, core)
+        // Fuel hose looping tank -> torso.
+        segment(cg, x0: 8, y0: 22 + bob, x1: 11, y1: 20 + bob, w: 2, color: soot)
+        // Scorched helm + furnace visor slit.
+        fill(cg, x: 10, y: 2 + bob, w: 12, h: 9, O)
+        fill(cg, x: 11, y: 3 + bob, w: 10, h: 7, rust)
+        fill(cg, x: 11, y: 3 + bob, w: 3, h: 7, rustD)
+        fill(cg, x: 11, y: 9 + bob, w: 10, h: 1, soot)
+        fill(cg, x: 14, y: 5 + bob, w: 7, h: blink ? 1 : 3, O)
+        if !blink {
+            fill(cg, x: 15, y: 5 + bob, w: 5, h: 2, flame)
+            fill(cg, x: 15, y: 5 + bob, w: 5, h: 1, core)
+        }
+        // Heat-vent collar.
+        fill(cg, x: 12, y: 11 + bob, w: 8, h: 2, soot)
+        fill(cg, x: 13, y: 11 + bob, w: 1, h: 2, flame)
+        fill(cg, x: 16, y: 11 + bob, w: 1, h: 2, flame)
+        // Soot-stained torso + pressure gauge.
+        fill(cg, x: 10, y: 13 + bob, w: 11, h: 11, O)
+        fill(cg, x: 11, y: 14 + bob, w: 9, h: 9, rust)
+        fill(cg, x: 11, y: 20 + bob, w: 9, h: 3, soot)
+        fill(cg, x: 15, y: 15 + bob, w: 4, h: 4, O)
+        fill(cg, x: 16, y: 16 + bob, w: 2, h: 2, core)
+        fill(cg, x: 16, y: 16 + bob, w: 2, h: 1, white)
+        // Belt + stomp legs with ember soles.
+        fill(cg, x: 10, y: 24 + bob, w: 11, h: 2, soot)
+        fill(cg, x: 14, y: 24 + bob, w: 3, h: 2, rustD)
+        marchLegs(cg, step: step, cx: 14, top: 26 + bob, len: 6, main: rustD,
+                  shade: soot, pad: rust, boot: soot, sole: flame)
     }
 }

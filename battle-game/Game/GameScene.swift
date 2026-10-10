@@ -41,6 +41,8 @@ final class GameScene: SKScene {
     /// Gun currently reloading (background reloads keep running), if any.
     private var reloadingWeapon: HeroWeapon?
     private var reloadEndsAt: TimeInterval = -1
+    /// Halfway mark of the active reload: fires the mag-seat clack once.
+    private var reloadMidAt: TimeInterval = -1
     /// Desperation trickle for fully-starved guns (mag 0 + reserve 0).
     private var regenAccumulator: TimeInterval = 0
 
@@ -71,6 +73,7 @@ final class GameScene: SKScene {
               gun.hasInfiniteAmmo || reserves[gun.rawValue] > 0 else { return false }
         reloadingWeapon = gun
         reloadEndsAt = sceneTime + gun.reloadTime
+        reloadMidAt = sceneTime + gun.reloadTime / 2
         SoundEngine.shared.reloadStart()
         return true
     }
@@ -257,6 +260,7 @@ final class GameScene: SKScene {
         reserves = HeroWeapon.allCases.map { $0.startReserve }
         reloadingWeapon = nil
         reloadEndsAt = -1
+        reloadMidAt = -1
         regenAccumulator = 0
         buildSky()
         buildFar()
@@ -649,7 +653,13 @@ final class GameScene: SKScene {
                 reserves[gun.rawValue] -= take
             }
             reloadingWeapon = nil
+            reloadMidAt = -1
             SoundEngine.shared.reloadDone()
+        } else if reloadingWeapon != nil, reloadMidAt >= 0, sceneTime >= reloadMidAt {
+            // Halfway through: the fresh mag seats with a clack, so long
+            // reloads read audibly from rack-out to seating thump.
+            reloadMidAt = -1
+            SoundEngine.shared.reloadTick()
         }
         // The dry active gun reloads on its own, even when not aiming.
         if reloadingWeapon == nil,
@@ -699,7 +709,7 @@ final class GameScene: SKScene {
             world.addChild(node)
             var shell = Projectile(node: node, dir: launchDir, life: gun.bulletLife,
                                    speed: gun.launchSpeed,
-                                   damage: gun.damage * HeroUpgrades.damageMultiplier(heroId: heroId),
+                                   damage: gun.damage + HeroUpgrades.damageBonus(heroId: heroId),
                                    team: .neutral)
             shell.thrust = gun.thrustAccel
             shell.gravity = gun.gravityPull

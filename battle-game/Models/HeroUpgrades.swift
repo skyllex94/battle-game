@@ -28,7 +28,7 @@ enum HeroUpgradeTrack: String, CaseIterable {
         case .speed: return tier == 0 ? "STOCK SPEED" : "+\(tier) SPEED"
         case .shield:
             return tier == 0 ? "NO SHIELD" : "\(HeroUpgrades.shieldCapacity(tier: tier)) SHIELD"
-        case .damage: return "+\(10 * tier)% DAMAGE"
+        case .damage: return "+\(2 * tier) DMG"
         }
     }
 }
@@ -73,9 +73,11 @@ enum HeroUpgrades {
         CGFloat(baseHP(heroId: heroId) + 25 * tier(heroId: heroId, track: .hp))
     }
 
-    /// Move-speed multiplier.
+    /// Move-speed multiplier. Gentle curve: scout stock (10) runs the
+    /// classic 1.0x, and every +1 speed is +5% — so the 20-speed ranger
+    /// tops out at 1.5x (what 15 used to be), never double pace.
     static func speedMultiplier(heroId: String) -> CGFloat {
-        CGFloat(speedValue(heroId: heroId)) / 10.0
+        CGFloat(0.5 + 0.05 * speedValue(heroId: heroId))
     }
 
     /// Roster stock speed for a hero (10 scout … 20 ranger).
@@ -84,15 +86,21 @@ enum HeroUpgrades {
     }
 
     /// Effective speed: roster stock +1 per SPEED tier. Battle run speed
-    /// is Balance.heroRunSpeed scaled by value/10, so scout (10) runs the
-    /// classic 520 and every +1 tier reads exactly on the stat sheet.
+    /// is Balance.heroRunSpeed × (0.5 + 0.05 × value), so scout (10) runs
+    /// the classic 520, each +1 tier reads on the sheet and adds 5% pace.
     static func speedValue(heroId: String) -> Double {
         baseSpeed(heroId: heroId) + Double(tier(heroId: heroId, track: .speed))
     }
 
-    /// Damage multiplier for hero bolts.
-    static func damageMultiplier(heroId: String) -> CGFloat {
-        CGFloat(1 + 0.10 * Double(tier(heroId: heroId, track: .damage)))
+    /// Roster stock damage bonus (0 scout … 14 warlord).
+    static func baseDamage(heroId: String) -> Int {
+        HeroRoster.heroes.first(where: { $0.id == heroId })?.baseDamage ?? 0
+    }
+
+    /// Flat damage added to every shot fired: roster stock +2 per DAMAGE
+    /// tier. Scout stock stays +0; a maxed warlord lands +20 per trigger.
+    static func damageBonus(heroId: String) -> CGFloat {
+        CGFloat(baseDamage(heroId: heroId) + 2 * tier(heroId: heroId, track: .damage))
     }
 
     /// Shield pool capacity (0 = no shield mechanic at all).

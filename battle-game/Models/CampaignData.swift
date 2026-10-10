@@ -114,6 +114,12 @@ struct HeroDef: Identifiable {
         case "ranger": return .ranger
         case "saboteur": return .saboteur
         case "warlord": return .warlord
+        case "titan": return .titan
+        case "wraith": return .wraith
+        case "paladin": return .paladin
+        case "juggernaut": return .juggernaut
+        case "spectre": return .spectre
+        case "inferno": return .inferno
         default: return .vanguard
         }
     }
@@ -125,11 +131,19 @@ struct HeroDef: Identifiable {
         case "ranger": return "MARKSMAN"
         case "saboteur": return "STRUCTURE KILLER"
         case "warlord": return "BRUISER"
+        case "titan": return "SIEGE WALL"
+        case "wraith": return "GHOST INFILTRATOR"
+        case "paladin": return "OATHBOUND GUARD"
+        case "juggernaut": return "DEMOLITIONS"
+        case "spectre": return "RIG ENGINEER"
+        case "inferno": return "PYRO VETERAN"
         default: return "BALANCED FRONTLINE"
         }
     }
     let maxHealth: Int
     let speed: Double
+    /// Flat damage added to every shot fired (0 scout … 14 warlord).
+    let baseDamage: Int
     let blurb: String
     /// Campaign level that unlocks this hero (0 = available from the start).
     /// Only Vanguard starts unlocked; the rest are milestone grants that the
@@ -140,23 +154,53 @@ struct HeroDef: Identifiable {
 struct HeroRoster {
     static let heroes: [HeroDef] = [
         HeroDef(id: "scout", displayName: "Scout", iconArtName: "Hero_icon1",
-                maxHealth: 100, speed: 10, blurb: "Fast feet, light frame. Your Unity starting build.",
+                maxHealth: 100, speed: 10, baseDamage: 0,
+                blurb: "Fast feet, light frame. Your Unity starting build.",
                 unlockLevel: 2),
         HeroDef(id: "vanguard", displayName: "Vanguard", iconArtName: "Hero_Icon2",
-                maxHealth: 300, speed: 13, blurb: "Balanced fighter for the first push.",
+                maxHealth: 300, speed: 13, baseDamage: 6,
+                blurb: "Balanced fighter for the first push.",
                 unlockLevel: 0),
         HeroDef(id: "bulwark", displayName: "Bulwark", iconArtName: "Hero_Icon3",
-                maxHealth: 480, speed: 11, blurb: "Slow tank. Holds the lane under tower fire.",
+                maxHealth: 480, speed: 11, baseDamage: 12,
+                blurb: "Slow tank. Holds the lane under tower fire.",
                 unlockLevel: 10),
         HeroDef(id: "ranger", displayName: "Ranger", iconArtName: "Hero_icon4",
-                maxHealth: 220, speed: 20, blurb: "Gun-ready skirmisher.",
+                maxHealth: 220, speed: 20, baseDamage: 8,
+                blurb: "Gun-ready skirmisher.",
                 unlockLevel: 4),
         HeroDef(id: "saboteur", displayName: "Saboteur", iconArtName: "Hero_icon5",
-                maxHealth: 380, speed: 17, blurb: "Tower-killer. Bonus vs structures (stage 2).",
+                maxHealth: 380, speed: 17, baseDamage: 10,
+                blurb: "Tower-killer. Bonus vs structures (stage 2).",
                 unlockLevel: 8),
         HeroDef(id: "warlord", displayName: "Warlord", iconArtName: "Hero_Icon6",
-                maxHealth: 580, speed: 14, blurb: "Late-campaign bruiser. Locked feel for now, playable in MVP.",
+                maxHealth: 580, speed: 14, baseDamage: 14,
+                blurb: "Late-campaign bruiser. Locked feel for now, playable in MVP.",
                 unlockLevel: 13),
+        HeroDef(id: "titan", displayName: "Titan", iconArtName: "Hero_icon1",
+                maxHealth: 700, speed: 11, baseDamage: 16,
+                blurb: "Walking siege wall. Slow, unstoppable, volcanic.",
+                unlockLevel: 15),
+        HeroDef(id: "wraith", displayName: "Wraith", iconArtName: "Hero_icon4",
+                maxHealth: 280, speed: 20, baseDamage: 12,
+                blurb: "Ghost infiltrator. There, then gone, then behind you.",
+                unlockLevel: 12),
+        HeroDef(id: "paladin", displayName: "Paladin", iconArtName: "Hero_Icon2",
+                maxHealth: 520, speed: 12, baseDamage: 14,
+                blurb: "Oathbound guard. Holds the line so others push it.",
+                unlockLevel: 11),
+        HeroDef(id: "juggernaut", displayName: "Juggernaut", iconArtName: "Hero_Icon3",
+                maxHealth: 620, speed: 10, baseDamage: 18,
+                blurb: "Demolitions bulk. Brings its own door-knocker.",
+                unlockLevel: 14),
+        HeroDef(id: "spectre", displayName: "Spectre", iconArtName: "Hero_icon5",
+                maxHealth: 340, speed: 19, baseDamage: 13,
+                blurb: "RIG-suited engineer. Cuts through anything.",
+                unlockLevel: 6),
+        HeroDef(id: "inferno", displayName: "Inferno", iconArtName: "Hero_Icon6",
+                maxHealth: 420, speed: 15, baseDamage: 15,
+                blurb: "Pyro veteran. Everything flammable has been warned.",
+                unlockLevel: 15),
     ]
 
     private static let selectedKey = "campaign.selectedHero"

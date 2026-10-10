@@ -350,8 +350,8 @@ private struct UpgradeColumn: View {
         let hp = Int(HeroUpgrades.maxHP(heroId: hero.id))
         let spd = Int(HeroUpgrades.speedValue(heroId: hero.id))
         let sh = Int(HeroUpgrades.shieldMax(heroId: hero.id))
-        let dmg = Int(round((HeroUpgrades.damageMultiplier(heroId: hero.id) - 1) * 100))
-        return "HP \(hp) · SPD \(spd) · SH \(sh) · DMG +\(dmg)%"
+        let dmg = Int(HeroUpgrades.damageBonus(heroId: hero.id))
+        return "HP \(hp) · SPD \(spd) · SH \(sh) · DMG +\(dmg)"
     }
 
     var body: some View {
@@ -883,14 +883,19 @@ private struct ShowcaseColumn: View {
 
     var body: some View {
         VStack(spacing: tight ? 6 : 8) {
-            // Stage: large idle sprite on a glow pad, arrows on the flanks,
+            // Stage: the roster portrait (same pixel image as the hero
+            // selection) on a glow pad, arrows on the flanks, trait +
             // status chip pinned bottom.
             ZStack {
                 Ellipse()
                     .fill(Color(red: 0.4, green: 0.95, blue: 1).opacity(0.10))
-                    .frame(width: 190, height: 54)
-                    .offset(y: tight ? 42 : 52)
-                HeroIdleView(kind: hero.pixelKind, height: tight ? 118 : 148)
+                    .frame(width: 200, height: 54)
+                    .offset(y: tight ? 40 : 50)
+                Image(uiImage: HeroPixelArt.portraitImage(for: hero.pixelKind))
+                    .interpolation(.none)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(height: tight ? 104 : 128)
                     .shadow(color: .cyan.opacity(0.35), radius: 14)
                     .saturation(locked ? 0.4 : 1)
                     .opacity(locked ? 0.75 : 1)
@@ -941,7 +946,7 @@ private struct ShowcaseColumn: View {
                     .frame(height: 1)
                 DossierStatRow(icon: .hp, label: "HEALTH",
                                value: "\(Int(HeroUpgrades.maxHP(heroId: hero.id)))",
-                               lit: pips(Int(HeroUpgrades.maxHP(heroId: hero.id)), 660),
+                               lit: pips(Int(HeroUpgrades.maxHP(heroId: hero.id)), 780),
                                color: .green)
                 DossierStatRow(icon: .speed, label: "SPEED",
                                value: "\(Int(HeroUpgrades.speedValue(heroId: hero.id)))",
@@ -952,8 +957,8 @@ private struct ShowcaseColumn: View {
                                lit: HeroUpgrades.tier(heroId: hero.id, track: .shield) * 2,
                                color: .cyan)
                 DossierStatRow(icon: .damage, label: "DAMAGE",
-                               value: "+\(Int(round((HeroUpgrades.damageMultiplier(heroId: hero.id) - 1) * 100)))%",
-                               lit: HeroUpgrades.tier(heroId: hero.id, track: .damage) * 2,
+                               value: "+\(Int(HeroUpgrades.damageBonus(heroId: hero.id)))",
+                               lit: pips(Int(HeroUpgrades.damageBonus(heroId: hero.id)), 30),
                                color: .orange)
             }
             .padding(.horizontal, 12)
@@ -1062,9 +1067,9 @@ private struct StageArrow: View {
 
 // MARK: - Choosing screen
 
-/// Full hero choosing screen: all six fighters as cards in a fixed grid
-/// (fits without scrolling). Locked cards veil with their unlock level;
-/// the deployed card glows yellow. Back chevron returns to the bay.
+/// Full hero choosing screen: all twelve fighters as cards in a fixed
+/// grid (4 columns, no scrolling). Locked cards veil with their unlock
+/// level; the deployed card glows yellow. Back chevron returns to the bay.
 private struct RosterScreen: View {
     let selectedId: String
     let previewId: String
@@ -1073,6 +1078,7 @@ private struct RosterScreen: View {
     let onBack: () -> Void
 
     private let columns = [
+        GridItem(.flexible(), spacing: 10),
         GridItem(.flexible(), spacing: 10),
         GridItem(.flexible(), spacing: 10),
         GridItem(.flexible(), spacing: 10),
@@ -1187,26 +1193,6 @@ private struct RosterMiniCard: View {
                 .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity)
-    }
-}
-
-/// Animated pixel hero: 2-frame idle (stand/breathe + blink) with a
-/// gentle bob. Pixel-crisp at any size. Shared with the briefing screen.
-struct HeroIdleView: View {
-    let kind: HeroPixelArt.Kind
-    let height: CGFloat
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 0.45)) { tl in
-            let secs = tl.date.timeIntervalSinceReferenceDate
-            let frame = Int(secs * 2.2) % 2
-            Image(uiImage: HeroPixelArt.bodyImage(for: kind, pose: frame))
-                .interpolation(.none)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(height: height)
-                .offset(y: frame == 1 ? -3 : 0)
-        }
     }
 }
 

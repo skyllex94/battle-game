@@ -139,8 +139,12 @@ struct LevelDetailView: View {
                         } label: {
                             HStack(spacing: 10) {
                                 ZStack(alignment: .bottomTrailing) {
-                                    HeroIdleView(kind: selectedHero.pixelKind, height: 56)
+                                    Image(uiImage: HeroPixelArt.portraitImage(for: selectedHero.pixelKind))
+                                        .interpolation(.none)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
                                         .frame(width: 56, height: 56)
+                                        .background(.black.opacity(0.4))
                                         .clipShape(ShopPixelShape(cut: 6))
                                         .overlay(ShopPixelShape(cut: 6).stroke(.yellow, lineWidth: 2))
                                         .shadow(color: .yellow.opacity(0.35), radius: 8)

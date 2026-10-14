@@ -50,10 +50,10 @@ enum Economy {
         }
     }
 
-    /// Hero add-on prices: health boosters follow the upgrade curve
-    /// (I/II/III); battle-droid tiers are a flat test diamond for now.
+    /// Hero add-on prices: health boosters and battle-droid tiers are
+    /// flat test diamonds for now (real curves land with economy pass).
     static func heroBoosterCost(_ tier: Int) -> Int {
-        heroUpgradeCost(tier)
+        1 // test price
     }
 
     static func heroDroidCost(_ tier: Int) -> Int {

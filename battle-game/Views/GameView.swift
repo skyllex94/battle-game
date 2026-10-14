@@ -775,6 +775,25 @@ struct GameView: View {
                            shield: minimap.shieldHP, shieldMax: minimap.shieldMax)
                 .allowsHitTesting(false)
 
+            // Health pack (booster add-on): one HUD-tapped heal per run.
+            // Lit green while armed + hurt, dim otherwise.
+            Button {
+                _ = scene.useHealthPack()
+            } label: {
+                HStack(spacing: 4) {
+                    PixelMedkitView()
+                    Text("+\(minimap.packAmount)")
+                        .monospacedDigit()
+                }
+                .font(.system(size: 11, weight: .black, design: .monospaced))
+                .foregroundStyle(minimap.packReady ? .green : .gray)
+                .padding(.horizontal, 7).padding(.vertical, 5)
+                .background(minimap.packReady ? .green.opacity(0.16) : .white.opacity(0.06))
+                .overlay(Rectangle().stroke(minimap.packReady
+                    ? .green.opacity(0.6) : .white.opacity(0.15), lineWidth: 1))
+            }
+            .disabled(!minimap.packReady)
+
             Spacer(minLength: 2)
                 .allowsHitTesting(false)
 
@@ -1279,6 +1298,26 @@ private struct PixelHeartView: View {
             "r": color,
             "L": .white,
         ], pixel: 1.5)
+    }
+}
+
+/// Pixel-art medkit for the health-pack button: green cross with a
+/// white-hot core on a dark pad. Matches the booster add-on icon.
+private struct PixelMedkitView: View {
+    private let grid = [
+        "..OO..",
+        ".OGGO.",
+        "OGWWGO",
+        ".OGGO.",
+        "..OO..",
+    ]
+    var body: some View {
+        PixelSpriteView(grid: grid, palette: [
+            "O": Color(white: 0.08),
+            "G": Color(red: 0.25, green: 0.95, blue: 0.45),
+            "W": .white,
+        ], pixel: 1.75)
+        .shadow(color: .green.opacity(0.35), radius: 2)
     }
 }
 

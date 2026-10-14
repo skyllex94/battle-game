@@ -127,9 +127,9 @@ final class GameScene: SKScene {
     /// Hearts remaining this attempt. Each death costs one; at zero the
     /// hero stays down and the run ends in defeat (see lostAt).
     private var heroLives: Int = Balance.heroLives
-    /// Medkit packs left this attempt (health-booster add-on). Each pack
-    /// cheats one lethal hit; refilled every attempt, not every respawn.
-    private var heroMedkits: Int = 0
+    /// Health pack armed this attempt (booster add-on). One HUD-tapped
+    /// heal per run; rearmed every attempt, not every respawn.
+    private var heroPackArmed: Bool = false
     // MARK: - Victory (enemy HQ destroyed -> level won)
     /// sceneTime of the winning blow; nil until the enemy HQ falls.
     private(set) var wonAt: TimeInterval?
@@ -251,7 +251,7 @@ final class GameScene: SKScene {
         summonCount = 0
         applyHeroUpgrades(fullRestore: true)
         heroLives = Balance.heroLives
-        heroMedkits = HeroAddons.boosterPacks(heroId: heroId)
+        heroPackArmed = HeroAddons.boosterTier(heroId: heroId) > 0
         money = Balance.startingGold
         sceneTime = 0
         lastUpdate = 0
@@ -411,10 +411,9 @@ final class GameScene: SKScene {
                 shieldHP = carry
             }
         }
-        // Lives per attempt (second-heart add-on included) + a fresh
-        // stock of medkit packs (health-booster add-on).
+        // Lives per attempt + one armed heal pack (booster add-on).
         heroLives = Balance.heroLives
-        heroMedkits = HeroAddons.boosterPacks(heroId: heroId)
+        heroPackArmed = HeroAddons.boosterTier(heroId: heroId) > 0
         // Owned battle buddy joins the deployment.
         ensureDroid()
         hero.position = CGPoint(x: Balance.heroSpawnX,
@@ -1387,21 +1386,6 @@ final class GameScene: SKScene {
         }
         heroHP = max(0, heroHP - rest)
         if heroHP <= 0 {
-            // Health-booster medkit: cheat death — burn one pack, rejoin
-            // the fight at half HP with a fresh shield instead of dying.
-            if heroMedkits > 0 {
-                heroMedkits -= 1
-                heroHP = heroMaxHP * 0.5
-                shieldHP = shieldMax
-                lastShieldHitAt = -10
-                SoundEngine.shared.pickup()
-                floatText("MEDKIT!",
-                          color: SKColor(red: 0.3, green: 1.0, blue: 0.5, alpha: 1),
-                          at: hero.position)
-                hero.run(.sequence([.fadeAlpha(to: 0.35, duration: 0.06),
-                                    .fadeAlpha(to: 1.0, duration: 0.12)]))
-                return
-            }
             killHero()
             return
         }
@@ -1416,6 +1400,30 @@ final class GameScene: SKScene {
         guard shieldMax > 0, shieldHP < shieldMax,
               sceneTime - lastShieldHitAt > 4 else { return }
         shieldHP = min(shieldMax, shieldHP + 10 * CGFloat(dt))
+    }
+
+    /// Health-pack button (HUD, next to the vitals): spends the run's one
+    /// armed pack for an instant heal. No-op at full HP, while dead, or
+    /// once spent. Returns true when HP actually moved.
+    @discardableResult
+    func useHealthPack() -> Bool {
+        guard hero.alive, heroPackArmed, heroHP > 0, heroHP < heroMaxHP else {
+            return false
+        }
+        let amount = CGFloat(HeroAddons.boosterHeal(
+            tier: HeroAddons.boosterTier(heroId: heroId)))
+        guard amount > 0 else { return false }
+        heroPackArmed = false
+        heroHP = min(heroMaxHP, heroHP + amount)
+        SoundEngine.shared.pickup()
+        floatText("+\(Int(amount)) HP",
+                  color: SKColor(red: 0.3, green: 1.0, blue: 0.5, alpha: 1),
+                  at: hero.position)
+        let puff = ProjectileFactory.makeImpactPuff()
+        puff.position = hero.position
+        puff.setScale(1.4)
+        world.addChild(puff)
+        return true
     }
 
     private func killHero() {
@@ -1761,6 +1769,9 @@ final class GameScene: SKScene {
             heroMaxLives: Balance.heroLives,
             shieldHP: shieldHP,
             shieldMax: shieldMax,
+            packReady: heroPackArmed && hero.alive && heroHP < heroMaxHP,
+            packAmount: HeroAddons.boosterHeal(
+                tier: HeroAddons.boosterTier(heroId: heroId)),
             money: money,
             allyXs: allies.filter { $0.alive }.map { $0.position.x },
             enemyXs: enemies.filter { $0.alive }.map { $0.position.x },

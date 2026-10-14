@@ -148,11 +148,11 @@ enum HeroUpgrades {
 /// Per-hero ADD-ONS (the armory's second panel, under UPGRADES).
 /// Shield lives here in the UI but keeps its upgrade-track storage +
 /// battle behavior untouched. New perks get their own storage:
-/// - HEALTH BOOSTER: tiered 0-3 medkits per run. Each pack cheats death:
-///   lethal damage burns one pack and puts the hero back at 50% HP.
-/// - BATTLE DROID: one-time buyout. A hover droid rides the hero's back
-///   shoulder, firing its own blaster at nearby enemies. Dies and is
-///   reborn with the hero; never targeted.
+/// - HEALTH BOOSTER: tiered 0-3 heal packs (75/150/300 HP). Each attempt
+///   carries one pack, fired from the HUD button next to the vitals.
+///   One use per run.
+/// - BATTLE DROID: tiered 0-3 hover buddy (scout, gunship, elite spread).
+///   Dies and is reborn with the hero; never targeted.
 enum HeroAddons {
     static let boosterMax = 3
 
@@ -164,19 +164,19 @@ enum HeroAddons {
         "hero.addons.\(heroId).droid"
     }
 
-    // MARK: - Health booster (cheat-death packs per run)
+    // MARK: - Health booster (HUD heal pack, one use per run)
 
     static func boosterTier(heroId: String) -> Int {
         min(boosterMax, max(0, UserDefaults.standard.integer(forKey: boosterKey(heroId))))
     }
 
-    /// Medkit packs carried into every run (one pack = one cheated death).
-    static func boosterPacks(heroId: String) -> Int {
-        boosterTier(heroId: heroId)
+    /// HP restored by the pack at each tier.
+    static func boosterHeal(tier: Int) -> Int {
+        [0, 75, 150, 300][min(max(tier, 0), 3)]
     }
 
     static func boosterEffect(tier: Int) -> String {
-        tier == 0 ? "NO BOOSTER" : "CHEAT DEATH ×\(tier)/RUN"
+        tier == 0 ? "NO PACK" : "+\(boosterHeal(tier: tier)) HP PACK"
     }
 
     /// Next-tier price, nil when maxed.

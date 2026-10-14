@@ -20,6 +20,9 @@ struct MinimapSnapshot {
     /// Energy shield pool (0 max hides the bar).
     var shieldHP: CGFloat = 0
     var shieldMax: CGFloat = 0
+    /// Health-pack button state (booster add-on): armed this run + heal.
+    var packReady: Bool = false
+    var packAmount: Int = 0
     var money: Int
     // Unit dots: player army (blue) + enemy marchers (red).
     var allyXs: [CGFloat] = []

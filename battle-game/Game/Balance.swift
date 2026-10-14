@@ -314,9 +314,20 @@ enum Balance {
     static let dropLifetime: Double = 15.0   // seconds before a drop expires
     static let dropAmmoMultiplier: Int = 2   // ammo drop = killAmmo x this, per gun
 
+    // MARK: - Droid companion (owned battle buddy: hovers the back
+    // shoulder, fires its own blaster at nearby enemies, dies/reborn
+    // with the hero — never targeted, just equipment that shoots)
+    static let droidDamage: CGFloat = 6
+    static let droidDamageTier2: CGFloat = 10 // gunship droid hits harder
+    static let droidPelletSpread: CGFloat = 0.14 // elite 3-shot fan (~8°)
+    static let droidRange: CGFloat = 560
+    static let droidCooldown: Double = 0.9
+    static let droidBoltSpeed: CGFloat = 800
+    static let droidFollowX: CGFloat = 55 // behind the facing shoulder
+    static let droidHoverHeight: CGFloat = 95 // above the hero's head
+
     // MARK: - Player army (summoned from cards, marches toward the enemy base)
-    static let maxAllies: Int = 10
-    // Trooper: cheap, fast, light. Heavy: pricey, slow, tanky + hard-hitting.
+    static let maxAllies: Int = 10    // Trooper: cheap, fast, light. Heavy: pricey, slow, tanky + hard-hitting.
     static let trooperCost: Int = 100
     static let trooperHP: CGFloat = 60
     static let trooperSpeed: CGFloat = 150

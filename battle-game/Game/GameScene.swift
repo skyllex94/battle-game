@@ -118,6 +118,8 @@ final class GameScene: SKScene {
     private var summonCount: Int = 0
     // MARK: - Player army (summoned from cards, marches toward the enemy base)
     private var allies: [AllyNode] = []
+    // MARK: - Droid companion (owned battle buddy over the back shoulder)
+    private var droid: DroidNode?
     // MARK: - Hero death/respawn
     private var sceneTime: TimeInterval = 0
     private var respawnAt: TimeInterval = -1 // <0 = no pending respawn
@@ -138,6 +140,9 @@ final class GameScene: SKScene {
     /// whose layer nodes already have parents): build content exactly once.
     /// Restarts go through resetLevel(), which tears down first.
     private var didBuild = false
+    /// True until the first buildHero: only a fresh level entry consumes
+    /// the banked shield carryover (retries start full).
+    private var freshEntry = true
     /// Level this scene is pinned to (drives Balance.active on every entry).
     private var levelId: Int = 1
     /// Hero id driving upgrade tiers (effective HP/speed/damage/shield).
@@ -227,6 +232,9 @@ final class GameScene: SKScene {
     }
     func resetLevel() {
         isPaused = false
+        // Retry path: banked carry is for fresh entries only — a restarted
+        // run always opens on a full shield.
+        freshEntry = false
         world.removeAllChildren()
         skyLayer.removeAllChildren()
         farLayer.removeAllChildren()
@@ -238,10 +246,11 @@ final class GameScene: SKScene {
         bases = []
         enemies = []
         allies = []
+        droid = nil // world teardown removed its node; buildHero re-fields it
         drops = []
         summonCount = 0
         applyHeroUpgrades(fullRestore: true)
-        heroLives = HeroAddons.maxLives(heroId: heroId)
+        heroLives = Balance.heroLives
         heroMedkits = HeroAddons.boosterPacks(heroId: heroId)
         money = Balance.startingGold
         sceneTime = 0
@@ -393,10 +402,21 @@ final class GameScene: SKScene {
         // Full battle stats from the first frame (roster HP + upgrades) —
         // otherwise the opening attempt runs on the 100 HP default.
         applyHeroUpgrades(fullRestore: true)
+        // Fresh level entry (not a retry): banked leftover shield rides in
+        // under anything bought since the win. Retries always start full.
+        if freshEntry {
+            freshEntry = false
+            if let carry = HeroUpgrades.consumeShieldCarry(heroId: heroId,
+                                                           cap: shieldMax) {
+                shieldHP = carry
+            }
+        }
         // Lives per attempt (second-heart add-on included) + a fresh
         // stock of medkit packs (health-booster add-on).
-        heroLives = HeroAddons.maxLives(heroId: heroId)
+        heroLives = Balance.heroLives
         heroMedkits = HeroAddons.boosterPacks(heroId: heroId)
+        // Owned battle buddy joins the deployment.
+        ensureDroid()
         hero.position = CGPoint(x: Balance.heroSpawnX,
                                 y: Balance.groundTopY + Balance.heroHeight / 2 + 4)
         world.addChild(hero)
@@ -477,6 +497,8 @@ final class GameScene: SKScene {
         lastUpdate = currentTime
         sceneTime += dt
         hero.step(dt: dt, now: currentTime)
+        // Shield orb feed: the bubble tracks the live charge every frame.
+        hero.shieldFrac = shieldMax > 0 ? max(0, shieldHP / shieldMax) : 0
         // Listener for positional audio: everything attenuates + pans
         // relative to the hero, so distant battles rumble quietly.
         SoundEngine.shared.listenerX = hero.position.x
@@ -488,6 +510,7 @@ final class GameScene: SKScene {
         updateEnemies(dt: dt)
         updateAllies(dt: dt)
         updateDrops(dt: dt)
+        updateDroid(dt: dt)
         stepProjectiles(dt: dt)
         updateGraceBlink()
         updateShield(dt: dt)
@@ -506,6 +529,16 @@ final class GameScene: SKScene {
         let puff = ProjectileFactory.makeImpactPuff()
         puff.position = hero.position
         world.addChild(puff)
+        // The droid is reborn beside him: snap to the shoulder with a pop.
+        if let droid {
+            droid.position = CGPoint(x: hero.position.x - hero.facingX * Balance.droidFollowX,
+                                     y: hero.position.y + Balance.droidHoverHeight)
+            droid.isHidden = false
+            droid.fireCooldown = 0.5
+            let spark = ProjectileFactory.makeImpactPuff()
+            spark.position = droid.position
+            world.addChild(spark)
+        }
     }
 
     /// Blink while invulnerable after respawn so the grace reads clearly.
@@ -1315,6 +1348,10 @@ final class GameScene: SKScene {
             // (~7Hz poll) and raises the victory card.
             if bases[index].team == .enemy, wonAt == nil {
                 wonAt = sceneTime
+                // Bank the leftover shield: it rides into the next level,
+                // stacking additively under any shield bought since.
+                HeroUpgrades.saveShieldCarry(heroId: heroId, amount: shieldHP,
+                                             cap: shieldMax)
             }
             // Player HQ down = run lost. Same defeat channel as the last
             // hero heart (GameView raises mission-failed off minimap.lost).
@@ -1344,6 +1381,7 @@ final class GameScene: SKScene {
             shieldHP -= absorbed
             rest -= absorbed
             lastShieldHitAt = sceneTime
+            hero.shieldFlash() // the orb takes the hit visibly
             hero.run(.sequence([.fadeAlpha(to: 0.6, duration: 0.05),
                                 .fadeAlpha(to: 1.0, duration: 0.1)]))
         }
@@ -1384,6 +1422,8 @@ final class GameScene: SKScene {
         let deathSpot = hero.position
         hero.die()
         hero.isHidden = true
+        // The droid dies with him (reborn on respawn).
+        droid?.isHidden = true
         releaseAimTouch()
         heroLives = max(0, heroLives - 1)
         if heroLives > 0 {
@@ -1718,7 +1758,7 @@ final class GameScene: SKScene {
             heroHP: heroHP,
             heroMaxHP: heroMaxHP,
             heroLives: heroLives,
-            heroMaxLives: HeroAddons.maxLives(heroId: heroId),
+            heroMaxLives: Balance.heroLives,
             shieldHP: shieldHP,
             shieldMax: shieldMax,
             money: money,
@@ -1895,5 +1935,179 @@ final class GameScene: SKScene {
         }
         guard let img = ctx.makeImage() else { return ImportedArt.skTexture(named: "MapBG") }
         return SKTexture(cgImage: img)
+    }
+
+    // MARK: - Droid companion: follow, acquire, fire
+    /// The owned battle droid hovers over the hero's back shoulder and
+    /// fires its own blaster at the nearest enemy in range. Hidden while
+    /// the hero is down; reborn beside him on respawn. Must run before
+    /// stepProjectiles so its bolts join this frame's sim.
+    private func updateDroid(dt: TimeInterval) {
+        guard let droid, hero.alive else {
+            droid?.isHidden = true
+            return
+        }
+        droid.isHidden = false
+        droid.fireCooldown -= dt
+        // Anchor: above + behind the facing shoulder, eased toward every
+        // frame so the droid trails flight-smooth instead of teleporting.
+        let anchor = CGPoint(x: hero.position.x - hero.facingX * Balance.droidFollowX,
+                             y: hero.position.y + Balance.droidHoverHeight)
+        let prevX = droid.position.x
+        let k = min(1, 5 * CGFloat(dt))
+        droid.position.x += (anchor.x - droid.position.x) * k
+        droid.position.y += (anchor.y - droid.position.y) * k
+        droid.hover(dt: dt, velX: (droid.position.x - prevX) / max(0.001, CGFloat(dt)))
+
+        guard let target = droidTarget(from: droid.position) else {
+            droid.face(hero.facingX)
+            return
+        }
+        droid.face(target.x - droid.position.x)
+        guard droid.fireCooldown <= 0 else { return }
+        droid.fireCooldown = Balance.droidCooldown
+        fireDroidBolt(from: droid, to: target)
+    }
+
+    /// Nearest thing worth shooting within droid range: marchers first,
+    /// then towers, then the HQ — same hunger as the army, smaller teeth.
+    private func droidTarget(from pos: CGPoint) -> CGPoint? {
+        var best: CGPoint?
+        var bestDist = Balance.droidRange
+        for e in enemies where e.alive {
+            let d = hypot(e.position.x - pos.x, e.position.y - pos.y)
+            if d < bestDist { bestDist = d; best = e.position }
+        }
+        if best != nil { return best }
+        for t in towers where t.team == .enemy && t.alive {
+            let p = CGPoint(x: t.node.position.x, y: Balance.groundTopY + 100)
+            let d = hypot(p.x - pos.x, p.y - pos.y)
+            if d < bestDist { bestDist = d; best = p }
+        }
+        if best != nil { return best }
+        if let base = bases.first(where: { $0.team == .enemy }), base.alive {
+            let p = CGPoint(x: base.node.position.x, y: Balance.groundTopY + 100)
+            if hypot(p.x - pos.x, p.y - pos.y) < bestDist { best = p }
+        }
+        return best
+    }
+
+    private func fireDroidBolt(from droid: DroidNode, to target: CGPoint) {
+        let muzzle = droid.muzzle()
+        let base = atan2(target.y - muzzle.y, target.x - muzzle.x)
+        // Elite droids fan a 3-shot spread of scout-grade pellets;
+        // gunships fire one harder bolt; scouts one standard bolt.
+        let tier = HeroAddons.droidTier(heroId: heroId)
+        let pellets = tier >= 3 ? 3 : 1
+        let damage: CGFloat = tier == 2 ? Balance.droidDamageTier2 : Balance.droidDamage
+        SoundEngine.shared.allyFire(at: muzzle.x)
+        for k in 0..<pellets {
+            let offset = (CGFloat(k) - CGFloat(pellets - 1) / 2) * Balance.droidPelletSpread
+            let a = base + offset
+            let dir = CGVector(dx: cos(a), dy: sin(a))
+            let bolt = ProjectileFactory.makeTowerBolt(team: .player)
+            bolt.setScale(0.6)
+            bolt.position = muzzle
+            bolt.zRotation = a
+            world.addChild(bolt)
+            projectiles.append(Projectile(node: bolt, dir: dir,
+                                          life: Double(Balance.droidRange / Balance.droidBoltSpeed),
+                                          speed: Balance.droidBoltSpeed,
+                                          damage: damage, team: .player))
+        }
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.setScale(0.6)
+        flash.position = muzzle
+        world.addChild(flash)
+    }
+
+    /// Owned heroes field the droid at its bought tier; everyone else
+    /// flies solo. Keeps the node across resets (it eases to the fresh
+    /// anchor on its own), rebuilding only when the tier changed.
+    private func ensureDroid() {
+        let tier = HeroAddons.droidTier(heroId: heroId)
+        if tier > 0, droid == nil || droid?.tier != tier {
+            droid?.removeFromParent()
+            let d = DroidNode(tier: tier)
+            d.position = CGPoint(x: hero.position.x - hero.facingX * Balance.droidFollowX,
+                                 y: hero.position.y + Balance.droidHoverHeight)
+            d.zPosition = 9
+            world.addChild(d)
+            droid = d
+        } else if tier == 0, let d = droid {
+            d.removeFromParent()
+            droid = nil
+        }
+    }
+}
+
+// MARK: - Droid companion node (battle buddy)
+
+/// Little circular hover droid: dome body, cyan eye, nose blaster, halo
+/// breathing underneath. Banks into lateral motion; the nose flips with
+/// xScale to face targets. Never targeted — equipment that shoots.
+final class DroidNode: SKNode {
+    private let body: SKSpriteNode
+    private var t: TimeInterval = 0
+    private var trailAcc: TimeInterval = 0
+    var fireCooldown: TimeInterval = 0
+    /// Add-on tier driving the body art (1 scout, 2 gunship, 3 elite).
+    let tier: Int
+
+    init(tier: Int) {
+        self.tier = tier
+        body = SKSpriteNode(texture: DroidArt.texture(tier))
+        body.size = DroidArt.displaySize
+        super.init()
+        addChild(body)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
+
+    /// Face travel/target direction (nose barrel flips with xScale).
+    func face(_ dx: CGFloat) {
+        guard dx != 0 else { return }
+        xScale = dx < 0 ? -1 : 1
+    }
+
+    /// Hover bob + bank into lateral motion + faint ion trail shed below.
+    func hover(dt: TimeInterval, velX: CGFloat) {
+        t += dt
+        body.position.y = sin(t * 3.1) * 4
+        body.zRotation = max(-0.2, min(0.2, -velX * 0.0004))
+        trailAcc += dt
+        if trailAcc >= 0.12 {
+            trailAcc = 0
+            spawnTrailMote()
+        }
+    }
+
+    /// Tiny cyan mote falling away beneath the droid — reads as engine
+    /// wash without any persistent shadow blob.
+    private func spawnTrailMote() {
+        guard let parent else { return }
+        let side = CGFloat.random(in: 2...3.5)
+        let mote = SKSpriteNode(color: SKColor(red: 0.4, green: 0.9, blue: 1,
+                                               alpha: 0.7),
+                                size: CGSize(width: side, height: side))
+        mote.position = CGPoint(x: position.x + CGFloat.random(in: -10...10),
+                                y: position.y - 14)
+        mote.zPosition = 8
+        parent.addChild(mote)
+        let dur = TimeInterval.random(in: 0.3...0.45)
+        mote.run(.sequence([
+            .group([
+                .moveBy(x: CGFloat.random(in: -8...8),
+                        y: CGFloat.random(in: -50...(-30)), duration: dur),
+                .fadeOut(withDuration: dur),
+            ]),
+            .removeFromParent(),
+        ]))
+    }
+
+    /// Nose-barrel tip in parent space (muzzle for bolts).
+    func muzzle() -> CGPoint {
+        guard let parent else { return position }
+        return convert(CGPoint(x: 16 * xScale, y: 0), to: parent)
     }
 }

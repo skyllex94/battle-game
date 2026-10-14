@@ -51,10 +51,12 @@ enum Economy {
     }
 
     /// Hero add-on prices: health boosters follow the upgrade curve
-    /// (I/II/III); the second heart is a one-time premium buyout per hero.
+    /// (I/II/III); battle-droid tiers are a flat test diamond for now.
     static func heroBoosterCost(_ tier: Int) -> Int {
         heroUpgradeCost(tier)
     }
 
-    static let heroHeartCost = 120
+    static func heroDroidCost(_ tier: Int) -> Int {
+        1 // test price — real curve lands with the economy pass
+    }
 }

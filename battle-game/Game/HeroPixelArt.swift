@@ -841,3 +841,118 @@ enum HeroPixelArt {
                   shade: soot, pad: rust, boot: soot, sole: flame)
     }
 }
+
+/// Battle droid companion: three evolving hover bodies on one 22×14
+/// canvas (facing +x) — scout orb, bronze gunship, gold-trimmed elite.
+/// `.nearest` filtering.
+enum DroidArt {
+    static let W = 22
+    static let H = 14
+    private static let px: CGFloat = 2
+
+    /// Battle size in points (22×14 px at 2pt). Shared by all tiers.
+    static let displaySize = CGSize(width: CGFloat(W) * px, height: CGFloat(H) * px)
+
+    /// Tier 1 scout orb: dome shell, cyan eye, brass nose blaster.
+    private static let grid1 = [
+        "..........W...........",
+        "..........O...........",
+        ".......OOOOOO.........",
+        ".....OOooooooOO.......",
+        "...OOBBooooOOBBOO.....",
+        "..OoommmmmOOOOOCCO.....",
+        "..OoommmmOOWCCCOBBBO...",
+        "..OoommmmOOOOOBBBBBO.",
+        "...OommmmmmmOBBBBO..",
+        "....OooooooooO.......",
+        "....OmmBBmmBBmmO.....",
+        ".....OOooooooOO......",
+        ".......OCCCCO........",
+        "........OCCO.........",
+    ]
+
+    /// Tier 2 gunship: top fin, wide 4-cell eye, stepped dual barrels,
+    /// sensor pods, heavier bronze plate, wider repulsor wash.
+    private static let grid2 = [
+        ".........OOO..........",
+        ".........OWO...........",
+        "......OOOOOOOO.......",
+        "....OOoooooooOOO.....",
+        "...OOBBooooOOBBBO....",
+        "..OPommmmmOOOCCCCO...",
+        "..OPommOOWCCCCBBBB....",
+        "..OPommOOOOOOOBBBB....",
+        "...OmmmmmmmOOBBBB.....",
+        "....OoooooooPO.....",
+        "....OmmBBmmBBO.....",
+        ".....OOooooOO.......",
+        ".......OCCCCCO......",
+        "........OCCCO.......",
+    ]
+
+    /// Tier 3 elite: gold crown + trim, violet core, triple nose cluster,
+    /// violet underglow. Same punch per pellet, three of them.
+    private static let grid3 = [
+        "........W.W...........",
+        ".......GGGGG........",
+        "......OGGGGGGO......",
+        "....OOGoooooGGOO....",
+        "...OOGGooooOOGGOO...",
+        "..OPommmVVVCCCCO....",
+        "..OPomOVVVCCCCGGGBB.",
+        "..OPomOOOOOOBBBBBG....",
+        "...OmmmmVVVOBBBBG...",
+        "....OooooooVVO.....",
+        "....OmmGGmmGGmO....",
+        ".....OOooooOO.......",
+        ".......OCCCCCO......",
+        "........OVVVO.......",
+    ]
+
+    static func grid(_ tier: Int) -> [String] {
+        switch tier {
+        case 2: return grid2
+        case 3: return grid3
+        default: return grid1
+        }
+    }
+
+    static let palette: [Character: UIColor] = [
+        "O": UIColor(red: 0.08, green: 0.07, blue: 0.10, alpha: 1),
+        "o": UIColor(red: 0.75, green: 0.77, blue: 0.82, alpha: 1),
+        "m": UIColor(red: 0.45, green: 0.47, blue: 0.54, alpha: 1),
+        "B": UIColor(red: 0.80, green: 0.55, blue: 0.25, alpha: 1),
+        "C": UIColor(red: 0.35, green: 0.88, blue: 1.0, alpha: 1),
+        "W": UIColor(white: 1, alpha: 1),
+        "P": UIColor(red: 0.30, green: 0.48, blue: 0.72, alpha: 1),
+        "G": UIColor(red: 1.0, green: 0.78, blue: 0.30, alpha: 1),
+        "V": UIColor(red: 0.70, green: 0.40, blue: 1.0, alpha: 1),
+    ]
+
+    private static var cache: [Int: SKTexture] = [:]
+
+    /// Baked battle texture per tier (cached — flip via xScale).
+    static func texture(_ tier: Int) -> SKTexture {
+        if let tex = cache[tier] { return tex }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        let img = UIGraphicsImageRenderer(
+            size: CGSize(width: CGFloat(W) * px, height: CGFloat(H) * px),
+            format: format).image { ctx in
+            let cg = ctx.cgContext
+            for (r, row) in grid(tier).enumerated() {
+                for (c, ch) in Array(row).enumerated() {
+                    guard ch != ".", let ink = palette[ch] else { continue }
+                    cg.setFillColor(ink.cgColor)
+                    cg.fill(CGRect(x: CGFloat(c) * px, y: CGFloat(r) * px,
+                                   width: px, height: px))
+                }
+            }
+        }
+        let tex = SKTexture(image: img)
+        tex.filteringMode = .nearest
+        cache[tier] = tex
+        return tex
+    }
+}

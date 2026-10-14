@@ -165,7 +165,7 @@ struct LevelDetailView: View {
                                     StatPips(label: "SPD", value: Int(selectedHero.speed), maxValue: 12, color: .cyan)
                                     let shield = Int(HeroUpgrades.shieldMax(heroId: selectedHero.id))
                                     if shield > 0 {
-                                        StatPips(label: "SHD", value: shield, maxValue: 80, color: .cyan)
+                                        StatPips(label: "SHD", value: shield, maxValue: 300, color: .cyan)
                                     }
                                 }
                                 Spacer()

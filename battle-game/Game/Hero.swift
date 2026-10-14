@@ -1,4 +1,5 @@
 import SpriteKit
+import UIKit
 
 /// Hero player node. Procedural astronaut trooper (InvaderPush theme) built from
 /// shape nodes — crisp at any zoom and fully animatable. Real sprite frames can
@@ -82,6 +83,9 @@ final class HeroNode: SKSpriteNode {
     // MARK: - Aim state (written by GameScene while the shoot-touch is down)
     /// X of the current aim direction. 0 = not aiming (face travel direction).
     var aimFacingX: CGFloat = 0
+    /// Unit facing, kept in sync with the visual flip (aim owns it while
+    /// aiming, travel owns it otherwise). The droid anchors off this.
+    private(set) var facingX: CGFloat = 1
 
     // MARK: - Init (no physics body: movement is integrated manually)
     init() {
@@ -96,6 +100,13 @@ final class HeroNode: SKSpriteNode {
 
     // MARK: - Visual construction (pixel body + rifle, facing +x)
     private func buildVisuals() {
+        // Shield bubble: faceted pixel hex (see HeroShieldArt) riding
+        // behind the body — a dome arc on the ground, a full orb mid-jump.
+        orb = SKSpriteNode(texture: HeroShieldArt.domeA)
+        orb.size = HeroShieldArt.displaySize
+        orb.zPosition = -1
+        orb.isHidden = true
+        visual.addChild(orb)
         body = SKSpriteNode(texture: nil)
         body.size = HeroPixelArt.displaySize(for: .vanguard)
         body.zPosition = 0
@@ -137,6 +148,7 @@ final class HeroNode: SKSpriteNode {
     func aimToward(_ dir: CGVector) {
         aimFacingX = dir.dx
         let facingRight = dir.dx >= 0
+        facingX = facingRight ? 1 : -1
         visual.xScale = facingRight ? 1 : -1
         let worldAngle = atan2(dir.dy, dir.dx)
         rifle.zRotation = facingRight ? worldAngle : .pi - worldAngle
@@ -157,6 +169,28 @@ final class HeroNode: SKSpriteNode {
     /// Strength scales with the gun's punch (blast guns kick harder).
     func kick(_ strength: CGFloat = 0.5) {
         recoil = min(1, recoil + strength)
+    }
+
+    // MARK: - Shield orb (written by GameScene every frame)
+
+    /// Current shield fraction 0...1. Drives the orb bubble: faint at a
+    /// sliver, bright near full, hidden with no shield.
+    var shieldFrac: CGFloat = 0
+    private var orb: SKSpriteNode!
+    /// Hit flash 0...1, kicked by shieldFlash(), decays in animate().
+    private var orbFlash: CGFloat = 0
+    /// Impact reveal 0...1: the bubble idles invisible and flares fully
+    /// whenever a shot lands, fading back over ~2s (Halo rules).
+    private var orbReveal: CGFloat = 0
+    /// Facet-glint alternation timer for the bubble shimmer.
+    private var orbTick: TimeInterval = 0
+    private var orbGlint = false
+
+    /// Shield absorbed a hit — flash the orb and reveal it fully so
+    /// the save reads even though the bubble idles invisible.
+    func shieldFlash() {
+        orbFlash = 1
+        orbReveal = 1
     }
 
     // MARK: - Per-frame movement + animation (manual character controller)
@@ -303,10 +337,14 @@ final class HeroNode: SKSpriteNode {
         alive = false
         velocity = .zero
         jumpCutArmed = false
+        shieldFrac = 0
+        orbFlash = 0
+        orbReveal = 0
         clearAim()
     }
 
     /// Respawn drop: placed above the base front, falls with gravity, lands.
+    /// The bubble shimmers once on entry so a refilled shield reads.
     func respawn(at pos: CGPoint) {
         position = pos
         velocity = .zero
@@ -314,6 +352,7 @@ final class HeroNode: SKSpriteNode {
         alive = true
         isHidden = false
         alpha = 1
+        orbReveal = 1
         lastGroundedTime = -10
         lastJumpPressedTime = -10
         jumpCutArmed = false
@@ -388,6 +427,7 @@ final class HeroNode: SKSpriteNode {
             let want: CGFloat = velocity.dx < 0 ? -1 : 1
             if visual.xScale != want {
                 visual.xScale = want
+                facingX = want
                 // Snap-turn pop: brief wide squash sells the reversal.
                 squashX = max(squashX, 1.12)
                 squashY = min(squashY, 0.92)
@@ -467,6 +507,32 @@ final class HeroNode: SKSpriteNode {
             if aimFacingX == 0 {
                 rifle.zRotation += (sin(now * 2.2) * 0.04 - rifle.zRotation) * 0.1
             }
+        }
+
+        // Shield bubble: dome arc grounded, full orb airborne. Idles
+        // invisible; impacts reveal it, then it fades back. Facet
+        // glints alternate, white-hot while absorbing.
+        orbFlash = max(0, orbFlash - CGFloat(dt) * 4)
+        orbReveal = max(0, orbReveal - CGFloat(dt) * 0.45)
+        orbTick += dt
+        if orbTick >= 0.35 {
+            orbTick = 0
+            orbGlint.toggle()
+        }
+        let charge = min(1, max(0, shieldFrac))
+        orb.isHidden = charge <= 0 || (orbReveal <= 0 && orbFlash <= 0)
+        if !orb.isHidden {
+            if orbFlash > 0 {
+                orb.texture = HeroShieldArt.flash
+            } else if isGrounded {
+                orb.texture = orbGlint ? HeroShieldArt.domeB : HeroShieldArt.domeA
+            } else {
+                orb.texture = orbGlint ? HeroShieldArt.fullB : HeroShieldArt.fullA
+            }
+            // Flare strength follows the reveal, tempered by charge: a
+            // nearly-drained shield flares weakly even on a fresh hit.
+            orb.alpha = min(1, orbReveal * (0.35 + 0.55 * charge) + 0.5 * orbFlash)
+            orb.setScale(1 + 0.03 * CGFloat(sin(now * 4)) + 0.1 * orbFlash)
         }
     }
 
@@ -609,4 +675,125 @@ final class HeroNode: SKSpriteNode {
 
 private func +(lhs: CGPoint, rhs: CGVector) -> CGPoint {
     CGPoint(x: lhs.x + rhs.dx, y: lhs.y + rhs.dy)
+}
+
+// MARK: - Pixel shield bubble (file-local)
+
+/// Pixel force bubble — the classic 2D energy-shield language (clean
+/// rasterized ring, dashed tech echo, twinkling cardinal sparks):
+/// two-tone shell (lit crown, deep base), white-hot variant for absorbs.
+/// Grounded it reads as a dome arc; airborne it closes into a full orb.
+/// Baked once to five textures.
+private enum HeroShieldArt {
+    private struct Cell: Hashable { var x, y: Int }
+
+    private static let n = 21
+    private static let c = 10
+    private static let px: CGFloat = 4
+
+    /// Display size in points (21 cells × 4px): wraps the 80pt hero.
+    static let displaySize = CGSize(width: 84, height: 84)
+
+    /// Main shell: true rasterized circle, radius 8 cells.
+    private static let ring: Set<Cell> = {
+        var set = Set<Cell>()
+        for y in 0..<n {
+            for x in 0..<n {
+                let d = hypot(Double(x - c), Double(y - c))
+                if abs(d - 8) < 0.6 { set.insert(Cell(x: x, y: y)) }
+            }
+        }
+        return set
+    }()
+
+    /// Tech echo: faint dashed outer circle, radius 10 (every 3rd cell).
+    private static let echo: Set<Cell> = {
+        var set = Set<Cell>()
+        for y in 0..<n {
+            for x in 0..<n {
+                let d = hypot(Double(x - c), Double(y - c))
+                if abs(d - 10) < 0.5, (x + y) % 3 == 0 {
+                    set.insert(Cell(x: x, y: y))
+                }
+            }
+        }
+        return set
+    }()
+
+    /// Cardinal spark diamonds riding the shell.
+    private static let nodes: Set<Cell> = [
+        Cell(x: 10, y: 2), Cell(x: 18, y: 10),
+        Cell(x: 10, y: 18), Cell(x: 2, y: 10),
+    ]
+
+    /// Twinkle sparks just off the shell, alternating diagonals per frame.
+    private static let sparksA: Set<Cell> = [
+        Cell(x: 5, y: 4), Cell(x: 15, y: 4),
+        Cell(x: 5, y: 16), Cell(x: 15, y: 16),
+    ]
+    private static let sparksB: Set<Cell> = [
+        Cell(x: 4, y: 9), Cell(x: 16, y: 9),
+        Cell(x: 4, y: 11), Cell(x: 16, y: 11),
+    ]
+
+    /// Dome arc: the shell + echo down just past the equator.
+    private static let domeShell: Set<Cell> = {
+        ring.filter { $0.y <= 11 }
+    }()
+    private static let domeEcho: Set<Cell> = {
+        echo.filter { $0.y <= 12 }
+    }()
+
+    /// Pale caps sealing the dome's open feet.
+    private static let ends: Set<Cell> = {
+        let lowest = domeShell.map(\.y).max() ?? c
+        return Set(domeShell.filter { $0.y == lowest })
+    }()
+
+    private static func color(of cell: Cell, sparks: Set<Cell>,
+                              shell: Set<Cell>, flash: Bool) -> UIColor? {
+        if flash { return .white }
+        if nodes.contains(cell) || ends.contains(cell) {
+            return UIColor(red: 0.8, green: 0.98, blue: 1, alpha: 1)
+        }
+        if sparks.contains(cell) { return .white }
+        if shell.contains(cell) {
+            // Two-tone shell: lit crown above center, deep base below.
+            if cell.y < c { return UIColor(red: 0.38, green: 0.9, blue: 1, alpha: 1) }
+            return UIColor(red: 0.15, green: 0.42, blue: 0.78, alpha: 1)
+        }
+        if echo.contains(cell) {
+            return UIColor(red: 0.25, green: 0.55, blue: 0.95, alpha: 1)
+        }
+        return nil
+    }
+
+    private static func render(shell: Set<Cell>, sparks: Set<Cell>, flash: Bool) -> SKTexture {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        // Canvas spans the FULL cell grid — anything smaller clips the art.
+        let img = UIGraphicsImageRenderer(
+            size: CGSize(width: CGFloat(n) * px, height: CGFloat(n) * px),
+            format: format).image { ctx in
+            let cg = ctx.cgContext
+            let all = shell.union(echo).union(nodes).union(sparks).union(ends)
+            for cell in all {
+                guard let ink = color(of: cell, sparks: sparks,
+                                      shell: shell, flash: flash) else { continue }
+                cg.setFillColor(ink.cgColor)
+                cg.fill(CGRect(x: CGFloat(cell.x) * px, y: CGFloat(cell.y) * px,
+                               width: px, height: px))
+            }
+        }
+        let tex = SKTexture(image: img)
+        tex.filteringMode = .nearest
+        return tex
+    }
+
+    static let domeA: SKTexture = render(shell: domeShell, sparks: sparksA, flash: false)
+    static let domeB: SKTexture = render(shell: domeShell, sparks: sparksB, flash: false)
+    static let fullA: SKTexture = render(shell: ring, sparks: sparksA, flash: false)
+    static let fullB: SKTexture = render(shell: ring, sparks: sparksB, flash: false)
+    static let flash: SKTexture = render(shell: ring, sparks: [], flash: true)
 }

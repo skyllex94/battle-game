@@ -104,12 +104,44 @@ enum HeroUpgrades {
     }
 
     /// Shield pool capacity (0 = no shield mechanic at all).
+    /// Tiers run 0/100/200/300 — the orb's three charge levels.
     static func shieldCapacity(tier: Int) -> Int {
-        [0, 25, 50, 80][min(max(tier, 0), 3)]
+        [0, 100, 200, 300][min(max(tier, 0), 3)]
     }
 
     static func shieldMax(heroId: String) -> CGFloat {
         CGFloat(shieldCapacity(tier: tier(heroId: heroId, track: .shield)))
+    }
+
+    // MARK: - Shield carryover (leftovers survive a win)
+
+    private static func carryKey(_ heroId: String) -> String {
+        "hero.shield.\(heroId).carry"
+    }
+
+    private static func carryMaxKey(_ heroId: String) -> String {
+        "hero.shield.\(heroId).carryMax"
+    }
+
+    /// Banks the leftover shield on victory (amount + the max it was
+    /// banked under, so later upgrades stack additively on top).
+    static func saveShieldCarry(heroId: String, amount: CGFloat, cap: CGFloat) {
+        UserDefaults.standard.set(Double(max(0, amount)), forKey: carryKey(heroId))
+        UserDefaults.standard.set(Double(max(0, cap)), forKey: carryMaxKey(heroId))
+    }
+
+    /// Starting shield for a fresh level entry: banked leftover plus any
+    /// capacity bought since the win, capped at the current max.
+    /// Nil = nothing banked → start full. Single-use: it clears on read.
+    static func consumeShieldCarry(heroId: String, cap: CGFloat) -> CGFloat? {
+        guard UserDefaults.standard.object(forKey: carryKey(heroId)) != nil else {
+            return nil
+        }
+        let carry = CGFloat(UserDefaults.standard.double(forKey: carryKey(heroId)))
+        let carryMax = CGFloat(UserDefaults.standard.double(forKey: carryMaxKey(heroId)))
+        UserDefaults.standard.removeObject(forKey: carryKey(heroId))
+        UserDefaults.standard.removeObject(forKey: carryMaxKey(heroId))
+        return min(cap, carry + max(0, cap - carryMax))
     }
 }
 
@@ -118,7 +150,9 @@ enum HeroUpgrades {
 /// battle behavior untouched. New perks get their own storage:
 /// - HEALTH BOOSTER: tiered 0-3 medkits per run. Each pack cheats death:
 ///   lethal damage burns one pack and puts the hero back at 50% HP.
-/// - SECOND HEART: one-time buyout, +1 life every run (3 -> 4 hearts).
+/// - BATTLE DROID: one-time buyout. A hover droid rides the hero's back
+///   shoulder, firing its own blaster at nearby enemies. Dies and is
+///   reborn with the hero; never targeted.
 enum HeroAddons {
     static let boosterMax = 3
 
@@ -126,8 +160,8 @@ enum HeroAddons {
         "hero.addons.\(heroId).booster"
     }
 
-    private static func heartKey(_ heroId: String) -> String {
-        "hero.addons.\(heroId).heart"
+    private static func droidKey(_ heroId: String) -> String {
+        "hero.addons.\(heroId).droid"
     }
 
     // MARK: - Health booster (cheat-death packs per run)
@@ -160,28 +194,50 @@ enum HeroAddons {
         return true
     }
 
-    // MARK: - Second heart (+1 life per run)
+    // MARK: - Battle droid (hover buddy, 3 tiers)
 
-    static func hasHeart(heroId: String) -> Bool {
-        UserDefaults.standard.bool(forKey: heartKey(heroId))
+    static let droidMax = 3
+
+    private static func droidTierKey(_ heroId: String) -> String {
+        "hero.addons.\(heroId).droidTier"
     }
 
-    /// One-time price, nil once owned.
-    static func heartCost(heroId: String) -> Int? {
-        hasHeart(heroId: heroId) ? nil : Economy.heroHeartCost
+    static func droidTier(heroId: String) -> Int {
+        let t = UserDefaults.standard.integer(forKey: droidTierKey(heroId))
+        if t > 0 { return min(droidMax, t) }
+        // Migrate the old single-buyout flag (true = tier 1).
+        if UserDefaults.standard.bool(forKey: droidKey(heroId)) {
+            UserDefaults.standard.set(1, forKey: droidTierKey(heroId))
+            return 1
+        }
+        return 0
     }
 
-    /// Buys the second heart. Returns false when owned or broke.
+    static func hasDroid(heroId: String) -> Bool {
+        droidTier(heroId: heroId) > 0
+    }
+
+    static func droidEffect(tier: Int) -> String {
+        switch tier {
+        case 1: return "SHOTS ×6 DMG"
+        case 2: return "SHOTS ×10 DMG"
+        case 3: return "3-SHOT ×6 SPREAD"
+        default: return "NO DROID"
+        }
+    }
+
+    /// Next-tier price, nil when maxed. Flat 1 diamond while tuning.
+    static func droidCost(heroId: String) -> Int? {
+        let t = droidTier(heroId: heroId)
+        return t < droidMax ? Economy.heroDroidCost(t + 1) : nil
+    }
+
+    /// Buys the next droid tier. Returns false when maxed or broke.
     @discardableResult
-    static func buyHeart(heroId: String) -> Bool {
-        guard !hasHeart(heroId: heroId),
-              WalletStore.shared.spend(Economy.heroHeartCost) else { return false }
-        UserDefaults.standard.set(true, forKey: heartKey(heroId))
+    static func buyDroid(heroId: String) -> Bool {
+        guard let cost = droidCost(heroId: heroId),
+              WalletStore.shared.spend(cost) else { return false }
+        UserDefaults.standard.set(droidTier(heroId: heroId) + 1, forKey: droidTierKey(heroId))
         return true
-    }
-
-    /// Lives per attempt: 3 stock, 4 with the second heart.
-    static func maxLives(heroId: String) -> Int {
-        Balance.heroLives + (hasHeart(heroId: heroId) ? 1 : 0)
     }
 }

@@ -201,8 +201,8 @@ struct HeroArmoryView: View {
             return HeroUpgrades.nextCost(heroId: previewId, track: track)
         case .booster:
             return HeroAddons.boosterCost(heroId: previewId)
-        case .heart:
-            return HeroAddons.heartCost(heroId: previewId)
+        case .droid:
+            return HeroAddons.droidCost(heroId: previewId)
         }
     }
 
@@ -215,8 +215,9 @@ struct HeroArmoryView: View {
         case .booster:
             let tier = HeroAddons.boosterTier(heroId: previewId) + 1
             return "\(name) — HEALTH BOOSTER \(roman(tier))"
-        case .heart:
-            return "\(name) — SECOND HEART"
+        case .droid:
+            let tier = HeroAddons.droidTier(heroId: previewId) + 1
+            return "\(name) — BATTLE DROID \(roman(tier))"
         }
     }
 
@@ -228,15 +229,15 @@ struct HeroArmoryView: View {
         case .booster:
             let tier = HeroAddons.boosterTier(heroId: previewId) + 1
             return HeroAddons.boosterEffect(tier: tier)
-        case .heart:
-            return "+1 LIFE EVERY RUN"
+        case .droid:
+            return "AUTO-TURRET BUDDY"
         }
     }
 
     private func buyKind(_ buy: PendingBuy) -> String {
         switch buy {
         case .track: return "upgrade"
-        case .booster, .heart: return "add-on"
+        case .booster, .droid: return "add-on"
         }
     }
 
@@ -247,11 +248,16 @@ struct HeroArmoryView: View {
             switch track {
             case .hp: return .hp
             case .speed: return .speed
-            case .shield: return .shield
+            case .shield:
+                return shieldIcon(HeroUpgrades.tier(heroId: previewId, track: .shield))
             case .damage: return .damage
             }
         case .booster: return .booster
-        case .heart: return .heart
+        case .droid:
+            // Confirm card shows the prize: the NEXT evolution.
+            let next = min(HeroAddons.droidMax,
+                           HeroAddons.droidTier(heroId: previewId) + 1)
+            return droidIcon(next)
         }
     }
 
@@ -262,8 +268,8 @@ struct HeroArmoryView: View {
             return HeroUpgrades.buy(heroId: previewId, track: track)
         case .booster:
             return HeroAddons.buyBooster(heroId: previewId)
-        case .heart:
-            return HeroAddons.buyHeart(heroId: previewId)
+        case .droid:
+            return HeroAddons.buyDroid(heroId: previewId)
         }
     }
 }
@@ -271,11 +277,11 @@ struct HeroArmoryView: View {
 // MARK: - Pending purchase
 
 /// Anything the confirm card can sell: an upgrade track tier, a booster
-/// tier, or the one-time second heart.
+/// tier, or the one-time battle droid.
 private enum PendingBuy {
     case track(HeroUpgradeTrack)
     case booster
-    case heart
+    case droid
 }
 
 private func roman(_ tier: Int) -> String {
@@ -404,7 +410,8 @@ private struct UpgradeRow: View {
         switch track {
         case .hp: return .hp
         case .speed: return .speed
-        case .shield: return .shield
+        case .shield:
+            return shieldIcon(HeroUpgrades.tier(heroId: heroId, track: .shield))
         case .damage: return .damage
         }
     }
@@ -437,11 +444,12 @@ private struct AddonsPanel: View {
     private var summary: String {
         let sh = Int(HeroUpgrades.shieldMax(heroId: hero.id))
         let bst = HeroAddons.boosterTier(heroId: hero.id)
-        let hearts = HeroAddons.maxLives(heroId: hero.id)
-        return "SH \(sh) · BST ×\(bst) · ♥\(hearts)"
+        let drd = HeroAddons.droidTier(heroId: hero.id)
+        return "SH \(sh) · BST ×\(bst) · DRD \(drd > 0 ? roman(drd) : "—")"
     }
 
     private var shieldTier: Int { HeroUpgrades.tier(heroId: hero.id, track: .shield) }
+    private var droidTier: Int { HeroAddons.droidTier(heroId: hero.id) }
     private var boosterTier: Int { HeroAddons.boosterTier(heroId: hero.id) }
 
     var body: some View {
@@ -459,7 +467,7 @@ private struct AddonsPanel: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
-            AddonTierRow(icon: .shield,
+            AddonTierRow(icon: shieldIcon(shieldTier),
                          label: HeroUpgradeTrack.shield.label,
                          tier: shieldTier,
                          maxTier: HeroUpgradeTrack.maxTier,
@@ -481,8 +489,8 @@ private struct AddonsPanel: View {
                 requestBuy(.booster)
             }
             .frame(maxHeight: .infinity)
-            AddonHeartRow(hero: hero, locked: locked, tight: tight) {
-                requestBuy(.heart)
+            AddonDroidRow(hero: hero, locked: locked, tight: tight) {
+                requestBuy(.droid)
             }
             .frame(maxHeight: .infinity)
         }
@@ -549,29 +557,39 @@ private struct AddonTierRow: View {
     }
 }
 
-/// Second-heart row: pixel heart slot + one-time buyout, OWNED forever.
-/// The slot tap confirms just like the price button.
-private struct AddonHeartRow: View {
+/// Battle-droid row: tiered pips, per-evolution effect + icon, price
+/// until MAX. The slot tap confirms just like the price button.
+private struct AddonDroidRow: View {
     let hero: HeroDef
     let locked: Bool
     let tight: Bool
     let onBuy: () -> Void
 
+    private var tier: Int { HeroAddons.droidTier(heroId: hero.id) }
+    private var cost: Int? { HeroAddons.droidCost(heroId: hero.id) }
+
     var body: some View {
         HStack(spacing: 8) {
-            AddonIconSlot(kind: .heart, buyable: !locked && HeroAddons.heartCost(heroId: hero.id) != nil) {
-                if !locked, HeroAddons.heartCost(heroId: hero.id) != nil {
+            AddonIconSlot(kind: droidIcon(tier), buyable: !locked && cost != nil) {
+                if !locked, cost != nil {
                     onBuy()
                 } else {
                     SoundEngine.shared.uiTap()
                 }
             }
             VStack(alignment: .leading, spacing: 3) {
-                Text("2ND HEART")
+                Text("DROID")
                     .font(.system(size: 10, weight: .black, design: .monospaced))
                     .tracking(1)
                     .foregroundStyle(.white)
-                Text(HeroAddons.hasHeart(heroId: hero.id) ? "♥♥♥♥ EVERY RUN" : "+1 LIFE EVERY RUN")
+                HStack(spacing: 3) {
+                    ForEach(0..<HeroAddons.droidMax, id: \.self) { i in
+                        Rectangle()
+                            .fill(i < tier ? .yellow : .white.opacity(0.15))
+                            .frame(width: 13, height: tight ? 7 : 8)
+                    }
+                }
+                Text(HeroAddons.droidEffect(tier: tier))
                     .font(.system(size: 9, weight: .bold, design: .monospaced))
                     .foregroundStyle(.cyan)
                     .lineLimit(1)
@@ -583,18 +601,41 @@ private struct AddonHeartRow: View {
                     .font(.system(size: 10, weight: .black, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.3))
                     .padding(.horizontal, 8).padding(.vertical, 4)
-            } else if let cost = HeroAddons.heartCost(heroId: hero.id) {
+            } else if let cost {
                 PriceButton(cost: cost, action: onBuy)
             } else {
-                OwnedTag(text: "OWNED")
+                OwnedTag(text: "MAX")
             }
         }
     }
 }
 
-/// Which pixel sprite fills a perk's placeholder slot.
+/// Which pixel sprite fills a perk's placeholder slot. Shields come in
+/// four charge states — hollow steel, low, half, overcharged gold — and
+/// droids in three evolutions, so both slots visibly level up.
 private enum AddonIconKind {
-    case hp, speed, shield, damage, booster, heart
+    case hp, speed, shield0, shield1, shield2, shield3, damage, booster
+    case droid1, droid2, droid3
+}
+
+/// Shield slot icon for a tier: the icon charges up with the add-on.
+private func shieldIcon(_ tier: Int) -> AddonIconKind {
+    switch tier {
+    case 1: return .shield1
+    case 2: return .shield2
+    case 3: return .shield3
+    default: return .shield0
+    }
+}
+
+/// Droid slot icon for a tier: the owned evolution shows (tier 0 parks
+/// on the scout shell as a preview of what's coming).
+private func droidIcon(_ tier: Int) -> AddonIconKind {
+    switch tier {
+    case 2: return .droid2
+    case 3: return .droid3
+    default: return .droid1
+    }
 }
 
 /// Placeholder slot for an add-on: dark pixel-framed box with the perk's
@@ -625,15 +666,17 @@ private struct AddonIconSlot: View {
 
 /// Crisp pixel perk sprites: health heart (green), speed bolt (gold),
 /// aegis shield (cyan + glint), damage slug (hot tip, steel case),
-/// booster medkit (white case, red cross), second heart (red + glint).
-/// Vector rects, same language as the HUD coin/diamond/heart.
+/// booster medkit (white case, red cross), battle droid (same art as
+/// the companion, shrunk to slot size). Vector rects, same language
+/// as the HUD coin/diamond/heart.
 private struct AddonPixelSprite: View {
     let kind: AddonIconKind
-    var pixel: CGFloat = 2.25
+    /// Size multiplier for hero slots (confirm card shows icons large).
+    var zoom: CGFloat = 1
 
     private var grid: [String] {
         switch kind {
-        case .hp, .heart:
+        case .hp:
             return [
                 "..OO.OO..",
                 ".OrrOrrO.",
@@ -655,16 +698,53 @@ private struct AddonPixelSprite: View {
                 ".OYYO...",
                 ".OOO....",
             ]
-        case .shield:
+        case .shield0:
+            // Hollow steel shell — no charge yet.
             return [
                 ".OOOOO.",
-                "OCWCCCO",
-                "OCCCCCO",
-                "OCCCCCO",
+                "OdddddO",
+                "OdddddO",
+                "OdddddO",
+                ".OdddO.",
+                ".OdddO.",
+                "..OdO..",
+                "..OOO..",
+            ]
+        case .shield1:
+            // Charge pooling at the base.
+            return [
+                ".OOOOO.",
+                "OdddddO",
+                "OdddddO",
+                "OdddddO",
                 ".OCCCO.",
                 ".OCCCO.",
                 "..OCO..",
                 "..OOO..",
+            ]
+        case .shield2:
+            // Half-charged with a glint.
+            return [
+                ".OOOOO.",
+                "OdddddO",
+                "OCCCCCO",
+                "OCCWCCO",
+                ".OCCCO.",
+                ".OCCCO.",
+                "..OCO..",
+                "..OOO..",
+            ]
+        case .shield3:
+            // Overcharged: gold rim, white-hot core.
+            return [
+                ".GGGGG.",
+                "GCCCCCG",
+                "GCCWCCG",
+                "GCCWCCG",
+                ".GCCCG.",
+                ".GCCCG.",
+                "..GCG..",
+                "..GGG..",
             ]
         case .damage:
             return [
@@ -677,6 +757,12 @@ private struct AddonPixelSprite: View {
                 ".OggggO.",
                 "..OOOO..",
             ]
+        case .droid1:
+            return DroidArt.grid(1)
+        case .droid2:
+            return DroidArt.grid(2)
+        case .droid3:
+            return DroidArt.grid(3)
         case .booster:
             return [
                 "..OOOOOO..",
@@ -705,10 +791,12 @@ private struct AddonPixelSprite: View {
                 "O": Color(white: 0.08),
                 "Y": Color(red: 1.0, green: 0.82, blue: 0.2),
             ]
-        case .shield:
+        case .shield0, .shield1, .shield2, .shield3:
             return [
                 "O": Color(white: 0.08),
                 "C": .cyan,
+                "d": Color(red: 0.22, green: 0.24, blue: 0.30),
+                "G": Color(red: 1.0, green: 0.78, blue: 0.30),
                 "W": .white,
             ]
         case .damage:
@@ -717,18 +805,30 @@ private struct AddonPixelSprite: View {
                 "Y": Color(red: 1.0, green: 0.55, blue: 0.15),
                 "g": Color(red: 0.55, green: 0.58, blue: 0.65),
             ]
+        case .droid1, .droid2, .droid3:
+            // Bridged from the battle art's UIKit palette.
+            return Dictionary(uniqueKeysWithValues: DroidArt.palette.map {
+                ($0.key, Color($0.value))
+            })
         case .booster:
             return [
                 "O": Color(white: 0.08),
                 "w": Color(red: 0.92, green: 0.94, blue: 0.96),
                 "R": Color(red: 1.0, green: 0.25, blue: 0.3),
             ]
-        case .heart:
-            return [
-                "O": Color(white: 0.08),
-                "r": Color(red: 1.0, green: 0.25, blue: 0.3),
-                "L": .white,
-            ]
+        case .droid1, .droid2, .droid3:
+            // Bridged from the battle art's UIKit palette.
+            return Dictionary(uniqueKeysWithValues: DroidArt.palette.map {
+                ($0.key, Color($0.value))
+            })
+        }
+    }
+
+    /// Slot pixel size: the wide droids render smaller to fit the box.
+    private var pixel: CGFloat {
+        switch kind {
+        case .droid1, .droid2, .droid3: return 1.5 * zoom
+        default: return 2.25 * zoom
         }
     }
 
@@ -810,7 +910,7 @@ private struct BuyConfirmCard: View {
                     .fill(.black.opacity(0.6))
                     .frame(width: 64, height: 64)
                     .overlay(Rectangle().stroke(.yellow.opacity(0.7), lineWidth: 2))
-                AddonPixelSprite(kind: icon, pixel: 3)
+                AddonPixelSprite(kind: icon, zoom: 1.35)
             }
             .frame(width: 64, height: 64)
             .shadow(color: .yellow.opacity(0.3), radius: 8)
@@ -952,7 +1052,8 @@ private struct ShowcaseColumn: View {
                                value: "\(Int(HeroUpgrades.speedValue(heroId: hero.id)))",
                                lit: pips(Int(HeroUpgrades.speedValue(heroId: hero.id)), 23),
                                color: .cyan)
-                DossierStatRow(icon: .shield, label: "SHIELD",
+                DossierStatRow(icon: shieldIcon(HeroUpgrades.tier(heroId: hero.id, track: .shield)),
+                               label: "SHIELD",
                                value: "\(Int(HeroUpgrades.shieldMax(heroId: hero.id)))",
                                lit: HeroUpgrades.tier(heroId: hero.id, track: .shield) * 2,
                                color: .cyan)
@@ -1022,7 +1123,7 @@ private struct DossierStatRow: View {
                     .fill(.black.opacity(0.6))
                     .frame(width: 30, height: 30)
                     .overlay(Rectangle().stroke(.cyan.opacity(0.35), lineWidth: 1))
-                AddonPixelSprite(kind: icon, pixel: 1.5)
+                AddonPixelSprite(kind: icon, zoom: 0.7)
             }
             .frame(width: 30, height: 30)
             Text(label)

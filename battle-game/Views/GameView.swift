@@ -8,7 +8,9 @@ import UIKit // UIImage portraits from UnitPixelArt
 /// Tap/drag the right side to aim + shoot (handled in GameScene).
 struct GameView: View {
     let level: LevelDef
-    let hero: HeroDef
+    /// Deploying hero. Mutable so the Level 8 milestone modal can hand
+    /// the player their newly-claimed hero mid-battle.
+    @State private var hero: HeroDef
     /// Campaign path. Continue swaps the finished battle for the next
     /// briefing (releasing the scene); Map buttons pop back to the map.
     @Binding var path: NavigationPath
@@ -20,7 +22,7 @@ struct GameView: View {
     /// the level-screen gun pick (clamped to unlocked inside the scene).
     init(level: LevelDef, hero: HeroDef, path: Binding<NavigationPath>) {
         self.level = level
-        self.hero = hero
+        _hero = State(initialValue: hero)
         _path = path
         Balance.active = Balance.layout(for: level.id)
         let gun = GunLocker.selectedGun
@@ -69,7 +71,15 @@ struct GameView: View {
     /// New-unit intel card: levels that debut a unit pause 1s after entry
     /// and brief the player (stats + portrait) until dismissed.
     @State private var showUnitIntro = false
+    /// Level 5 grant sequence: 1 = free gun slot, 2 = Scatter gun.
+    /// Shown one modal after another on battle entry; each CLAIM grants.
+    @State private var grantStep: Int?
     @State private var weapon: HeroWeapon = .blaster
+    /// Why the last deploy tap was refused (toast). Nil = none.
+    @State private var deployRefusal: String?
+    /// Milestone hero unlocked by this level's briefing (shown once, then
+    /// claimed + auto-equipped). Nil when nothing new or already owned.
+    @State private var heroUnlock: HeroDef?
     @State private var minimap = MinimapSnapshot(levelWidth: Balance.levelWidth, heroX: Balance.heroSpawnX,
                                                  cameraX: 0, viewWidth: 1334,
                                                  playerBaseX: Balance.playerBaseX,
@@ -108,22 +118,50 @@ struct GameView: View {
             }
             .ignoresSafeArea(edges: .top)
 
-            // Bottom army tabs: flush with the screen edge so the battlefield
-            // stays fully visible. Tap to summon when you can afford it.
+            // Bottom army tabs: floating islands dropped 20pt into the
+            // safe area — sits right above the screen edge. Note: this
+            // re-enters the iPhone home-gesture zone, so bottom-edge swipes
+            // may hit Home again.
             VStack(spacing: 0) {
                 Spacer()
                 HStack(spacing: 8) {
                     // Locked units aren't shown at all (Heavy arrives L2+).
                     ForEach(ArmyKind.allCases.filter { ArmyKind.isUnlocked($0, levelId: level.id) }) { kind in
-                        ArmyCardButton(kind: kind, money: minimap.money) {
-                            scene.summonAlly(kind: kind)
+                        ArmyCardButton(kind: kind, money: minimap.money,
+                                       cooldownFrac: cooldownFraction(for: kind),
+                                       armyFull: minimap.allyCount >= minimap.allyCap) {
+                            if !scene.summonAlly(kind: kind) {
+                                deployRefusal = scene.summonRefusal(for: kind)
+                                // Auto-clear the toast so it never sticks.
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+                                    deployRefusal = nil
+                                }
+                            } else {
+                                deployRefusal = nil
+                            }
                         }
                     }
                     Spacer()
                 }
-                .padding(.leading, 10)
+                .padding(.leading, 4)
+                .padding(.bottom, 0)
+                .offset(y: 20)
+                // Refusal toast: explains WHY a deploy didn't happen
+                // (army full / not enough gold / still recharging).
+                if let refusal = deployRefusal {
+                    Text(refusal)
+                        .font(.system(size: 11, weight: .black, design: .monospaced))
+                        .tracking(2)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .background(.red.opacity(0.9))
+                        .clipShape(PixelPanelShape(cut: 5))
+                        .overlay(PixelPanelShape(cut: 5).stroke(.white.opacity(0.6), lineWidth: 1.5))
+                        .shadow(color: .black.opacity(0.5), radius: 6)
+                        .padding(.bottom, 6)
+                        .transition(.opacity)
+                }
             }
-            .ignoresSafeArea(edges: .bottom)
 
             // Pause menu overlay (sim is frozen while this is up).
             // Tap outside the card to resume automatically.
@@ -453,6 +491,126 @@ struct GameView: View {
                 .shadow(color: .yellow.opacity(0.2), radius: 18)
             }
 
+            // Milestone hero unlock (Level 8 = Vanguard): portrait + stats, then
+            // CLAIM persists the unlock, auto-equips, and resumes.
+            if let fresh = heroUnlock {
+                Color.black.opacity(0.65)
+                    .ignoresSafeArea()
+                VStack(spacing: 10) {
+                    Text("NEW HERO")
+                        .font(.system(size: 11, weight: .black, design: .monospaced))
+                        .tracking(3)
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 10).padding(.vertical, 3)
+                        .background(.orange)
+                    Image(uiImage: HeroPixelArt.portraitImage(for: fresh.pixelKind))
+                        .interpolation(.none)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 120, height: 90)
+                        .background(.black.opacity(0.6))
+                        .clipShape(PixelPanelShape(cut: 8))
+                        .overlay(PixelPanelShape(cut: 8).stroke(.orange, lineWidth: 2))
+                        .shadow(color: .orange.opacity(0.4), radius: 10)
+                    Text(fresh.displayName.uppercased())
+                        .font(.system(size: 20, weight: .black, design: .monospaced))
+                        .tracking(2)
+                        .foregroundStyle(.white)
+                    Text(fresh.trait.uppercased())
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .tracking(2)
+                        .foregroundStyle(.orange)
+                    Text(fresh.blurb)
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.white.opacity(0.75))
+                    HStack(spacing: 14) {
+                        UnitStatChip(label: "HP", value: "\(fresh.maxHealth)")
+                        UnitStatChip(label: "DMG", value: "\(fresh.baseDamage)")
+                        UnitStatChip(label: "SPD", value: "\(Int(fresh.speed))")
+                    }
+                    PixelMenuButton(title: "Deploy \(fresh.displayName)", style: .primary) {
+                        SoundEngine.shared.uiTap()
+                        claimHeroUnlock()
+                    }
+                    PixelMenuButton(title: "Keep Current Hero", style: .ghost) {
+                        SoundEngine.shared.uiTap()
+                        dismissHeroUnlock()
+                    }
+                    Text("AUTO-EQUIPPED FOR THIS RUN")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(2)
+                        .foregroundStyle(.white.opacity(0.4))
+                }
+                .padding(.horizontal, 26)
+                .padding(.vertical, 22)
+                .background(.black.opacity(0.9))
+                .clipShape(PixelPanelShape(cut: 10))
+                .overlay(PixelPanelShape(cut: 10).stroke(.orange.opacity(0.6), lineWidth: 3))
+                .shadow(color: .orange.opacity(0.2), radius: 18)
+            }
+
+            // Level 5 grants: modal 1 = free gun slot, modal 2 = Scatter.
+            // One after another; each CLAIM grants immediately. Paused sim.
+            if let step = grantStep {
+                Color.black.opacity(0.65)
+                    .ignoresSafeArea()
+                VStack(spacing: 10) {
+                    Text(step == 1 ? "EXTRA GUN SLOT" : "NEW GUN")
+                        .font(.system(size: 11, weight: .black, design: .monospaced))
+                        .tracking(3)
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 10).padding(.vertical, 3)
+                        .background(.cyan)
+                    if step == 1 {
+                        Text("SLOT 2 — FREE")
+                            .font(.system(size: 20, weight: .black, design: .monospaced))
+                            .tracking(2)
+                            .foregroundStyle(.white)
+                        Text("HQ expanded your loadout. Carry two guns into battle — swap anytime with the HUD button.")
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.75))
+                            .multilineTextAlignment(.center)
+                    } else {
+                        Image(uiImage: PixelHeroArt.gunImage(.scatter))
+                            .interpolation(.none)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 140, height: 70)
+                            .background(.black.opacity(0.6))
+                            .clipShape(PixelPanelShape(cut: 8))
+                            .overlay(PixelPanelShape(cut: 8).stroke(.yellow, lineWidth: 2))
+                            .shadow(color: .yellow.opacity(0.4), radius: 10)
+                        Text(HeroWeapon.scatter.name.uppercased())
+                            .font(.system(size: 20, weight: .black, design: .monospaced))
+                            .tracking(2)
+                            .foregroundStyle(.white)
+                        Text(HeroWeapon.scatter.blurb)
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.75))
+                        HStack(spacing: 14) {
+                            UnitStatChip(label: "DMG", value: "\(Int(HeroWeapon.scatter.damage))×\(HeroWeapon.scatter.pelletCount)")
+                            UnitStatChip(label: "MAG", value: "\(HeroWeapon.scatter.magSize)")
+                            UnitStatChip(label: "SLOT", value: "2")
+                        }
+                    }
+                    PixelMenuButton(title: step == 1 ? "Claim Slot" : "Claim Scatter", style: .primary) {
+                        SoundEngine.shared.uiTap()
+                        claimGrantStep()
+                    }
+                    Text("STEP \(step) OF 2")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(2)
+                        .foregroundStyle(.white.opacity(0.4))
+                }
+                .padding(.horizontal, 26)
+                .padding(.vertical, 22)
+                .background(.black.opacity(0.9))
+                .clipShape(PixelPanelShape(cut: 10))
+                .overlay(PixelPanelShape(cut: 10).stroke(.cyan.opacity(0.6), lineWidth: 3))
+                .shadow(color: .cyan.opacity(0.2), radius: 18)
+            }
+
             // Diamond flight layer: after the win-card count-up, gems arc
             // from the card to the HUD wallet (which fills as they land).
             // Anchors bridge the two spots; nothing renders when idle.
@@ -547,6 +705,33 @@ struct GameView: View {
                     guard debutUnit != nil, !showUnitIntro,
                           !minimap.won, !minimap.lost else { return }
                     showUnitIntro = true
+                    showMenu = false
+                    scene.isPaused = true
+                }
+            }
+            // Level 5 grants: free slot 2, then the Scatter — one modal
+            // after another, 1.2s after entry so the field reads first.
+            // Grants persist, so replays skip whatever is already owned.
+            if level.id == 5 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    guard grantStep == nil, !showUnitIntro,
+                          !minimap.won, !minimap.lost else { return }
+                    if LoadoutStore.slotCount < 2 {
+                        grantStep = 1
+                    } else if !UnlockStore.owns(.scatter) {
+                        grantStep = 2
+                    } else { return }
+                    showMenu = false
+                    scene.isPaused = true
+                }
+            }
+            // Hero milestone unlock: freeze the field and hand the player their
+            // new hero, then deploy them for the rest of this run.
+            if let fresh = milestoneHero {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    guard heroUnlock == nil, !showUnitIntro, grantStep == nil,
+                          !minimap.won, !minimap.lost else { return }
+                    heroUnlock = fresh
                     showMenu = false
                     scene.isPaused = true
                 }
@@ -656,9 +841,66 @@ struct GameView: View {
         ArmyKind.allCases.first(where: { $0.unlockLevel == level.id })
     }
 
+    /// Deploy-cooldown veil fraction for a summon tile (0 = ready).
+    /// Reads the SCENE's clock so the card can never claim "ready" while
+    /// the scene still refuses the deploy.
+    private func cooldownFraction(for kind: ArmyKind) -> Double {
+        let remaining = minimap.summonCooldowns[kind] ?? 0
+        guard remaining > 0, kind.cooldown > 0 else { return 0 }
+        return min(1, remaining / kind.cooldown)
+    }
+
+    /// Hero this level unlocks (Vanguard at Level 8), only while it is
+    /// still unclaimed. Already-owned milestones never re-modal.
+    private var milestoneHero: HeroDef? {
+        HeroRoster.heroes.first { $0.unlockLevel == level.id && !HeroRoster.isUnlocked($0) }
+    }
+
+    /// CLAIM the milestone hero: persist the unlock, auto-equip it for the
+    /// rest of this run, and resume the battle.
+    private func claimHeroUnlock() {
+        guard let fresh = heroUnlock else { return }
+        HeroRosterClaims.claim(fresh)
+        hero = fresh
+        scene.setHero(fresh.id)
+        SoundEngine.shared.pickup()
+        heroUnlock = nil
+        scene.isPaused = false
+    }
+
+    /// Decline the milestone hero: it still unlocks for the armory (no
+    /// claim is spent), the current hero keeps deploying this run.
+    private func dismissHeroUnlock() {
+        if let fresh = heroUnlock {
+            HeroRosterClaims.record(fresh)
+        }
+        heroUnlock = nil
+        scene.isPaused = false
+    }
+
     private func closeUnitIntro() {
         showUnitIntro = false
         scene.isPaused = false
+    }
+
+    /// Level 5 grant CLAIM: step 1 grants the free slot (if still missing)
+    /// then advances to step 2; step 2 grants + slots the Scatter, then
+    /// resumes. Grants persist so replays never re-offer them.
+    private func claimGrantStep() {
+        guard let step = grantStep else { return }
+        if step == 1 {
+            if LoadoutStore.slotCount < 2 { LoadoutStore.grantSlot() }
+            SoundEngine.shared.pickup()
+            grantStep = UnlockStore.owns(.scatter) ? nil : 2
+        } else {
+            UnlockStore.grant(.scatter)
+            if LoadoutStore.slotCount >= 2 {
+                _ = LoadoutStore.assign(.scatter, to: 1)
+            }
+            SoundEngine.shared.pickup()
+            grantStep = nil
+        }
+        if grantStep == nil { scene.isPaused = false }
     }
 
     /// Ad revive: raises the overlay, plays the stub ad with a 3s pixel
@@ -933,63 +1175,105 @@ private struct PixelMenuButton: View {
     }
 }
 
-/// Bottom army tab: pixel-menu styling — chamfered hard corners, chunky
-/// 3pt border, uppercase monospaced label + cost. Locked units never reach
-/// this card (the bar only lists fieldable kinds). No stats, just pick-and-go.
+/// Bottom army tab: pixel-menu styling — floating island with chamfered
+/// Compact summon tile: chamfered octagon-rectangle portrait with the
+/// gold cost riding a strip along the bottom inside the tile. No name
+/// label — keeps each tile narrow so more units fit the bar later.
+/// While deploying cools down, a dark veil drains top -> bottom with a
+/// cyan sweep line + seconds readout. Locked units never reach this tile
+/// (the bar only lists fieldable kinds).
 private struct ArmyCardButton: View {
     let kind: ArmyKind
     let money: Int
+    /// 0 = ready, 1 = just deployed (veil covers the tile, drains down).
+    let cooldownFrac: Double
+    /// True when the on-field army hit the cap — the card shows FULL and
+    /// the deploy toast explains it instead of silently refusing.
+    let armyFull: Bool
     let onTap: () -> Void
 
     private var affordable: Bool { money >= kind.cost }
-    private let tabShape = PixelTabShape(cut: 7)
+    private var cooling: Bool { cooldownFrac > 0 }
+    private let tileShape = PixelPanelShape(cut: 10)
+    private let tileW: CGFloat = 78
+    private let tileH: CGFloat = 56
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 8) {
-                // Live portrait: the real pixel sprite, torso-up with its
-                // gun raised — breaking out of the little square on purpose.
-                ZStack {
+            ZStack(alignment: .bottom) {
+                // Tint wash behind the sprite.
+                Rectangle()
+                    .fill(affordable ? .cyan.opacity(0.18) : .white.opacity(0.08))
+                // Top edge catch-light for a raised-panel read.
+                VStack(spacing: 0) {
                     Rectangle()
-                        .fill(affordable ? .cyan.opacity(0.18) : .white.opacity(0.08))
-                        .frame(width: 30, height: 30)
-                        .overlay(Rectangle().stroke(affordable ? Color.cyan : Color.gray.opacity(0.5),
-                                                    lineWidth: 2))
-                    Image(uiImage: UnitPixelArt.portraitImage(for: kind.pixelKind))
-                        .interpolation(.none)
-                        .resizable()
-                        .frame(width: 48, height: 32)
-                        .offset(x: -2, y: -7)
-                        .saturation(affordable ? 1 : 0)
-                        .opacity(affordable ? 1 : 0.6)
-                        .allowsHitTesting(false)
+                        .fill(.white.opacity(0.14))
+                        .frame(height: 2)
+                    Spacer(minLength: 0)
                 }
-                .frame(width: 30, height: 30)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(kind.name.uppercased())
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .tracking(1)
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
+                // Live portrait: the real pixel sprite, torso-up with its
+                // gun raised.
+                Image(uiImage: UnitPixelArt.portraitImage(for: kind.pixelKind))
+                    .interpolation(.none)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 68, height: 32)
+                    .offset(y: -10)
+                    .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
+                    .saturation(affordable ? 1 : 0)
+                    .opacity(affordable ? 1 : 0.6)
+                    .allowsHitTesting(false)
+                // Cost strip pinned to the bottom inside the tile.
+                VStack(spacing: 0) {
+                    Rectangle()
+                        .fill(affordable ? .cyan.opacity(0.5) : .white.opacity(0.15))
+                        .frame(height: 1)
                     HStack(spacing: 3) {
                         Image(systemName: "dollarsign.circle.fill")
                             .font(.system(size: 10, weight: .bold))
                         Text("\(kind.cost)")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
                             .monospacedDigit()
                     }
                     .foregroundStyle(affordable ? .yellow : .gray)
-                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, minHeight: 17)
+                    .background(.black.opacity(0.72))
                 }
             }
-            .padding(.horizontal, 10)
-            .frame(width: 158, height: 48)
+            .frame(width: tileW, height: tileH)
             .background(.black.opacity(affordable ? 0.78 : 0.55))
-            .clipShape(tabShape)
-            .overlay(tabShape.stroke(affordable ? Color.cyan : Color.gray.opacity(0.5), lineWidth: 3))
+            .clipShape(tileShape)
+            .overlay {
+                // Cooldown sweep: dark veil draining top -> bottom with a
+                // cyan sweep line riding its leading edge. Clipped to the
+                // octagon so the fill never spikes past the card outline.
+                if cooling {
+                    VStack(spacing: 0) {
+                        Rectangle()
+                            .fill(.black.opacity(0.68))
+                            .frame(height: tileH * CGFloat(min(1, cooldownFrac)))
+                        Rectangle()
+                            .fill(.cyan)
+                            .frame(height: 2)
+                    }
+                    .clipShape(tileShape)
+                }
+            }
+            .overlay(tileShape.stroke(affordable && !cooling ? Color.cyan : Color.gray.opacity(0.5),
+                                     lineWidth: 2.5))
+            .overlay(alignment: .top) {
+                // Army at the cap: say so instead of silently refusing.
+                if armyFull {
+                    Text("FULL")
+                        .font(.system(size: 9, weight: .black, design: .monospaced))
+                        .tracking(1)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(.red)
+                }
+            }
             .opacity(affordable ? 1.0 : 0.6)
         }
-        .disabled(!affordable)
     }
 }
 

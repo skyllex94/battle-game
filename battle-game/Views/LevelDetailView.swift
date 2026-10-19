@@ -15,7 +15,13 @@ struct LevelDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedHero: HeroDef = HeroRoster.selectedHero
     @State private var selectedGun: HeroWeapon = GunLocker.selectedGun
-    @State private var bgScene = MainMenuBattleScene(size: CGSize(width: 1334, height: 750))
+    @State private var bgScene = MainMenuBattleScene(size: CGSize(width: 1334, height: 750),
+                                                levelId: CampaignData.levels.first?.id ?? 1)
+
+    /// Enemy kinds debuting on this level (briefing intel).
+    private var newEnemies: [EnemyKind] {
+        EnemyKind.allCases.filter { $0.unlockLevel == level.id }
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -53,16 +59,46 @@ struct LevelDetailView: View {
                             .font(.system(size: 12, weight: .medium, design: .monospaced))
                             .foregroundStyle(.white.opacity(0.85))
                             .lineLimit(5)
-                        HStack(spacing: 8) {
-                            PixelIcon.crosshair
-                            Text("TARGET: ENEMY HQ — \(level.baseHP) HP")
-                                .font(.system(size: 11, weight: .black, design: .monospaced))
-                                .tracking(1)
-                                .foregroundStyle(.yellow)
+                        // Intel strip: what NEW enemy units this level
+                        // fields (or a quiet "nothing new" read).
+                        if let debut = newEnemies.first, !newEnemies.isEmpty {
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack(spacing: 6) {
+                                    PixelIcon.crosshair
+                                    Text("NEW ENEMY UNITS")
+                                        .font(.system(size: 10, weight: .black, design: .monospaced))
+                                        .tracking(1)
+                                        .foregroundStyle(.red)
+                                }
+                                Text(newEnemies.map { $0.displayName.uppercased() }
+                                    .joined(separator: "  ·  "))
+                                    .font(.system(size: 11, weight: .black, design: .monospaced))
+                                    .foregroundStyle(.white)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                                Text(debut.threatBlurb)
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(0.7))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 8).padding(.vertical, 5)
+                            .background(.black.opacity(0.55))
+                            .overlay(Rectangle().stroke(.red.opacity(0.5), lineWidth: 1))
+                        } else {
+                            HStack(spacing: 6) {
+                                Rectangle().fill(.white.opacity(0.4)).frame(width: 8, height: 8)
+                                Text("NO NEW ENEMY UNITS")
+                                    .font(.system(size: 10, weight: .black, design: .monospaced))
+                                    .tracking(1)
+                                    .foregroundStyle(.white.opacity(0.65))
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 8).padding(.vertical, 7)
+                            .background(.black.opacity(0.45))
+                            .overlay(Rectangle().stroke(.white.opacity(0.18), lineWidth: 1))
                         }
-                        .padding(.horizontal, 8).padding(.vertical, 5)
-                        .background(.black.opacity(0.55))
-                        .overlay(Rectangle().stroke(.yellow.opacity(0.5), lineWidth: 1))
                         Spacer(minLength: 2)
                         // New-unit showcase: units debuting on THIS level get
                         // a pixel-art callout right above START BATTLE.
@@ -169,7 +205,13 @@ struct LevelDetailView: View {
                                     }
                                 }
                                 Spacer()
+                                // "This opens" affordance: pixel chevron.
+                                PixelIcon.chevron
                             }
+                            .padding(8)
+                            .background(.black.opacity(0.55))
+                            .clipShape(ShopPixelShape(cut: 8))
+                            .overlay(ShopPixelShape(cut: 8).stroke(.yellow.opacity(0.55), lineWidth: 2))
                             .contentShape(Rectangle())
                         }
                         .simultaneousGesture(TapGesture().onEnded {
@@ -189,10 +231,18 @@ struct LevelDetailView: View {
                                 GunShopCard(gun: selectedGun,
                                             selected: true,
                                             denied: false)
-                                    .allowsHitTesting(false)
                                 ChangeBadge()
                                     .offset(x: 6, y: 6)
                             }
+                            .overlay(alignment: .topTrailing) {
+                                // "This opens" affordance: pixel chevron.
+                                PixelIcon.chevron
+                                    .padding(8)
+                            }
+                            .padding(8)
+                            .background(.black.opacity(0.55))
+                            .clipShape(ShopPixelShape(cut: 8))
+                            .overlay(ShopPixelShape(cut: 8).stroke(.cyan.opacity(0.55), lineWidth: 2))
                             .contentShape(Rectangle())
                         }
                         .simultaneousGesture(TapGesture().onEnded {
@@ -217,17 +267,14 @@ struct LevelDetailView: View {
                                 dismiss()
                             }
                         } label: {
-                            HStack(spacing: 7) {
-                                PixelIcon.back
-                                Text("BACK")
-                                    .font(.system(size: 12, weight: .black, design: .monospaced))
-                                    .tracking(2)
-                            }
-                            .foregroundStyle(.cyan)
-                            .padding(.horizontal, 12).padding(.vertical, 8)
-                            .background(.black.opacity(0.65))
-                            .clipShape(ShopPixelShape(cut: 6))
-                            .overlay(ShopPixelShape(cut: 6).stroke(.cyan.opacity(0.6), lineWidth: 2))
+                            Text("BACK")
+                                .font(.system(size: 12, weight: .black, design: .monospaced))
+                                .tracking(2)
+                                .foregroundStyle(.cyan)
+                                .padding(.horizontal, 14).padding(.vertical, 8)
+                                .background(.black.opacity(0.65))
+                                .clipShape(ShopPixelShape(cut: 6))
+                                .overlay(ShopPixelShape(cut: 6).stroke(.cyan.opacity(0.6), lineWidth: 2))
                         }
                         Spacer()
                     }
@@ -242,6 +289,12 @@ struct LevelDetailView: View {
             // Refresh: the armories may have changed the picks while away.
             selectedHero = HeroRoster.selectedHero
             selectedGun = GunLocker.selectedGun
+            // Backdrop must dress THIS level's battlefield, not the last one
+            // played — rebuild when SwiftUI hands us a different briefing.
+            if bgScene.levelId != level.id {
+                bgScene = MainMenuBattleScene(size: CGSize(width: 1334, height: 750),
+                                              levelId: level.id)
+            }
         }
     }
 }
@@ -267,7 +320,7 @@ private struct ChangeBadge: View {
 }
 
 /// Hand-drawn pixel glyphs (hard squares, no SF Symbols): back chevron,
-/// crosshair target, lightning bolt. Game-designed icon language.
+/// crosshair target, lightning bolt, forward chevron.
 private enum PixelIcon {
     static var back: some View {
         HStack(spacing: 1.5) {
@@ -292,7 +345,27 @@ private enum PixelIcon {
         }
     }
 
-    static var crosshair: some View {
+    /// Right-pointing pixel chevron: the "this opens" affordance.
+static var chevron: some View {
+    HStack(spacing: 1.5) {
+        VStack(spacing: 1.5) {
+            Color.cyan.frame(width: 5, height: 5)
+            Color.cyan.frame(width: 5, height: 5)
+            Color.cyan.frame(width: 5, height: 5)
+            Color.cyan.frame(width: 5, height: 5)
+            Color.cyan.frame(width: 5, height: 5)
+        }
+        VStack(spacing: 1.5) {
+            Color.clear.frame(width: 5, height: 5)
+            Color.clear.frame(width: 5, height: 5)
+            Color.cyan.frame(width: 5, height: 5)
+            Color.clear.frame(width: 5, height: 5)
+            Color.clear.frame(width: 5, height: 5)
+        }
+    }
+}
+
+static var crosshair: some View {
         ZStack {
             Rectangle().fill(.yellow).frame(width: 16, height: 4)
             Rectangle().fill(.yellow).frame(width: 4, height: 16)

@@ -23,9 +23,44 @@ enum UnlockStore {
               !owns(gun),
               !GunLocker.isUnlocked(gun),
               WalletStore.shared.spend(gun.diamondCost) else { return false }
+        grant(gun)
+        return true
+    }
+
+    /// Free milestone grant (Level 5 modals, quest rewards): records
+    /// ownership with no diamond charge. No-op when already owned.
+    static func grant(_ gun: HeroWeapon) {
         var set = purchasedRawValues
         set.insert(gun.rawValue)
         UserDefaults.standard.set(Array(set), forKey: purchasedKey)
-        return true
+    }
+}
+
+/// Heroes claimed by milestone (persisted ids). HeroRoster consults it
+/// so a battle-time unlock survives replays — the gun-unlock seam, but
+/// for heroes.
+enum HeroRosterClaims {
+    private static let claimedKey = "heroroster.claimed"
+
+    static var claimedIds: Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: claimedKey) ?? [])
+    }
+
+    static func owns(_ hero: HeroDef) -> Bool {
+        claimedIds.contains(hero.id)
+    }
+
+    /// Records a claimed hero and selects it for future battles.
+    static func claim(_ hero: HeroDef) {
+        record(hero)
+        HeroRoster.selectedHeroId = hero.id
+    }
+
+    /// Records ownership only (the player kept their current hero) — the
+    /// milestone unlocks in the armory without re-offering the modal.
+    static func record(_ hero: HeroDef) {
+        var set = claimedIds
+        set.insert(hero.id)
+        UserDefaults.standard.set(Array(set), forKey: claimedKey)
     }
 }

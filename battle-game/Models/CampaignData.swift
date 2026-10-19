@@ -39,11 +39,11 @@ struct CampaignData {
         LevelDef(id: 6, name: "Sandhold Citadel", subtitle: "Breach the desert keep",
                  briefing: "The desert keep has never fallen — its walls have buried better armies than ours. Be the first. Objective: breach Sandhold Citadel.",
                  mapArtName: "MapBG", enemyWaves: 6, towerHP: 320, baseHP: 800),
-        LevelDef(id: 7, name: "Cinder Gate", subtitle: "Enter the burn",
-                 briefing: "Ash chokes the pass and the ground glows through the cracks. The Cannon is hot and waiting at the gate. Objective: force Cinder Gate.",
+        LevelDef(id: 7, name: "Sirocco Dunes", subtitle: "Ride the dune sea",
+                 briefing: "Past the citadel the desert opens into a golden dune sea — shifting sands, bleached bones, and the enemy dug in deep. Objective: cross the Sirocco Dunes and destroy the enemy HQ.",
                  mapArtName: "MapBG", enemyWaves: 7, towerHP: 350, baseHP: 900),
-        LevelDef(id: 8, name: "Hell Grounds", subtitle: "Hold the middle",
-                 briefing: "The middle of nowhere, and it shoots back. Saboteur up — their towers are the mission now. Objective: hold the middle, kill the HQ.",
+        LevelDef(id: 8, name: "Oasis Waste", subtitle: "Cross the green mirage",
+                 briefing: "What looks like water is a trap — the oases are crawling, and something nests in the ruin arches. The Vanguard drops in with you tonight. Objective: cross the Oasis Waste and destroy the enemy HQ.",
                  mapArtName: "MapBG", enemyWaves: 8, towerHP: 400, baseHP: 1000),
         LevelDef(id: 9, name: "Ashfall Bastion", subtitle: "Take the ash keep",
                  briefing: "A keep of black glass under falling ash. Something new hunts the treeline here — watch your flanks. Objective: take Ashfall Bastion.",
@@ -152,80 +152,83 @@ struct HeroDef: Identifiable {
 }
 
 struct HeroRoster {
+    /// Hero Roster. FOR NOW: Scout + Vanguard (Vanguard is the Level 8
+    /// milestone unlock). Everything else stays locked (99).
     static let heroes: [HeroDef] = [
         HeroDef(id: "scout", displayName: "Scout", iconArtName: "Hero_icon1",
                 maxHealth: 100, speed: 10, baseDamage: 0,
                 blurb: "Fast feet, light frame. Your Unity starting build.",
-                unlockLevel: 2),
-        HeroDef(id: "vanguard", displayName: "Vanguard", iconArtName: "Hero_Icon2",
-                maxHealth: 300, speed: 13, baseDamage: 6,
-                blurb: "Balanced fighter for the first push.",
                 unlockLevel: 0),
+        HeroDef(id: "vanguard", displayName: "Vanguard", iconArtName: "Hero_Icon2",
+                maxHealth: 160, speed: 13, baseDamage: 6,
+                blurb: "Balanced fighter for the first push.",
+                unlockLevel: 8),
         HeroDef(id: "bulwark", displayName: "Bulwark", iconArtName: "Hero_Icon3",
                 maxHealth: 480, speed: 11, baseDamage: 12,
                 blurb: "Slow tank. Holds the lane under tower fire.",
-                unlockLevel: 10),
+                unlockLevel: 99),
         HeroDef(id: "ranger", displayName: "Ranger", iconArtName: "Hero_icon4",
                 maxHealth: 220, speed: 20, baseDamage: 8,
                 blurb: "Gun-ready skirmisher.",
-                unlockLevel: 4),
+                unlockLevel: 99),
         HeroDef(id: "saboteur", displayName: "Saboteur", iconArtName: "Hero_icon5",
                 maxHealth: 380, speed: 17, baseDamage: 10,
                 blurb: "Tower-killer. Bonus vs structures (stage 2).",
-                unlockLevel: 8),
+                unlockLevel: 99),
         HeroDef(id: "warlord", displayName: "Warlord", iconArtName: "Hero_Icon6",
                 maxHealth: 580, speed: 14, baseDamage: 14,
                 blurb: "Late-campaign bruiser. Locked feel for now, playable in MVP.",
-                unlockLevel: 13),
+                unlockLevel: 99),
         HeroDef(id: "titan", displayName: "Titan", iconArtName: "Hero_icon1",
                 maxHealth: 700, speed: 11, baseDamage: 16,
                 blurb: "Walking siege wall. Slow, unstoppable, volcanic.",
-                unlockLevel: 15),
+                unlockLevel: 99),
         HeroDef(id: "wraith", displayName: "Wraith", iconArtName: "Hero_icon4",
                 maxHealth: 280, speed: 20, baseDamage: 12,
                 blurb: "Ghost infiltrator. There, then gone, then behind you.",
-                unlockLevel: 12),
+                unlockLevel: 99),
         HeroDef(id: "paladin", displayName: "Paladin", iconArtName: "Hero_Icon2",
                 maxHealth: 520, speed: 12, baseDamage: 14,
                 blurb: "Oathbound guard. Holds the line so others push it.",
-                unlockLevel: 11),
+                unlockLevel: 99),
         HeroDef(id: "juggernaut", displayName: "Juggernaut", iconArtName: "Hero_Icon3",
                 maxHealth: 620, speed: 10, baseDamage: 18,
                 blurb: "Demolitions bulk. Brings its own door-knocker.",
-                unlockLevel: 14),
+                unlockLevel: 99),
         HeroDef(id: "spectre", displayName: "Spectre", iconArtName: "Hero_icon5",
                 maxHealth: 340, speed: 19, baseDamage: 13,
                 blurb: "RIG-suited engineer. Cuts through anything.",
-                unlockLevel: 6),
+                unlockLevel: 99),
         HeroDef(id: "inferno", displayName: "Inferno", iconArtName: "Hero_Icon6",
                 maxHealth: 420, speed: 15, baseDamage: 15,
                 blurb: "Pyro veteran. Everything flammable has been warned.",
-                unlockLevel: 15),
+                unlockLevel: 99),
     ]
 
     private static let selectedKey = "campaign.selectedHero"
 
     /// DEBUG — explore mode: every hero selectable while we tune.
-    /// Flip to false for release (milestones take over again).
-    static let debugUnlockAll = true
+    /// OFF for now: Scout only.
+    static let debugUnlockAll = false
 
-    /// A hero is selectable when its milestone is claimed. Until the
-    /// UnlockStore lands, only unlockLevel 0 (Vanguard) is available.
+    /// A hero is selectable once its milestone is claimed in battle (e.g.
+    /// Vanguard on Level 8). Progress alone does NOT unlock — the claim
+    /// modal is the gate, so the briefing always gets its moment.
     static func isUnlocked(_ hero: HeroDef) -> Bool {
-        debugUnlockAll || hero.unlockLevel <= 0
+        debugUnlockAll || hero.unlockLevel <= 0 || HeroRosterClaims.owns(hero)
     }
 
     static var unlockedHeroes: [HeroDef] { heroes.filter(isUnlocked) }
 
     static var selectedHeroId: String {
         get {
-            let stored = UserDefaults.standard.string(forKey: selectedKey) ?? "vanguard"
+            let stored = UserDefaults.standard.string(forKey: selectedKey) ?? "scout"
             // Migrate old installs (and guard corrupt ids): a locked stored
-            // hero always falls back to Vanguard, never to a locked pick.
+            // hero always falls back to Scout, never to a locked pick.
             if let match = heroes.first(where: { $0.id == stored }), isUnlocked(match) {
                 return match.id
             }
-            return "vanguard"
+            return "scout"
         }
         set {
             // Never persist a locked hero.
@@ -236,6 +239,6 @@ struct HeroRoster {
     }
 
     static var selectedHero: HeroDef {
-        heroes.first(where: { $0.id == selectedHeroId }) ?? heroes[1]
+        heroes.first(where: { $0.id == selectedHeroId }) ?? heroes[0]
     }
 }

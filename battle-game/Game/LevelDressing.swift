@@ -373,4 +373,399 @@ enum LevelDressing {
             placed += 1
         }
     }
+
+    // MARK: - Sunscorch field (Level 5 Sunscorch Expanse at high noon)
+
+    /// Open rolling fields: a bleached noon wash over the turf band, long
+    /// low swells suggesting very small dips + a gentle ascent mid-lane,
+    /// and sparse sunburnt tufts. Visual only — gameplay stays flat.
+    /// (No jumping platforms on this level by design.)
+    static func buildSunscorchField(in world: SKNode) {
+        let gy = Balance.groundTopY
+        let width = Balance.levelWidth
+        // Noon wash: bleached gold-white grade lying over the turf band.
+        let wash = SKSpriteNode(color: SKColor(red: 1.0, green: 0.90, blue: 0.66, alpha: 0.16),
+                                size: CGSize(width: width, height: 104))
+        wash.anchorPoint = CGPoint(x: 0, y: 1)
+        wash.position = CGPoint(x: 0, y: gy)
+        wash.zPosition = 2
+        world.addChild(wash)
+
+        // Rolling swells: long shallow ellipses lying on the lane, lighter
+        // crowns up, soft shadows down — reads as dips + ascending ground.
+        var rng = DressingRNG(seed: 50505)
+        let swells = 9
+        for i in 0..<swells {
+            let w = rng.cgFloat(in: 620...980)
+            let h: CGFloat = rng.cgFloat(in: 16...28)
+            let x = (width / CGFloat(swells)) * (CGFloat(i) + 0.5) + rng.cgFloat(in: -120...120)
+            let swell = SKShapeNode(ellipseOf: CGSize(width: w, height: h * 2))
+            swell.fillColor = SKColor(red: 0.55, green: 0.48, blue: 0.28, alpha: 0.35)
+            swell.strokeColor = .clear
+            swell.position = CGPoint(x: x, y: gy + 2)
+            swell.zPosition = 1
+            world.addChild(swell)
+            // Sunlit crown along the swell top.
+            let crown = SKSpriteNode(color: SKColor(red: 1.0, green: 0.93, blue: 0.70, alpha: 0.35),
+                                     size: CGSize(width: w * 0.85, height: 4))
+            crown.position = CGPoint(x: x, y: gy + h * 0.7)
+            crown.zPosition = 2
+            world.addChild(crown)
+        }
+
+        // Sparse sunburnt tufts, kept clear of structures.
+        var placed = 0, guard_ = 0
+        while placed < 10, guard_ < 200 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 60...(width - 60))
+            guard isClear(x) else { continue }
+            let tuft = SKNode()
+            tuft.position = CGPoint(x: x, y: gy + 2)
+            tuft.zPosition = 2
+            world.addChild(tuft)
+            let blades = rng.int(in: 2...3)
+            for b in 0..<blades {
+                let h = rng.cgFloat(in: 8...16)
+                let ang = 0.20 + CGFloat(b) * 0.14
+                let blade = SKSpriteNode(
+                    color: SKColor(red: 0.58, green: 0.50, blue: 0.30, alpha: 1),
+                    size: CGSize(width: 3, height: h))
+                blade.anchorPoint = CGPoint(x: 0.5, y: 0)
+                blade.zRotation = ang
+                tuft.addChild(blade)
+            }
+            tuft.run(.repeatForever(.sequence([
+                .rotate(toAngle: 0.05, duration: 2.4), .rotate(toAngle: -0.05, duration: 2.4),
+            ])))
+            placed += 1
+        }
+    }
+
+    // MARK: - Sandhold keep (Level 6 Sandhold Citadel at ember dusk)
+
+    /// Desert-keep dressing: a burnt-ember wash over the turf band, wall
+    /// torches breathing on poles along the lane, and ember sparks rising
+    /// off the sand. Visual only — gameplay stays flat.
+    static func buildSandholdKeep(in world: SKNode) {
+        let gy = Balance.groundTopY
+        let width = Balance.levelWidth
+        // Ember wash: burnt-orange grade lying over the turf band.
+        let wash = SKSpriteNode(color: SKColor(red: 0.95, green: 0.45, blue: 0.18, alpha: 0.10),
+                                size: CGSize(width: width, height: 104))
+        wash.anchorPoint = CGPoint(x: 0, y: 1)
+        wash.position = CGPoint(x: 0, y: gy)
+        wash.zPosition = 2
+        world.addChild(wash)
+
+        var rng = DressingRNG(seed: 60606)
+        // Wall torches: poles with breathing ember heads, clear of structures.
+        var placed = 0, guard_ = 0
+        while placed < 10, guard_ < 200 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 60...(width - 60))
+            guard isClear(x) else { continue }
+            let pole = SKSpriteNode(color: SKColor(white: 0.15, alpha: 1),
+                                    size: CGSize(width: 5, height: 64))
+            pole.anchorPoint = CGPoint(x: 0.5, y: 0)
+            pole.position = CGPoint(x: x, y: gy)
+            pole.zPosition = 3
+            world.addChild(pole)
+            let flame = SKSpriteNode(color: SKColor(red: 1.0, green: 0.55, blue: 0.15, alpha: 1),
+                                     size: CGSize(width: 10, height: 14))
+            flame.position = CGPoint(x: x, y: gy + 70)
+            flame.zPosition = 3
+            world.addChild(flame)
+            let halo = SKShapeNode(ellipseOf: CGSize(width: 52, height: 30))
+            halo.fillColor = SKColor(red: 1.0, green: 0.5, blue: 0.15, alpha: 0.14)
+            halo.strokeColor = .clear
+            halo.position = flame.position
+            halo.zPosition = 3
+            world.addChild(halo)
+            halo.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.4, duration: 0.9),
+                .fadeAlpha(to: 1.0, duration: 0.9),
+            ])))
+            flame.run(.repeatForever(.sequence([
+                .scale(to: 1.15, duration: 0.45), .scale(to: 1.0, duration: 0.45),
+            ])))
+            placed += 1
+        }
+
+        // Rising ember sparks off the sand.
+        for i in 0..<18 {
+            let mote = SKSpriteNode(color: SKColor(red: 1.0, green: 0.55, blue: 0.2, alpha: 0.9),
+                                    size: CGSize(width: 3, height: 3))
+            let homeX = rng.cgFloat(in: 0...width)
+            mote.position = CGPoint(x: homeX, y: gy + rng.cgFloat(in: 6...60))
+            mote.zPosition = 3
+            world.addChild(mote)
+            let fly = SKAction.moveBy(x: rng.cgFloat(in: -24...24),
+                                      y: rng.cgFloat(in: 60...130),
+                                      duration: rng.double(in: 2.2...4.2))
+            let vanish = SKAction.sequence([
+                SKAction.wait(forDuration: 1.4),
+                SKAction.fadeOut(withDuration: 1.4),
+            ])
+            mote.run(.repeatForever(.sequence([
+                SKAction.wait(forDuration: Double(i) * 0.2),
+                SKAction.group([fly, vanish]),
+                SKAction.run { mote.position = CGPoint(x: homeX, y: gy + 6) },
+                SKAction.fadeIn(withDuration: 0.4),
+            ])))
+        }
+    }
+
+    // MARK: - Dune sea (Level 7 Sirocco Dunes, golden desert day)
+
+    /// Desert dressing on the flat sand deck: dry dune-grass
+    /// tufts swaying downwind, half-buried bones, scattered pebbles, and
+    /// wind-blown sand streaking sideways across the lane.
+    static func buildDuneSea(in world: SKNode) {
+        let width = Balance.levelWidth
+        var rng = DressingRNG(seed: 70707)
+
+        // Dry dune-grass tufts: pale straw blades leaning downwind.
+        var placed = 0, guard_ = 0
+        while placed < 22, guard_ < 300 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 60...(width - 60))
+            guard isClear(x) else { continue }
+            let tuft = SKNode()
+            tuft.position = CGPoint(x: x, y: Balance.groundY(at: x) + 2)
+            tuft.zPosition = 2
+            world.addChild(tuft)
+            let blades = rng.int(in: 3...5)
+            for b in 0..<blades {
+                let h = rng.cgFloat(in: 12...26)
+                let ang = 0.30 + CGFloat(b) * 0.10
+                let blade = SKSpriteNode(
+                    color: SKColor(red: 0.72, green: 0.60, blue: 0.36, alpha: 1),
+                    size: CGSize(width: 3, height: h))
+                blade.anchorPoint = CGPoint(x: 0.5, y: 0)
+                blade.zRotation = ang
+                tuft.addChild(blade)
+                let tip = SKSpriteNode(
+                    color: SKColor(red: 0.98, green: 0.88, blue: 0.62, alpha: 1),
+                    size: CGSize(width: 3, height: 3))
+                tip.position = CGPoint(x: -sin(ang) * h, y: cos(ang) * h)
+                tuft.addChild(tip)
+            }
+            tuft.run(.repeatForever(.sequence([
+                .rotate(toAngle: 0.05, duration: 2.2), .rotate(toAngle: -0.05, duration: 2.2),
+            ])))
+            placed += 1
+        }
+
+        // Half-buried bones: bleached rib arcs poking out of the sand.
+        placed = 0; guard_ = 0
+        while placed < 7, guard_ < 200 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 100...(width - 100))
+            guard isClear(x) else { continue }
+            let gy = Balance.groundY(at: x)
+            let bones = SKNode()
+            bones.position = CGPoint(x: x, y: gy)
+            bones.zPosition = 2
+            world.addChild(bones)
+            let bone = SKColor(red: 0.92, green: 0.86, blue: 0.70, alpha: 1)
+            for r in 0..<3 {
+                let rib = SKSpriteNode(color: bone, size: CGSize(width: 4, height: 14 + CGFloat(r) * 4))
+                rib.position = CGPoint(x: CGFloat(r) * 10 - 10, y: 6)
+                rib.zRotation = -0.25 + CGFloat(r) * 0.12
+                bones.addChild(rib)
+            }
+            let spine = SKSpriteNode(color: bone, size: CGSize(width: 34, height: 4))
+            spine.position = CGPoint(x: 0, y: 2)
+            bones.addChild(spine)
+            placed += 1
+        }
+
+        // Scattered pebbles riding the swells.
+        placed = 0; guard_ = 0
+        while placed < 30, guard_ < 300 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 40...(width - 40))
+            guard isClear(x) else { continue }
+            let s = rng.cgFloat(in: 3...7)
+            let peb = SKSpriteNode(
+                color: SKColor(red: 0.45, green: 0.33, blue: 0.20, alpha: 1),
+                size: CGSize(width: s, height: s * 0.7))
+            peb.position = CGPoint(x: x, y: Balance.groundY(at: x) + 2)
+            peb.zPosition = 2
+            world.addChild(peb)
+            placed += 1
+        }
+
+        // Wind-blown sand: pale grains streaking sideways, hugging the deck.
+        for i in 0..<26 {
+            let grain = SKSpriteNode(color: SKColor(red: 1.0, green: 0.90, blue: 0.66, alpha: 0.8),
+                                     size: CGSize(width: rng.cgFloat(in: 3...6), height: 2))
+            let homeX = rng.cgFloat(in: 0...width)
+            let homeY = Balance.groundY(at: homeX) + rng.cgFloat(in: 4...40)
+            grain.position = CGPoint(x: homeX, y: homeY)
+            grain.zPosition = 3
+            world.addChild(grain)
+            let streak = SKAction.moveBy(x: rng.cgFloat(in: 120...260),
+                                         y: rng.cgFloat(in: -8...8),
+                                         duration: rng.double(in: 1.6...3.0))
+            let vanish = SKAction.sequence([
+                SKAction.wait(forDuration: 1.0),
+                SKAction.fadeOut(withDuration: 1.0),
+            ])
+            grain.run(.repeatForever(.sequence([
+                SKAction.wait(forDuration: Double(i) * 0.12),
+                SKAction.group([streak, vanish]),
+                SKAction.run {
+                    let nx = homeX
+                    grain.position = CGPoint(x: nx, y: Balance.groundY(at: nx) + 4)
+                },
+                SKAction.fadeIn(withDuration: 0.4),
+            ])))
+        }
+    }
+
+    // MARK: - Oasis waste (Level 8, desert with life)
+
+    /// Desert ornaments on the flat sand deck: date palms with swaying
+    /// fronds, woven market-stall poles, caravan crates + barrels, and a
+    /// pair of shade tents. Everything sits on the deck and clears the
+    /// structures so units stay readable.
+    static func buildOasisWaste(in world: SKNode) {
+        let width = Balance.levelWidth
+        var rng = DressingRNG(seed: 81818)
+
+        // Date palms: trunk + frond crown, leaning with the wind.
+        var placed = 0, guard_ = 0
+        while placed < 12, guard_ < 300 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 80...(width - 80))
+            guard isClear(x, margin: 200) else { continue }
+            let gy = Balance.groundY(at: x)
+            let palm = SKNode()
+            palm.position = CGPoint(x: x, y: gy)
+            palm.zPosition = 3
+            world.addChild(palm)
+            let th: CGFloat = rng.cgFloat(in: 70...110)
+            let lean = CGFloat(rng.int(in: -2...2)) * 0.06
+            let trunk = SKNode()
+            trunk.zRotation = lean
+            palm.addChild(trunk)
+            let pole = SKSpriteNode(color: SKColor(red: 0.42, green: 0.30, blue: 0.18, alpha: 1),
+                                    size: CGSize(width: 8, height: th))
+            pole.anchorPoint = CGPoint(x: 0.5, y: 0)
+            pole.position = CGPoint(x: 0, y: 0)
+            trunk.addChild(pole)
+            let top = CGPoint(x: 0, y: th)
+            let frond = SKColor(red: 0.20, green: 0.46, blue: 0.20, alpha: 1)
+            let frondHi = SKColor(red: 0.34, green: 0.64, blue: 0.28, alpha: 1)
+            let frondAngles: [Double] = [-1.0, -0.55, 0.0, 0.55, 1.0]
+            let frondLens: [CGFloat] = [34, 26, 22, 26, 34]
+            for i in 0..<frondAngles.count {
+                let a = frondAngles[i]
+                let len = frondLens[i]
+                let fr = SKSpriteNode(color: i == 2 ? frondHi : frond,
+                                      size: CGSize(width: len, height: 7))
+                fr.anchorPoint = CGPoint(x: a < 0 ? 1 : 0, y: 0.5)
+                fr.position = top
+                fr.zRotation = CGFloat(a) * 0.11
+                trunk.addChild(fr)
+            }
+            let crown = SKSpriteNode(color: frondHi, size: CGSize(width: 14, height: 11))
+            crown.position = top
+            trunk.addChild(crown)
+            // Date clusters under the crown.
+            for c in 0..<2 {
+                let dates = SKSpriteNode(color: SKColor(red: 0.85, green: 0.45, blue: 0.16, alpha: 1),
+                                         size: CGSize(width: 10, height: 8))
+                dates.position = CGPoint(x: c == 0 ? 8 : -8, y: th - 12)
+                trunk.addChild(dates)
+            }
+            trunk.run(.repeatForever(.sequence([
+                .rotate(toAngle: lean + 0.05, duration: 2.6),
+                .rotate(toAngle: lean - 0.05, duration: 2.6),
+            ])))
+            placed += 1
+        }
+
+        // Caravan crates + barrels beside the palms.
+        placed = 0; guard_ = 0
+        while placed < 16, guard_ < 300 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 60...(width - 60))
+            guard isClear(x, margin: 180) else { continue }
+            let gy = Balance.groundY(at: x)
+            let pile = SKNode()
+            pile.position = CGPoint(x: x, y: gy)
+            pile.zPosition = 3
+            world.addChild(pile)
+            let kind = rng.int(in: 0...1)
+            if kind == 0 {
+                let cw: CGFloat = rng.cgFloat(in: 22...30)
+                let crate = SKSpriteNode(color: SKColor(red: 0.50, green: 0.34, blue: 0.18, alpha: 1),
+                                         size: CGSize(width: cw, height: cw * 0.8))
+                crate.anchorPoint = CGPoint(x: 0.5, y: 0)
+                pile.addChild(crate)
+                let lid = SKSpriteNode(color: SKColor(red: 0.62, green: 0.44, blue: 0.24, alpha: 1),
+                                       size: CGSize(width: cw, height: 4))
+                lid.anchorPoint = CGPoint(x: 0.5, y: 0)
+                lid.position = CGPoint(x: 0, y: cw * 0.8 - 2)
+                pile.addChild(lid)
+                let strap = SKSpriteNode(color: SKColor(red: 0.28, green: 0.18, blue: 0.10, alpha: 1),
+                                         size: CGSize(width: 4, height: cw * 0.8))
+                strap.position = CGPoint(x: 0, y: cw * 0.4)
+                pile.addChild(strap)
+            } else {
+                let bw: CGFloat = rng.cgFloat(in: 16...22)
+                let barrel = SKSpriteNode(color: SKColor(red: 0.55, green: 0.38, blue: 0.20, alpha: 1),
+                                          size: CGSize(width: bw, height: bw * 1.3))
+                barrel.anchorPoint = CGPoint(x: 0.5, y: 0)
+                pile.addChild(barrel)
+                let hoop = SKSpriteNode(color: SKColor(red: 0.30, green: 0.20, blue: 0.11, alpha: 1),
+                                        size: CGSize(width: bw + 2, height: 3))
+                hoop.anchorPoint = CGPoint(x: 0.5, y: 0)
+                hoop.position = CGPoint(x: 0, y: bw * 0.7)
+                pile.addChild(hoop)
+                let hoop2 = SKSpriteNode(color: SKColor(red: 0.30, green: 0.20, blue: 0.11, alpha: 1),
+                                         size: CGSize(width: bw + 2, height: 3))
+                hoop2.anchorPoint = CGPoint(x: 0.5, y: 0)
+                hoop2.position = CGPoint(x: 0, y: bw * 0.2)
+                pile.addChild(hoop2)
+            }
+            placed += 1
+        }
+
+        // Shade tents: two poles + a striped canopy.
+        placed = 0; guard_ = 0
+        while placed < 6, guard_ < 300 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 120...(width - 120))
+            guard isClear(x, margin: 210) else { continue }
+            let gy = Balance.groundY(at: x)
+            let tent = SKNode()
+            tent.position = CGPoint(x: x, y: gy)
+            tent.zPosition = 3
+            world.addChild(tent)
+            let span: CGFloat = rng.cgFloat(in: 70...96)
+            let th: CGFloat = 46
+            for s in 0..<2 {
+                let pole = SKSpriteNode(color: SKColor(red: 0.32, green: 0.22, blue: 0.13, alpha: 1),
+                                        size: CGSize(width: 5, height: th))
+                pole.anchorPoint = CGPoint(x: 0.5, y: 0)
+                pole.position = CGPoint(x: s == 0 ? -span / 2 : span / 2, y: 0)
+                tent.addChild(pole)
+            }
+            for stripe in 0..<5 {
+                let cw = span / 5
+                let piece = SKSpriteNode(
+                    color: stripe % 2 == 0
+                        ? SKColor(red: 0.88, green: 0.45, blue: 0.28, alpha: 1)
+                        : SKColor(red: 0.94, green: 0.80, blue: 0.52, alpha: 1),
+                    size: CGSize(width: cw, height: 14))
+                piece.position = CGPoint(x: -span / 2 + cw * (CGFloat(stripe) + 0.5),
+                                         y: th - 8)
+                tent.addChild(piece)
+            }
+            placed += 1
+        }
+    }
 }

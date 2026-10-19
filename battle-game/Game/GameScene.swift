@@ -118,6 +118,8 @@ final class GameScene: SKScene {
     private var summonCount: Int = 0
     // MARK: - Player army (summoned from cards, marches toward the enemy base)
     private var allies: [AllyNode] = []
+    /// Per-unit deploy cooldowns (seconds left; pricier units wait longer).
+    private var summonCooldowns: [ArmyKind: TimeInterval] = [:]
     // MARK: - Droid companion (owned battle buddy over the back shoulder)
     private var droid: DroidNode?
     // MARK: - Hero death/respawn
@@ -230,6 +232,20 @@ final class GameScene: SKScene {
         }
         hero.speedMultiplier = HeroUpgrades.speedMultiplier(heroId: heroId)
     }
+
+    /// Mid-battle hero swap (milestone unlock modal): repoints the tier
+    /// lookups, redresses the on-field sprite, refreshes the booster +
+    /// droid companion, and refills the new hero's HP + shield so the
+    /// deploy starts clean.
+    func setHero(_ id: String) {
+        guard id != heroId else { return }
+        heroId = id
+        hero.setHero(HeroPixelArt.kind(for: id))
+        heroPackArmed = HeroAddons.boosterTier(heroId: id) > 0
+        applyHeroUpgrades(fullRestore: true)
+        ensureDroid()
+    }
+
     func resetLevel() {
         isPaused = false
         // Retry path: banked carry is for fresh entries only — a restarted
@@ -246,6 +262,7 @@ final class GameScene: SKScene {
         bases = []
         enemies = []
         allies = []
+        summonCooldowns = [:]
         droid = nil // world teardown removed its node; buildHero re-fields it
         drops = []
         summonCount = 0
@@ -289,7 +306,9 @@ final class GameScene: SKScene {
 
     // MARK: - Per-level set dressing (flags, alien sky-flocks, lush flora)
     /// Levels opt in via Balance.LevelLayout (Level 2+); Level 4's dawn
-    /// atoll swaps glow flora for the dune wash. Runs after every layer
+    /// atoll swaps glow flora for the dune wash, Level 5's sunscorch for
+    /// the open rolling-field dressing (no platforms there), Level 6's
+    /// sandhold for the ember-keep dressing. Runs after every layer
     /// exists so dressing can sit in world + sky alike.
     private func buildDressing() {
         let layout = Balance.active
@@ -297,6 +316,10 @@ final class GameScene: SKScene {
         if layout.alienBirds { LevelDressing.buildAlienBirds(in: skyLayer, sceneSize: size) }
         if layout.lushFlora { LevelDressing.buildGlowFlora(in: world) }
         if Balance.active.theme == .dawn { LevelDressing.buildDuneWash(in: world) }
+        if Balance.active.theme == .sunscorch { LevelDressing.buildSunscorchField(in: world) }
+        if Balance.active.theme == .sandhold { LevelDressing.buildSandholdKeep(in: world) }
+        if Balance.active.theme == .dunesea { LevelDressing.buildDuneSea(in: world) }
+        if Balance.active.theme == .oasis { LevelDressing.buildOasisWaste(in: world) }
     }
 
     // MARK: - Layer 0: twilight ruins sky (static, factor 0.0)
@@ -360,7 +383,7 @@ final class GameScene: SKScene {
     /// Enemy muzzle is the cannon tip; fan shots originate there.
     private func addBase(at x: CGFloat, team: Team) {
         let base = BaseNode(team: team)
-        base.position = CGPoint(x: x, y: Balance.groundTopY)
+        base.position = CGPoint(x: x, y: Balance.groundY(at: x))
         world.addChild(base)
         bases.append(Base(node: base, team: team, hp: Balance.baseHP,
                           maxHP: Balance.baseHP, cooldown: Balance.baseFireCooldown,
@@ -375,7 +398,7 @@ final class GameScene: SKScene {
     /// Muzzle is the barrel tip; shots originate there.
     private func addTower(at x: CGFloat, team: Team) {
         let tower = TowerNode(team: team)
-        tower.position = CGPoint(x: x, y: Balance.groundTopY)
+        tower.position = CGPoint(x: x, y: Balance.groundY(at: x))
         world.addChild(tower)
         // Stagger first shots round-robin so the line doesn't volley
         // on the same frame.
@@ -417,7 +440,8 @@ final class GameScene: SKScene {
         // Owned battle buddy joins the deployment.
         ensureDroid()
         hero.position = CGPoint(x: Balance.heroSpawnX,
-                                y: Balance.groundTopY + Balance.heroHeight / 2 + 4)
+                                y: Balance.groundY(at: Balance.heroSpawnX)
+                                    + Balance.heroHeight / 2 + 4)
         world.addChild(hero)
         // Fresh node needs the speed tier (HP/shield were set at reset).
         hero.speedMultiplier = HeroUpgrades.speedMultiplier(heroId: heroId)
@@ -508,6 +532,9 @@ final class GameScene: SKScene {
         updateBases(dt: dt)
         updateEnemies(dt: dt)
         updateAllies(dt: dt)
+        for kind in Array(summonCooldowns.keys) {
+            summonCooldowns[kind] = max(0, (summonCooldowns[kind] ?? 0) - dt)
+        }
         updateDrops(dt: dt)
         updateDroid(dt: dt)
         stepProjectiles(dt: dt)
@@ -522,7 +549,8 @@ final class GameScene: SKScene {
         guard respawnAt >= 0, sceneTime >= respawnAt else { return }
         respawnAt = -1
         hero.respawn(at: CGPoint(x: Balance.playerBaseX + Balance.respawnOffsetX,
-                                 y: Balance.groundTopY + Balance.respawnDropHeight))
+                                 y: Balance.groundY(at: Balance.playerBaseX + Balance.respawnOffsetX)
+                                     + Balance.respawnDropHeight))
         applyHeroUpgrades(fullRestore: true)
         graceUntil = sceneTime + Balance.respawnGrace
         let puff = ProjectileFactory.makeImpactPuff()
@@ -891,7 +919,11 @@ final class GameScene: SKScene {
             // doubleChance sometimes pop a PAIR out of the gate together.
             // Levels with a bruteEvery march a Brute out every Nth summon
             // (Level 3: every 4th); reaverEvery rushes a Reaver axe-fighter
-            // out instead (Level 4: every 3rd, Brutes winning ties).
+            // out instead (Level 4: every 3rd, Brutes winning ties);
+                    // skitterEvery scuttles a Skitter out instead (Level 6: every
+                    // 2nd — Brutes, then Reavers, win ties); jetEvery flies a
+                    // Jet gun-robot in instead (Level 7: every 5th — Brutes,
+                    // Reavers, then Skitters win ties).
             bases[i].summonTimer -= dt
             if bases[i].summonTimer <= 0 {
                 bases[i].summonTimer = Balance.summonInterval
@@ -905,11 +937,29 @@ final class GameScene: SKScene {
                         kind = .brute
                     } else if Balance.reaverEvery > 0, summonCount % Balance.reaverEvery == 0 {
                         kind = .reaver
+                    } else if Balance.skitterEvery > 0, summonCount % Balance.skitterEvery == 0 {
+                        kind = .skitter
+                    } else if Balance.jetEvery > 0, summonCount % Balance.jetEvery == 0 {
+                        kind = .jet
                     } else {
                         kind = .raider
                     }
                     summonEnemy(from: bases[i], slot: slot, kind: kind)
                     slot += 1
+                    // Jets fly in as a pair: the second follows the first
+                    // out of the gate one beat later.
+                    if kind == .jet {
+                        let home = bases[i]
+                        for extra in 0..<(Balance.jetPairSize - 1) {
+                            let offset = slot + extra + 1
+                            DispatchQueue.main.asyncAfter(deadline: .now()
+                                + 0.45 * Double(extra + 1)) { [weak self] in
+                                guard let self, self.enemies.count < Balance.maxEnemies else { return }
+                                self.summonEnemy(from: home, slot: offset, kind: .jet)
+                            }
+                        }
+                        slot += Balance.jetPairSize - 1
+                    }
                     batch -= 1
                 }
             }
@@ -983,8 +1033,12 @@ final class GameScene: SKScene {
     /// single-spawn levels are pixel-identical to before).
     private func summonEnemy(from base: Base, slot: Int = 0, kind: EnemyKind = .raider) {
         let e = EnemyNode(kind: kind)
-        e.position = CGPoint(x: base.node.position.x - 120 - CGFloat(slot) * 55,
-                             y: Balance.groundTopY + e.size.height / 2)
+        let sx = base.node.position.x - 120 - CGFloat(slot) * 55
+        // Jets fly out of the gate already at cruise altitude.
+        let restY = kind.isFlying
+            ? Balance.groundY(at: sx) + Balance.jetHoverHeight
+            : Balance.groundY(at: sx) + e.size.height / 2
+        e.position = CGPoint(x: sx, y: restY)
         world.addChild(e)
         enemies.append(e)
         base.node.spawnPulse()
@@ -1002,11 +1056,63 @@ final class GameScene: SKScene {
     }
 
     // MARK: - Summoned enemies: advance, stop at range, shoot bolts
+    /// Rest height for a marcher: deck level for walkers, cruise altitude
+    /// (+ dodge-juke offset + hover sway) for jets.
+    private func enemyRestY(_ e: EnemyNode) -> CGFloat {
+        let deck = Balance.groundY(at: e.position.x)
+        guard e.kind.isFlying else { return deck + e.size.height / 2 }
+        let sway = 4 * sin(sceneTime * 2.5 + e.position.x * 0.05)
+        return deck + Balance.jetHoverHeight + e.jukeOffset + sway
+    }
+
+    /// Jet dodge AI: counts incoming player/hero shots; every 5th bullet
+    /// headed its way triggers a vertical juke around the bullet lane
+    /// (up when the shot runs low, down when it runs high), then relaxes
+    /// back to cruise. One trigger per cooldown so a single volley can't
+    /// chain-count.
+    private func updateJetDodge(_ e: EnemyNode, dt: TimeInterval) {
+        e.jukeCooldown = max(0, e.jukeCooldown - dt)
+        // Thruster exhaust puffing while flying.
+        e.jetExhaustTimer -= dt
+        if e.jetExhaustTimer <= 0 {
+            e.jetExhaustTimer = 0.09
+            let exhaust = ProjectileFactory.makeJetExhaust()
+            exhaust.position = CGPoint(x: e.position.x - e.facing * e.size.width / 2,
+                                       y: e.position.y - 18)
+            world.addChild(exhaust)
+        }
+        if e.jukeCooldown <= 0 {
+            for p in projectiles where p.team == .player || p.team == .neutral {
+                let dx = e.position.x - p.node.position.x
+                let dy = e.position.y - p.node.position.y
+                let dist = hypot(dx, dy)
+                guard dist < 340, dist > 1 else { continue }
+                let speed = max(1, hypot(p.dir.dx, p.dir.dy))
+                let dot = (p.dir.dx * dx + p.dir.dy * dy) / (speed * dist)
+                guard dot > 0.85 else { continue } // actually headed at the jet
+                e.incomingShots += 1
+                e.jukeCooldown = Balance.jetJukeCooldown
+                if e.incomingShots % 5 == 0 {
+                    let away: CGFloat = p.node.position.y >= e.position.y ? -1 : 1
+                    e.jukeTarget = away * Balance.jetJukeHeight
+                }
+                break
+            }
+        }
+        // Chase the dodge peak, then relax back to cruise altitude.
+        let k = min(1, 10 * CGFloat(dt))
+        e.jukeOffset += (e.jukeTarget - e.jukeOffset) * k
+        if e.jukeTarget != 0, abs(e.jukeTarget - e.jukeOffset) < 5 {
+            e.jukeTarget = 0
+        }
+    }
+
     private func updateEnemies(dt: TimeInterval) {
         let playerBase = bases.first(where: { $0.team == .player })
         for e in enemies {
             guard e.alive else { continue }
             e.fireCooldown -= dt
+            if e.kind.isFlying { updateJetDodge(e, dt: dt) }
 
             // Target priority: closest exposed body in sight (hero or ally)
             // > player tower > player base. Marchers chew what's nearest
@@ -1046,7 +1152,7 @@ final class GameScene: SKScene {
                     e.face(-1)
                     e.position.x = max(40, e.position.x - e.moveSpeed * CGFloat(dt))
                     e.animateMarch(dt: dt, advancing: true)
-                    e.position.y = Balance.groundTopY + e.size.height / 2 + e.yBob
+                    e.position.y = enemyRestY(e) + e.yBob
                     if !cameraSpan(margin: 80).contains(e.position.x)
                         || e.position.x <= 50 {
                         e.marchedOff = true
@@ -1055,7 +1161,7 @@ final class GameScene: SKScene {
                     continue
                 }
                 e.animateMarch(dt: dt, advancing: false)
-                e.position.y = Balance.groundTopY + e.size.height / 2
+                e.position.y = enemyRestY(e)
                 continue
             }
 
@@ -1099,7 +1205,7 @@ final class GameScene: SKScene {
                     }
                 }
             }
-            e.position.y = Balance.groundTopY + e.size.height / 2 + e.yBob
+            e.position.y = enemyRestY(e) + e.yBob
         }
         // Sweep the dead (gold was already paid at kill time).
         enemies.removeAll { !$0.alive || $0.marchedOff }
@@ -1150,9 +1256,9 @@ final class GameScene: SKScene {
                                     y: Balance.groundTopY + 100))
             return
         }
-        // Player HQ in axe reach (HQ is ~110pt half-width).
+        // Player HQ in axe reach (HQ is ~130pt half-width).
         if let base = bases.first(where: { $0.team == .player }), base.alive,
-           abs(base.node.position.x - e.position.x) <= e.shootRange + 110,
+           abs(base.node.position.x - e.position.x) <= e.shootRange + 130,
            let idx = bases.firstIndex(where: { $0.node === base.node }) {
             damageBase(at: idx, amount: dmg)
             meleeImpact(at: CGPoint(x: base.node.position.x,
@@ -1193,21 +1299,35 @@ final class GameScene: SKScene {
     }
 
     // MARK: - Player army: summon + march toward the enemy base
+    /// Why a deploy was refused (shown as a toast so the button never
+    /// fails silently). Nil = no reason (the summon went through).
+    func summonRefusal(for kind: ArmyKind) -> String? {
+        if !ArmyKind.isUnlocked(kind, levelId: levelId) { return "NOT AVAILABLE" }
+        if allies.count >= Balance.maxAllies { return "ARMY FULL" }
+        if money < kind.cost { return "NEED \(kind.cost) GOLD" }
+        if (summonCooldowns[kind] ?? 0) > 0 { return "RECHARGING" }
+        if bases.first(where: { $0.team == .player })?.alive != true { return "HQ DOWN" }
+        return nil
+    }
     /// Called by the SwiftUI cards. Returns false when broke, capped,
     /// or the unit isn't fielded on this level yet (Ranger = Level 2+,
-    /// Heavy = Level 3+).
+    /// Heavy = Level 3+, Truck = Level 6+).
     @discardableResult
     func summonAlly(kind: ArmyKind) -> Bool {
         guard ArmyKind.isUnlocked(kind, levelId: levelId),
-              money >= kind.cost, allies.count < Balance.maxAllies else { return false }
+              money >= kind.cost, allies.count < Balance.maxAllies,
+              (summonCooldowns[kind] ?? 0) <= 0 else { return false }
         guard let homeBase = bases.first(where: { $0.team == .player }),
               homeBase.alive else { return false }
         money -= kind.cost
+        summonCooldowns[kind] = kind.cooldown
         let a = AllyNode(kind: kind)
-        // Stagger spawn positions so stacked summons don't overlap.
-        let offset = CGFloat(allies.count % 4) * 46
-        a.position = CGPoint(x: Balance.playerBaseX + 120 + offset,
-                             y: Balance.groundTopY + a.size.height / 2)
+        // Stagger spawn positions so stacked summons don't overlap. Six
+        // slots (no army cap) so a big deployment spreads out of the gate.
+        let offset = CGFloat(allies.count % 6) * 50
+        let ax = Balance.playerBaseX + 120 + offset
+        a.position = CGPoint(x: ax,
+                             y: Balance.groundY(at: ax) + a.size.height / 2)
         world.addChild(a)
         allies.append(a)
         homeBase.node.spawnPulse()
@@ -1218,8 +1338,7 @@ final class GameScene: SKScene {
         return true
     }
 
-    private func updateAllies(dt: TimeInterval) {
-        let enemyBase = bases.first(where: { $0.team == .enemy })
+    private func updateAllies(dt: TimeInterval) {        let enemyBase = bases.first(where: { $0.team == .enemy })
         for a in allies {
             guard a.alive else { continue }
             a.fireCooldown -= dt
@@ -1252,7 +1371,8 @@ final class GameScene: SKScene {
                     a.position.x = min(Balance.levelWidth - 40,
                                        a.position.x + a.kind.speed * CGFloat(dt))
                     a.animateMarch(dt: dt, advancing: true)
-                    a.position.y = Balance.groundTopY + a.size.height / 2 + a.yBob
+                    truckDust(a, dt: dt)
+                    a.position.y = Balance.groundY(at: a.position.x) + a.size.height / 2 + a.yBob
                     if !cameraSpan(margin: 80).contains(a.position.x)
                         || a.position.x >= Balance.levelWidth - 50 {
                         a.marchedOff = true
@@ -1261,7 +1381,7 @@ final class GameScene: SKScene {
                     continue
                 }
                 a.animateMarch(dt: dt, advancing: false)
-                a.position.y = Balance.groundTopY + a.size.height / 2
+                a.position.y = Balance.groundY(at: a.position.x) + a.size.height / 2
                 continue
             }
 
@@ -1273,16 +1393,36 @@ final class GameScene: SKScene {
                 a.position.x = min(Balance.levelWidth - 40,
                                    a.position.x + dir * a.kind.speed * CGFloat(dt))
                 a.animateMarch(dt: dt, advancing: true)
+                truckDust(a, dt: dt)
             } else {
                 a.animateMarch(dt: dt, advancing: false)
                 if a.fireCooldown <= 0 {
                     a.fireCooldown = a.kind.fireCooldown
                     fireAllyBolt(from: a, to: aim)
+                    if a.kind == .truck {
+                        // 2-round burst: the second shell follows right behind.
+                        a.run(.sequence([.wait(forDuration: 0.12), .run { [weak self, weak a] in
+                            guard let self, let a, a.alive else { return }
+                            self.fireAllyBolt(from: a, to: aim)
+                        }]))
+                    }
                 }
             }
-            a.position.y = Balance.groundTopY + a.size.height / 2 + a.yBob
+            a.position.y = Balance.groundY(at: a.position.x) + a.size.height / 2 + a.yBob
         }
         allies.removeAll { !$0.alive || $0.marchedOff }
+    }
+
+    /// Trucks kick up dust behind the rear wheel while rolling.
+    private func truckDust(_ a: AllyNode, dt: TimeInterval) {
+        guard a.kind == .truck else { return }
+        a.dustTimer -= dt
+        guard a.dustTimer <= 0 else { return }
+        a.dustTimer = 0.22
+        let dust = ProjectileFactory.makeDustPuff()
+        let dx = a.position.x - a.facing * (a.size.width / 2 + 6)
+        dust.position = CGPoint(x: dx, y: Balance.groundY(at: dx) + 8)
+        world.addChild(dust)
     }
 
     /// Friendly bolt: player team so it hurts marchers + enemy structures.
@@ -1325,10 +1465,18 @@ final class GameScene: SKScene {
         a.hp = max(0, a.hp - amount)
         a.refreshHPBar()
         if !a.alive {
-            let puff = ProjectileFactory.makeImpactPuff()
-            puff.position = a.position
-            puff.setScale(1.4)
-            world.addChild(puff)
+            if a.kind == .truck {
+                // Armor kill: full vehicle explosion (flash + fire + smoke
+                // + debris + sparks) instead of the trooper puff.
+                let boom = ProjectileFactory.makeTruckExplosion()
+                boom.position = a.position
+                world.addChild(boom)
+            } else {
+                let puff = ProjectileFactory.makeImpactPuff()
+                puff.position = a.position
+                puff.setScale(1.4)
+                world.addChild(puff)
+            }
             a.removeFromParent()
             SoundEngine.shared.troopDown(at: a.position.x)
         }
@@ -1360,12 +1508,12 @@ final class GameScene: SKScene {
         }
     }
 
-    /// Point-in-base test for one team's alive bases. HQ is ~227 wide, 170 tall.
+    /// Point-in-base test for one team's alive bases. HQ is ~267 wide, 210 tall.
     private func baseIndex(at pt: CGPoint, team: Team) -> Int? {
         for (i, b) in bases.enumerated() where b.team == team && b.alive {
             let dx = abs(pt.x - b.node.position.x)
-            let inX = dx < 110
-            let inY = pt.y >= Balance.groundTopY && pt.y <= Balance.groundTopY + 175
+            let inX = dx < 130
+            let inY = pt.y >= Balance.groundTopY && pt.y <= Balance.groundTopY + 220
             if inX && inY { return i }
         }
         return nil
@@ -1543,7 +1691,8 @@ final class GameScene: SKScene {
                     p.dir = CGVector(dx: p.dir.dx / s, dy: p.dir.dy / s)
                     p.speed *= 0.7
                     p.node.zRotation = atan2(p.dir.dy, p.dir.dx)
-                    p.node.position.y = max(p.node.position.y, Balance.groundTopY + 6)
+                    p.node.position.y = max(p.node.position.y,
+                                              Balance.groundY(at: p.node.position.x) + 6)
                     impact(at: p.node.position)
                     alive.append(p)
                     continue
@@ -1618,7 +1767,7 @@ final class GameScene: SKScene {
         if let base = bases.first(where: { $0.team == .enemy }), base.alive,
            let idx = bases.firstIndex(where: { $0.node === base.node }),
            hypot(base.node.position.x - pos.x,
-                 (Balance.groundTopY + 100) - pos.y) <= r + 110 {
+                 (Balance.groundTopY + 100) - pos.y) <= r + 130 {
             damageBase(at: idx, amount: p.damage)
         }
     }
@@ -1701,10 +1850,17 @@ final class GameScene: SKScene {
                                   heroWeapon.startReserve * 2)
             }
             maybeSpawnDrop(at: e.position)
-            let puff = ProjectileFactory.makeImpactPuff()
-            puff.position = e.position
-            puff.setScale(1.6)
-            world.addChild(puff)
+            if e.kind.isFlying {
+                // Jetpack droids go out in a mid-air fireball + falling wreck.
+                let boom = ProjectileFactory.makeJetExplosion()
+                boom.position = e.position
+                world.addChild(boom)
+            } else {
+                let puff = ProjectileFactory.makeImpactPuff()
+                puff.position = e.position
+                puff.setScale(1.6)
+                world.addChild(puff)
+            }
             e.removeFromParent()
             SoundEngine.shared.enemyDown(at: e.position.x)
         }
@@ -1723,7 +1879,7 @@ final class GameScene: SKScene {
     }
 
     private func hitsGroundOrPlatform(_ pt: CGPoint) -> Bool {
-        if pt.y <= Balance.groundTopY + 3 { return true }
+        if pt.y <= Balance.groundY(at: pt.x) + 3 { return true }
         if pt.x < 0 || pt.x > Balance.levelWidth { return true }
         for rect in Balance.platforms where rect.insetBy(dx: -4, dy: -4).contains(pt) {
             return true
@@ -1780,7 +1936,10 @@ final class GameScene: SKScene {
             reloading: reloadingWeapon == heroWeapon,
             won: wonAt != nil,
             winTime: wonAt ?? 0,
-            lost: lostAt != nil
+            lost: lostAt != nil,
+            summonCooldowns: summonCooldowns,
+            allyCount: allies.count,
+            allyCap: Balance.maxAllies
         )
     }
 

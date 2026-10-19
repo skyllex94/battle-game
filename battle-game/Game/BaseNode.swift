@@ -16,10 +16,10 @@ import UIKit
 /// `(x, Balance.groundTopY)`).
 final class BaseNode: SKNode {
 
-    /// Building height, matches the old ~170pt Base sprite.
-    static let baseHeight: CGFloat = 170
+    /// Building height, matches the big HQ fortress sprite.
+    static let baseHeight: CGFloat = 210
     /// HP bar floats just above the roof (same spot as the old bars).
-    private static let hpBarY: CGFloat = 185
+    private static let hpBarY: CGFloat = 232
 
     let team: Team
     /// Which way the gate + cannon face: player looks right (+1),
@@ -36,7 +36,7 @@ final class BaseNode: SKNode {
     private let beacon: SKShapeNode
     private let hpBG = SKSpriteNode()
     private let hpFill = SKSpriteNode()
-    private let teamGlow = SKShapeNode(circleOfRadius: 70)
+    private let teamGlow = SKShapeNode(circleOfRadius: 95)
 
     private var phase: TimeInterval = 0
     private var gateFlash: CGFloat = 0   // 0..1, decays after a spawn
@@ -67,9 +67,9 @@ final class BaseNode: SKNode {
         cannonSprite.anchorPoint = CGPoint(x: 4.0 / cannonTex.size().width, y: 0.5)
 
         // Gate glow sits inside the arch; sized in points after scaling.
-        gateGlow = SKShapeNode(ellipseOf: CGSize(width: 30, height: 52))
-        gateLightL = SKShapeNode(circleOfRadius: 4)
-        gateLightR = SKShapeNode(circleOfRadius: 4)
+        gateGlow = SKShapeNode(ellipseOf: CGSize(width: 36, height: 62))
+        gateLightL = SKShapeNode(circleOfRadius: 5)
+        gateLightR = SKShapeNode(circleOfRadius: 5)
         beacon = SKShapeNode(circleOfRadius: 5)
 
         super.init()
@@ -81,12 +81,12 @@ final class BaseNode: SKNode {
         teamGlow.fillColor = palette.glow
         teamGlow.strokeColor = .clear
         teamGlow.alpha = 0.20
-        teamGlow.position = CGPoint(x: 0, y: 12)
+        teamGlow.position = CGPoint(x: 0, y: 16)
         teamGlow.zPosition = -2
         addChild(teamGlow)
 
         // Wide drop shadow for 2.5D grounding (child so it leaves with the HQ).
-        let shadow = SKShapeNode(ellipseOf: CGSize(width: 220, height: 20))
+        let shadow = SKShapeNode(ellipseOf: CGSize(width: 290, height: 24))
         shadow.fillColor = SKColor(white: 0, alpha: 0.35)
         shadow.strokeColor = .clear
         shadow.position = CGPoint(x: 0, y: 6)
@@ -98,8 +98,8 @@ final class BaseNode: SKNode {
         addChild(bodySprite)
 
         // Energy glow inside the gate arch (flickers; flashes on spawn).
-        // Gate opening rows 20-29 -> ~33-76pt; centre the glow on it.
-        let gateLocal = CGPoint(x: 0, y: 54)
+        // Gate opening rows 27-38 -> ~29-81pt; centre the glow on it.
+        let gateLocal = CGPoint(x: 0, y: 55)
         gateGlow.fillColor = palette.gate
         gateGlow.strokeColor = .clear
         gateGlow.alpha = 0.55
@@ -110,12 +110,12 @@ final class BaseNode: SKNode {
         // Gate side lamps.
         gateLightL.fillColor = palette.beacon
         gateLightL.strokeColor = .clear
-        gateLightL.position = gateLocal + CGVector(dx: -24, dy: 6)
+        gateLightL.position = gateLocal + CGVector(dx: -28, dy: 6)
         gateLightL.zPosition = 2
         addChild(gateLightL)
         gateLightR.fillColor = palette.beacon
         gateLightR.strokeColor = .clear
-        gateLightR.position = gateLocal + CGVector(dx: 24, dy: 6)
+        gateLightR.position = gateLocal + CGVector(dx: 28, dy: 6)
         gateLightR.zPosition = 2
         addChild(gateLightR)
 
@@ -124,7 +124,7 @@ final class BaseNode: SKNode {
         let cannonScale: CGFloat = 3.6
         cannonSprite.setScale(cannonScale)
         cannonSprite.position = .zero
-        cannonPivot.position = CGPoint(x: facing * 18, y: 140)
+        cannonPivot.position = CGPoint(x: facing * 20, y: 170)
         cannonPivot.zRotation = homeAngle
         cannonPivot.zPosition = 2
         cannonPivot.addChild(cannonSprite)
@@ -134,10 +134,10 @@ final class BaseNode: SKNode {
         muzzleSocket.position = CGPoint(x: 18 * cannonScale, y: 0)
         cannonPivot.addChild(muzzleSocket)
 
-        // Antenna beacon on the dome.
+        // Antenna beacon on the mast.
         beacon.fillColor = palette.beacon
         beacon.strokeColor = .clear
-        beacon.position = CGPoint(x: -2, y: 180)
+        beacon.position = CGPoint(x: -2, y: 220)
         beacon.zPosition = 2
         addChild(beacon)
 
@@ -259,7 +259,7 @@ final class BaseNode: SKNode {
     /// Pinned above units (z=9) but below the hero (z=10): readable
     /// through marching armies, covered only by the hero passing by.
     private func buildHPBar(palette: Palette) {
-        let w: CGFloat = 140, h: CGFloat = 12
+        let w: CGFloat = 160, h: CGFloat = 12
         hpBG.color = SKColor(white: 0, alpha: 0.65)
         hpBG.size = CGSize(width: w + 4, height: h + 4)
         hpBG.position = CGPoint(x: 0, y: BaseNode.hpBarY)
@@ -341,12 +341,12 @@ final class BaseNode: SKNode {
         cg.fill(CGRect(x: x, y: y, width: w, height: h))
     }
 
-    /// 48×36 HQ fortress: radar mast + dome + crenellated parapet,
-    /// bannered keep, side bastions with pennants, arched spawn gate,
-    /// riveted foundation. Row 0 = top.
-    /// Gate arch centre x=24, opening rows 20-29.
+    /// 56×44 grand HQ fortress: radar mast + dome + crenellated parapet,
+    /// bannered keep, twin stepped side towers with pennants, arched
+    /// spawn gate, riveted foundation. Row 0 = top.
+    /// Gate arch centre x=28, opening rows 27-38.
     private static func makeBodyTexture(palette: Palette) -> SKTexture {
-        let W = 48, H = 36
+        let W = 56, H = 44
         return pixelTexture(w: W, h: H) { cg in
             let outline = UIColor(red: 0.08, green: 0.06, blue: 0.10, alpha: 1)
             let stoneD = UIColor(red: 0.23, green: 0.25, blue: 0.31, alpha: 1)
@@ -356,25 +356,31 @@ final class BaseNode: SKNode {
             let dark = UIColor(red: 0.10, green: 0.10, blue: 0.14, alpha: 1)
             let warn = UIColor(red: 0.95, green: 0.75, blue: 0.25, alpha: 1)
             let gateDark = UIColor(red: 0.05, green: 0.07, blue: 0.10, alpha: 1)
+            let gold = UIColor(red: 0.85, green: 0.72, blue: 0.35, alpha: 1)
 
             // Silhouette spans per row (x-ranges of solid building).
             func spans(at row: Int) -> [(Int, Int)] {
                 switch row {
-                case 0: return [(23, 24)]            // mast tip
-                case 1: return [(20, 27)]            // radar bar
-                case 2: return [(22, 25)]            // mast
-                case 3: return [(19, 28)]            // dome crown
-                case 4: return [(17, 30)]            // dome
-                case 5: return [(16, 31)]            // dome foot
-                case 6: return [(15, 32)]            // dome ring
-                case 7: return [(14, 33)]            // parapet base
-                case 8: return [(14, 33)]            // merlons
-                case 9: return [(14, 33)]            // keep top
-                case 10: return [(2, 12), (14, 33), (35, 45)]  // bastion caps + keep
-                case 11: return [(2, 12), (14, 33), (35, 45)]
-                case 12..<31: return [(3, 11), (14, 33), (36, 44)] // bastions + keep
-                case 31..<35: return [(1, 46)]       // foundation
-                case 35: return [(0, 47)]            // ground skirt
+                case 0: return [(27, 28)]                 // mast tip
+                case 1: return [(24, 31)]                 // radar bar
+                case 2: return [(27, 28)]                 // mast
+                case 3: return [(24, 31)]                 // dome crown
+                case 4: return [(22, 33)]                 // dome
+                case 5: return [(21, 34)]                 // dome
+                case 6: return [(20, 35)]                 // dome foot
+                case 7: return [(20, 35)]                 // dome ring
+                case 8: return [(19, 36)]                 // parapet base
+                case 9: return [(19, 36)]                 // merlons
+                case 10: return [(19, 36)]                // keep top
+                case 11: return [(19, 36), (6, 11), (44, 49)]   // banner + tower tips
+                case 12: return [(19, 36), (5, 12), (43, 50)]
+                case 13: return [(19, 36), (4, 13), (42, 51)]
+                case 14: return [(19, 36), (3, 14), (41, 52)]   // roofs widen
+                case 15: return [(19, 36), (2, 15), (40, 53)]   // tower caps
+                case 16: return [(19, 36), (2, 15), (40, 53)]   // tower merlons
+                case 17..<38: return [(2, 15), (19, 36), (40, 53)] // towers + keep
+                case 38..<43: return [(1, 54)]            // foundation
+                case 43: return [(0, 55)]                 // ground skirt
                 default: return []
                 }
             }
@@ -392,99 +398,112 @@ final class BaseNode: SKNode {
                 }
             }
             // Radar mast: dark pole + team tip + sweeping bar.
-            fill(cg, x: 23, y: 0, w: 2, h: 3, color: dark)
-            fill(cg, x: 23, y: 0, w: 2, h: 1, color: palette.trim)
-            fill(cg, x: 20, y: 1, w: 8, h: 1, color: stoneM)
-            fill(cg, x: 20, y: 1, w: 2, h: 1, color: palette.trim)
-            fill(cg, x: 26, y: 1, w: 2, h: 1, color: palette.trim)
+            fill(cg, x: 27, y: 0, w: 2, h: 3, color: dark)
+            fill(cg, x: 27, y: 0, w: 2, h: 1, color: palette.trim)
+            fill(cg, x: 24, y: 1, w: 8, h: 1, color: stoneM)
+            fill(cg, x: 24, y: 1, w: 2, h: 1, color: palette.trim)
+            fill(cg, x: 30, y: 1, w: 2, h: 1, color: palette.trim)
             // Dome shading: bright crown + team ring at its foot.
-            fill(cg, x: 21, y: 3, w: 6, h: 1, color: stoneL)
-            fill(cg, x: 19, y: 3, w: 2, h: 1, color: .white.withAlphaComponent(0.6))
-            fill(cg, x: 15, y: 6, w: 18, h: 1, color: palette.trimDark)
-            fill(cg, x: 16, y: 5, w: 16, h: 1, color: palette.trim)
+            fill(cg, x: 25, y: 3, w: 6, h: 1, color: stoneL)
+            fill(cg, x: 23, y: 3, w: 2, h: 1, color: .white.withAlphaComponent(0.6))
+            fill(cg, x: 20, y: 6, w: 16, h: 1, color: palette.trimDark)
+            fill(cg, x: 21, y: 5, w: 14, h: 1, color: palette.trim)
 
-            // Crenellated parapet: lit top edge (row 7) + merlon blocks (row 8).
-            fill(cg, x: 14, y: 7, w: 20, h: 1, color: stoneL)
-            var mx = 14
-            while mx < 34 {
-                fill(cg, x: mx + 2, y: 8, w: 2, h: 1, color: dark) // crenel gaps
+            // Crenellated parapet: lit top edge (row 8) + merlon blocks (row 9).
+            fill(cg, x: 19, y: 8, w: 18, h: 1, color: stoneL)
+            var mx = 19
+            while mx < 37 {
+                fill(cg, x: mx + 2, y: 9, w: 2, h: 1, color: dark) // crenel gaps
                 mx += 4
             }
 
-            // Team banner band across the keep (rows 10-12) + chevron emblem.
-            fill(cg, x: 14, y: 10, w: 20, h: 1, color: palette.trimDark)
-            fill(cg, x: 14, y: 11, w: 20, h: 2, color: palette.trim)
-            fill(cg, x: 14, y: 13, w: 20, h: 1, color: palette.trimDark)
-            fill(cg, x: 14, y: 11, w: 2, h: 2, color: .white.withAlphaComponent(0.35))
-            fill(cg, x: 23, y: 11, w: 3, h: 1, color: .white)
-            fill(cg, x: 24, y: 11, w: 1, h: 2, color: .white)
+            // Team banner band across the keep (rows 11-13) + chevron emblem.
+            fill(cg, x: 19, y: 11, w: 18, h: 1, color: palette.trimDark)
+            fill(cg, x: 19, y: 12, w: 18, h: 2, color: palette.trim)
+            fill(cg, x: 19, y: 14, w: 18, h: 1, color: palette.trimDark)
+            fill(cg, x: 19, y: 12, w: 2, h: 2, color: .white.withAlphaComponent(0.35))
+            fill(cg, x: 27, y: 12, w: 3, h: 1, color: .white)
+            fill(cg, x: 28, y: 12, w: 1, h: 2, color: .white)
 
             // Brick mortar courses on the keep.
-            for row in [16, 27] {
-                fill(cg, x: 15, y: row, w: 18, h: 1, color: mortar)
+            for row in [17, 24, 32] {
+                fill(cg, x: 20, y: row, w: 16, h: 1, color: mortar)
             }
             // Keep arrow slits (lit, team-tinted) flanking the banner/gate.
-            for (sx, sy) in [(16, 15), (30, 15)] {
+            for (sx, sy) in [(21, 16), (33, 16), (21, 26), (33, 26)] {
                 fill(cg, x: sx, y: sy, w: 2, h: 4, color: outline)
                 fill(cg, x: sx, y: sy + 1, w: 2, h: 2, color: palette.trimDark)
                 fill(cg, x: sx, y: sy + 1, w: 2, h: 1, color: .white.withAlphaComponent(0.7))
             }
 
-            // Bastion caps: lit tops + team band + crenels.
-            for (bx, _) in [(2, 0), (35, 0)] {
-                fill(cg, x: bx, y: 10, w: 11, h: 1, color: stoneL)
-                fill(cg, x: bx, y: 11, w: 11, h: 1, color: palette.trim)
-                fill(cg, x: bx + 1, y: 10, w: 1, h: 1, color: dark)
-                fill(cg, x: bx + 5, y: 10, w: 1, h: 1, color: dark)
-                fill(cg, x: bx + 9, y: 10, w: 1, h: 1, color: dark)
+            // Twin stepped tower roofs: team-coloured tiers, gold finials.
+            for (tx0, tx1) in [(6, 11), (44, 49)] {          // row 11 tips
+                fill(cg, x: tx0, y: 11, w: tx1 - tx0 + 1, h: 1, color: gold)
             }
-            // Bastion pennants: poles + team flags flying outward.
-            fill(cg, x: 7, y: 6, w: 1, h: 4, color: dark)
-            fill(cg, x: 3, y: 6, w: 4, h: 1, color: palette.trim)
-            fill(cg, x: 4, y: 7, w: 3, h: 1, color: palette.trimDark)
-            fill(cg, x: 40, y: 6, w: 1, h: 4, color: dark)
-            fill(cg, x: 41, y: 6, w: 4, h: 1, color: palette.trim)
-            fill(cg, x: 41, y: 7, w: 3, h: 1, color: palette.trimDark)
-            // Bastion windows: lit slits.
-            for wx in [5, 38] {
-                fill(cg, x: wx, y: 20, w: 4, h: 4, color: outline)
-                fill(cg, x: wx + 1, y: 21, w: 2, h: 2, color: palette.trimDark)
-                fill(cg, x: wx + 1, y: 21, w: 2, h: 1, color: .white.withAlphaComponent(0.7))
-                fill(cg, x: wx, y: 26, w: 4, h: 3, color: outline)
-                fill(cg, x: wx + 1, y: 26, w: 2, h: 2, color: stoneD)
+            for (tx0, tx1) in [(5, 12), (43, 50)] {
+                fill(cg, x: tx0, y: 12, w: tx1 - tx0 + 1, h: 1, color: palette.trim)
+            }
+            for (tx0, tx1) in [(4, 13), (42, 51)] {
+                fill(cg, x: tx0, y: 13, w: tx1 - tx0 + 1, h: 1, color: palette.trimDark)
+            }
+            for (tx0, tx1) in [(3, 14), (41, 52)] {
+                fill(cg, x: tx0, y: 14, w: tx1 - tx0 + 1, h: 1, color: palette.trim)
+            }
+            // Tower caps: lit top + team band + crenels.
+            for (bx, _) in [(2, 0), (40, 0)] {
+                fill(cg, x: bx, y: 15, w: 14, h: 1, color: stoneL)
+                fill(cg, x: bx, y: 16, w: 14, h: 1, color: palette.trim)
+                fill(cg, x: bx + 1, y: 15, w: 1, h: 1, color: dark)
+                fill(cg, x: bx + 6, y: 15, w: 1, h: 1, color: dark)
+                fill(cg, x: bx + 12, y: 15, w: 1, h: 1, color: dark)
+            }
+            // Tower pennants: poles + team flags flying outward.
+            fill(cg, x: 9, y: 7, w: 1, h: 4, color: dark)
+            fill(cg, x: 4, y: 7, w: 5, h: 1, color: palette.trim)
+            fill(cg, x: 5, y: 8, w: 4, h: 1, color: palette.trimDark)
+            fill(cg, x: 46, y: 7, w: 1, h: 4, color: dark)
+            fill(cg, x: 47, y: 7, w: 5, h: 1, color: palette.trim)
+            fill(cg, x: 47, y: 8, w: 4, h: 1, color: palette.trimDark)
+            // Tower windows: lit slits.
+            for wx in [7, 45] {
+                fill(cg, x: wx, y: 21, w: 4, h: 4, color: outline)
+                fill(cg, x: wx + 1, y: 22, w: 2, h: 2, color: palette.trimDark)
+                fill(cg, x: wx + 1, y: 22, w: 2, h: 1, color: .white.withAlphaComponent(0.7))
+                fill(cg, x: wx, y: 28, w: 4, h: 3, color: outline)
+                fill(cg, x: wx + 1, y: 28, w: 2, h: 2, color: stoneD)
             }
 
-            // Spawn gate arch: opening x20-27, rows 20-29.
-            fill(cg, x: 19, y: 19, w: 10, h: 12, color: outline)
-            fill(cg, x: 20, y: 20, w: 8, h: 11, color: gateDark)
+            // Spawn gate arch: opening x25-30, rows 27-38.
+            fill(cg, x: 24, y: 26, w: 10, h: 13, color: outline)
+            fill(cg, x: 25, y: 27, w: 8, h: 12, color: gateDark)
             // Inner energy field (the glow node animates over this).
-            fill(cg, x: 21, y: 21, w: 6, h: 9, color: palette.trimDark)
-            fill(cg, x: 22, y: 22, w: 4, h: 7, color: palette.trim)
-            fill(cg, x: 23, y: 23, w: 2, h: 5, color: .white.withAlphaComponent(0.8))
+            fill(cg, x: 26, y: 28, w: 6, h: 10, color: palette.trimDark)
+            fill(cg, x: 27, y: 29, w: 4, h: 8, color: palette.trim)
+            fill(cg, x: 28, y: 30, w: 2, h: 6, color: .white.withAlphaComponent(0.8))
             // Door shutter teeth top + bottom (half-open).
-            for sx in 20..<28 {
-                fill(cg, x: sx, y: 20, w: 1, h: 2, color: dark)
-                fill(cg, x: sx, y: 29, w: 1, h: 2, color: dark)
+            for sx in 25..<31 {
+                fill(cg, x: sx, y: 27, w: 1, h: 2, color: dark)
+                fill(cg, x: sx, y: 37, w: 1, h: 2, color: dark)
             }
             // Arch pillars: lit left, shaded right.
-            fill(cg, x: 18, y: 19, w: 1, h: 12, color: stoneL)
-            fill(cg, x: 29, y: 19, w: 1, h: 12, color: stoneD)
+            fill(cg, x: 23, y: 26, w: 1, h: 13, color: stoneL)
+            fill(cg, x: 32, y: 26, w: 1, h: 13, color: stoneD)
             // Hazard chevrons + keystone ABOVE the gate.
-            var hx = 19
+            var hx = 23
             var flip = false
-            while hx < 27 {
-                fill(cg, x: hx, y: 17, w: 2, h: 2, color: flip ? warn : dark)
+            while hx < 31 {
+                fill(cg, x: hx, y: 24, w: 2, h: 2, color: flip ? warn : dark)
                 hx += 2
                 flip.toggle()
             }
-            fill(cg, x: 23, y: 16, w: 2, h: 1, color: warn)
+            fill(cg, x: 28, y: 23, w: 2, h: 1, color: warn)
 
-            // Foundation block (rows 31-35): lit top edge, dark body, rivets.
-            fill(cg, x: 1, y: 31, w: 46, h: 1, color: stoneL)
-            fill(cg, x: 1, y: 32, w: 46, h: 2, color: stoneD)
-            fill(cg, x: 0, y: 35, w: 48, h: 1, color: outline)
-            for rx in [3, 10, 17, 30, 37, 44] {
-                fill(cg, x: rx, y: 32, w: 1, h: 1, color: stoneL)
+            // Foundation block (rows 38-43): lit top edge, dark body, rivets.
+            fill(cg, x: 1, y: 38, w: 54, h: 1, color: stoneL)
+            fill(cg, x: 1, y: 39, w: 54, h: 3, color: stoneD)
+            fill(cg, x: 0, y: 43, w: 56, h: 1, color: outline)
+            for rx in [4, 12, 20, 34, 42, 50] {
+                fill(cg, x: rx, y: 39, w: 1, h: 1, color: stoneL)
             }
             _ = W
         }

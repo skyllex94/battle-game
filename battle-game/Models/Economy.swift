@@ -29,9 +29,11 @@ enum Economy {
     /// worse than the sell rate (150g → 1💎) so there's no arbitrage loop.
     static let goldPerDiamond: Int = 50
 
-    /// Loadout slot prices (slots 3…6; slots 1–2 are free).
+    /// Loadout slot prices (slot 1 is free; slot 2 is bought or granted
+    /// free at Level 5; slots 3…6 are diamond sinks).
     static func slotCost(_ slot: Int) -> Int {
         switch slot {
+        case 2: return 40
         case 3: return 100
         case 4: return 250
         case 5: return 500

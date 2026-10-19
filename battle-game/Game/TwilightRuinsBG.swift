@@ -78,24 +78,54 @@ enum TwilightRuinsBG {
     /// same shapes, furnace horizon, russet air.
     /// The dawn theme (Level 4) breaks early morning over the dunes: a
     /// touch brighter overall, pale-gold horizon, warm haze.
+    /// The sunscorch theme (Level 5) is high noon: brightest so far,
+    /// bleached blue sky, harsh sun, pale horizon, thin haze.
+    /// The sandhold theme (Level 6) is desert-keep dusk: burnt-orange
+    /// ember grade, fortress silhouette, shadow flyers circling far.
     static func buildSky(in layer: SKNode, sceneSize: CGSize) {
         let theme = Balance.active.theme
         let overgrown = theme == .overgrown
         let bastion = theme == .bastion
         let dawn = theme == .dawn
-        let gTop = overgrown ? UIColor(red: 0.02, green: 0.09, blue: 0.12, alpha: 1)
+        let sunscorch = theme == .sunscorch
+        let sandhold = theme == .sandhold
+        let dunesea = theme == .dunesea
+        let oasis = theme == .oasis
+        // Golden desert day: bright sky, harsh sun, washed-out stars.
+        let brightDay = sunscorch || dunesea || oasis
+        let gTop = oasis ? UIColor(red: 0.26, green: 0.50, blue: 0.74, alpha: 1)
+            : dunesea ? UIColor(red: 0.30, green: 0.52, blue: 0.75, alpha: 1)
+            : sandhold ? UIColor(red: 0.10, green: 0.06, blue: 0.13, alpha: 1)
+            : sunscorch ? UIColor(red: 0.32, green: 0.52, blue: 0.78, alpha: 1)
+            : overgrown ? UIColor(red: 0.02, green: 0.09, blue: 0.12, alpha: 1)
             : bastion ? UIColor(red: 0.07, green: 0.04, blue: 0.10, alpha: 1)
             : dawn ? UIColor(red: 0.08, green: 0.08, blue: 0.20, alpha: 1) : skyTop
-        let gMid = overgrown ? UIColor(red: 0.05, green: 0.20, blue: 0.21, alpha: 1)
+        let gMid = oasis ? UIColor(red: 0.58, green: 0.68, blue: 0.62, alpha: 1)
+            : dunesea ? UIColor(red: 0.62, green: 0.66, blue: 0.62, alpha: 1)
+            : sandhold ? UIColor(red: 0.28, green: 0.12, blue: 0.11, alpha: 1)
+            : sunscorch ? UIColor(red: 0.52, green: 0.66, blue: 0.84, alpha: 1)
+            : overgrown ? UIColor(red: 0.05, green: 0.20, blue: 0.21, alpha: 1)
             : bastion ? UIColor(red: 0.20, green: 0.09, blue: 0.12, alpha: 1)
             : dawn ? UIColor(red: 0.22, green: 0.16, blue: 0.30, alpha: 1) : skyMid
-        let gLow = overgrown ? UIColor(red: 0.13, green: 0.30, blue: 0.22, alpha: 1)
+        let gLow = oasis ? UIColor(red: 0.94, green: 0.80, blue: 0.52, alpha: 1)
+            : dunesea ? UIColor(red: 0.95, green: 0.76, blue: 0.48, alpha: 1)
+            : sandhold ? UIColor(red: 0.55, green: 0.25, blue: 0.12, alpha: 1)
+            : sunscorch ? UIColor(red: 0.82, green: 0.76, blue: 0.64, alpha: 1)
+            : overgrown ? UIColor(red: 0.13, green: 0.30, blue: 0.22, alpha: 1)
             : bastion ? UIColor(red: 0.36, green: 0.17, blue: 0.10, alpha: 1)
             : dawn ? UIColor(red: 0.42, green: 0.28, blue: 0.30, alpha: 1) : skyLow
-        let gHorizon = overgrown ? UIColor(red: 0.38, green: 0.50, blue: 0.28, alpha: 1)
+        let gHorizon = oasis ? UIColor(red: 0.90, green: 0.94, blue: 0.72, alpha: 1)
+            : dunesea ? UIColor(red: 1.0, green: 0.86, blue: 0.58, alpha: 1)
+            : sandhold ? UIColor(red: 1.0, green: 0.55, blue: 0.25, alpha: 1)
+            : sunscorch ? UIColor(red: 1.0, green: 0.92, blue: 0.72, alpha: 1)
+            : overgrown ? UIColor(red: 0.38, green: 0.50, blue: 0.28, alpha: 1)
             : bastion ? UIColor(red: 0.80, green: 0.50, blue: 0.22, alpha: 1)
             : dawn ? UIColor(red: 0.95, green: 0.70, blue: 0.45, alpha: 1) : horizonPink
-        let gMist = overgrown ? UIColor(red: 0.15, green: 0.32, blue: 0.28, alpha: 1)
+        let gMist = oasis ? UIColor(red: 0.86, green: 0.82, blue: 0.62, alpha: 1)
+            : dunesea ? UIColor(red: 0.90, green: 0.74, blue: 0.52, alpha: 1)
+            : sandhold ? UIColor(red: 0.40, green: 0.25, blue: 0.18, alpha: 1)
+            : sunscorch ? UIColor(red: 0.88, green: 0.80, blue: 0.68, alpha: 1)
+            : overgrown ? UIColor(red: 0.15, green: 0.32, blue: 0.28, alpha: 1)
             : bastion ? UIColor(red: 0.30, green: 0.20, blue: 0.15, alpha: 1)
             : dawn ? UIColor(red: 0.35, green: 0.30, blue: 0.32, alpha: 1) : mistBlue
         // Dithered vertical gradient: deep indigo -> purple -> dim pink band -> mist.
@@ -131,14 +161,21 @@ enum TwilightRuinsBG {
         let W = sceneSize.width, H = sceneSize.height
 
         // Moon: pale lavender disc + halo, upper right. Dimmed for mood.
-        let moon = SKShapeNode(circleOfRadius: 26)
-        moon.fillColor = SKColor(red: 0.82, green: 0.80, blue: 0.94, alpha: 0.95)
+        // Sunscorch: harsh high-noon sun instead — bigger, warm white.
+        // Dunesea: big low golden sun hanging over the dune sea.
+        let sunY: CGFloat = brightDay ? 0.22 : 0.30
+        let moon = SKShapeNode(circleOfRadius: brightDay ? 34 : 26)
+        moon.fillColor = brightDay
+            ? SKColor(red: 1.0, green: 0.95, blue: 0.82, alpha: 1.0)
+            : SKColor(red: 0.82, green: 0.80, blue: 0.94, alpha: 0.95)
         moon.strokeColor = .clear
-        moon.position = CGPoint(x: W * 0.30, y: H * 0.30)
+        moon.position = CGPoint(x: W * 0.30, y: H * sunY)
         moon.zPosition = 1
         layer.addChild(moon)
-        let halo = SKShapeNode(circleOfRadius: 52)
-        halo.fillColor = SKColor(red: 0.55, green: 0.52, blue: 0.85, alpha: 0.14)
+        let halo = SKShapeNode(circleOfRadius: brightDay ? 70 : 52)
+        halo.fillColor = brightDay
+            ? SKColor(red: 1.0, green: 0.90, blue: 0.65, alpha: 0.30)
+            : SKColor(red: 0.55, green: 0.52, blue: 0.85, alpha: 0.14)
         halo.strokeColor = .clear
         halo.position = moon.position
         halo.zPosition = 1
@@ -146,44 +183,57 @@ enum TwilightRuinsBG {
         halo.run(.repeatForever(.sequence([
             .fadeAlpha(to: 0.55, duration: 3.2), .fadeAlpha(to: 1.0, duration: 3.2),
         ])))
-        // Moon craters (pixel blocks).
-        for (dx, dy, r) in [(-8, 5, 5), (6, -4, 4), (2, 9, 3)] as [(CGFloat, CGFloat, CGFloat)] {
-            let c = SKShapeNode(circleOfRadius: r)
-            c.fillColor = SKColor(red: 0.68, green: 0.66, blue: 0.82, alpha: 0.8)
-            c.strokeColor = .clear
-            c.position = CGPoint(x: moon.position.x + dx, y: moon.position.y + dy)
-            c.zPosition = 2
-            layer.addChild(c)
+        // Moon craters (pixel blocks). Skipped under bright day.
+        if !brightDay {
+            for (dx, dy, r) in [(-8, 5, 5), (6, -4, 4), (2, 9, 3)] as [(CGFloat, CGFloat, CGFloat)] {
+                let c = SKShapeNode(circleOfRadius: r)
+                c.fillColor = SKColor(red: 0.68, green: 0.66, blue: 0.82, alpha: 0.8)
+                c.strokeColor = .clear
+                c.position = CGPoint(x: moon.position.x + dx, y: moon.position.y + dy)
+                c.zPosition = 2
+                layer.addChild(c)
+            }
         }
 
         // Stars: ~90 pixel dots, upper 2/3, gentle twinkle. Pink/white mix.
+        // Bright day washes them out — a few faint ones only.
         var rng = SeededRNG(seed: 20260917)
-        for i in 0..<90 {
+        let starCount = brightDay ? 18 : 90
+        for i in 0..<starCount {
             let sx = rng.cgFloat(in: -W * 0.6...W * 0.6)
             let sy = rng.cgFloat(in: -H * 0.05...H * 0.68)
             let s: CGFloat = rng.cgFloat(in: 1.5...3.2)
             let pink = rng.int(in: 0...3) == 0
             let star = SKSpriteNode(color: pink
-                ? SKColor(red: 1, green: 0.55, blue: 0.8, alpha: 0.9)
-                : SKColor(white: 0.92, alpha: 0.9),
+                ? SKColor(red: 1, green: 0.55, blue: 0.8, alpha: brightDay ? 0.25 : 0.9)
+                : SKColor(white: 0.92, alpha: brightDay ? 0.25 : 0.9),
                 size: CGSize(width: s, height: s))
             star.position = CGPoint(x: sx, y: sy)
             star.zPosition = 1
             layer.addChild(star)
             let wait = SKAction.wait(forDuration: rng.double(in: 0...2.5))
             let dim = SKAction.fadeAlpha(to: 0.15, duration: rng.double(in: 0.7...1.8))
-            let bright = SKAction.fadeAlpha(to: 0.95, duration: rng.double(in: 0.7...1.8))
+            let bright = SKAction.fadeAlpha(to: brightDay ? 0.3 : 0.95, duration: rng.double(in: 0.7...1.8))
             star.run(.repeatForever(.sequence([wait, dim, bright])))
             _ = i
         }
 
         // Horizon glow band: faint pink light sitting over the mountains
         // (lime-gold breath over the jungle for the overgrown theme,
-        // furnace amber for the bastion theme, pale gold for dawn).
+        // furnace amber for the bastion theme, pale gold for dawn,
+        // bleached noon glare for sunscorch, ember blaze for sandhold).
         let glowTex = render(w: 64, h: 8) { cg in
             for x in 0..<64 {
                 let edge = abs(CGFloat(x) - 32) / 32 // 0 center -> 1 edge
-                if overgrown {
+                if oasis {
+                    cg.setFillColor(UIColor(red: 0.92, green: 0.95, blue: 0.70, alpha: 0.30 * (1 - edge)).cgColor)
+                } else if dunesea {
+                    cg.setFillColor(UIColor(red: 1, green: 0.85, blue: 0.55, alpha: 0.32 * (1 - edge)).cgColor)
+                } else if sandhold {
+                    cg.setFillColor(UIColor(red: 1, green: 0.50, blue: 0.20, alpha: 0.30 * (1 - edge)).cgColor)
+                } else if sunscorch {
+                    cg.setFillColor(UIColor(red: 1, green: 0.92, blue: 0.70, alpha: 0.30 * (1 - edge)).cgColor)
+                } else if overgrown {
                     cg.setFillColor(UIColor(red: 0.55, green: 0.9, blue: 0.45, alpha: 0.16 * (1 - edge)).cgColor)
                 } else if bastion {
                     cg.setFillColor(UIColor(red: 1, green: 0.55, blue: 0.25, alpha: 0.20 * (1 - edge)).cgColor)
@@ -207,10 +257,19 @@ enum TwilightRuinsBG {
 
         // Drifting clouds: 5 long wispy streaks, pink-purple, very dim
         // (teal-green for the overgrown theme, ember for the bastion theme,
-        // warm pale for dawn).
+        // warm pale for dawn, bright white-gold for sunscorch, burnt
+        // ember for sandhold).
         for i in 0..<5 {
             let cw = W * rng.cgFloat(in: 0.35...0.6)
-            let cloud = SKSpriteNode(color: overgrown
+            let cloud = SKSpriteNode(color: oasis
+                ? SKColor(red: 0.98, green: 0.96, blue: 0.84, alpha: 0.26)
+                : dunesea
+                ? SKColor(red: 1.0, green: 0.92, blue: 0.78, alpha: 0.30)
+                : sandhold
+                ? SKColor(red: 0.65, green: 0.30, blue: 0.18, alpha: 0.20)
+                : sunscorch
+                ? SKColor(red: 1.0, green: 0.95, blue: 0.85, alpha: 0.35)
+                : overgrown
                 ? SKColor(red: 0.30, green: 0.48, blue: 0.38, alpha: 0.16)
                 : bastion
                 ? SKColor(red: 0.55, green: 0.35, blue: 0.25, alpha: 0.16)
@@ -243,12 +302,13 @@ enum TwilightRuinsBG {
         }
 
         // Cinematic vignette: darkens edges so the lane feels dim + focused.
+        // Sunscorch skips most of it — high noon stays bright and open.
         let vig = render(w: 128, h: 128) { cg in
             for px in 0..<128 {
                 for py in 0..<128 {
                     let dx = (CGFloat(px) - 64) / 64, dy = (CGFloat(py) - 64) / 64
                     let d = min(1, sqrt(dx * dx + dy * dy))
-                    let a: CGFloat = max(0, d - 0.55) * 0.75
+                    let a: CGFloat = max(0, d - 0.55) * (brightDay ? 0.25 : 0.75)
                     cg.setFillColor(UIColor(white: 0, alpha: a).cgColor)
                     cg.fill(CGRect(x: px, y: 127 - py, width: 1, height: 1))
                 }
@@ -273,6 +333,11 @@ enum TwilightRuinsBG {
         let PW = 800, PH = 190
         let tex = render(w: PW, h: PH) { cg in
             cg.clear(CGRect(x: 0, y: 0, width: PW, height: PH))
+            // Oasis theme: bright warm range + green oases, ruin arches
+            // and a bone field instead of the dark mountain/forest sheet.
+            if Balance.active.theme == .oasis {
+                drawOasisRange(cg, PW: PW, PH: PH)
+            } else {
             // Back range: soft wide peaks.
             let back: [(x: Int, peak: Int, half: Int)] = [
                 (60, 128, 90), (190, 148, 110), (330, 120, 80),
@@ -361,6 +426,47 @@ enum TwilightRuinsBG {
             for py in stride(from: 46, to: 110, by: 7) {
                 fill(cg, 656 + hash(py, 1, 21) * 30 / 100, py, 4, 1, dirtDk.withAlpha(0.8))
             }
+            // Sandhold signature: desert-keep citadel on the far LEFT —
+            // blocky sandstone hold with twin watchtowers, battlements,
+            // arched gate, ember windows, war banners on the ramparts.
+            if Balance.active.theme == .sandhold {
+                let stone = UIColor(red: 0.22, green: 0.14, blue: 0.12, alpha: 1)
+                let stoneRim = UIColor(red: 0.95, green: 0.55, blue: 0.28, alpha: 1)
+                let ember = UIColor(red: 1.0, green: 0.45, blue: 0.12, alpha: 1)
+                // Twin watchtowers.
+                fill(cg, 48, 28, 26, 96, stone)
+                fill(cg, 122, 28, 26, 96, stone)
+                for tx in [48, 122] {
+                    // Battlement merlons.
+                    for m in stride(from: tx, to: tx + 26, by: 8) {
+                        fill(cg, m, 22, 5, 7, stone)
+                    }
+                    fill(cg, tx + 24, 28, 2, 96, stoneRim.withAlpha(0.7))
+                    // Arrow slits.
+                    for sy in stride(from: 44, to: 100, by: 14) {
+                        fill(cg, tx + 11, sy, 3, 7, UIColor(red: 0.05, green: 0.04, blue: 0.06, alpha: 1))
+                    }
+                }
+                // Main keep block between the towers.
+                fill(cg, 70, 44, 56, 80, stone)
+                for m in stride(from: 70, to: 126, by: 10) {
+                    fill(cg, m, 38, 6, 7, stone)
+                }
+                fill(cg, 124, 44, 2, 80, stoneRim.withAlpha(0.6))
+                fill(cg, 70, 44, 56, 2, stoneRim.withAlpha(0.5))
+                // Arched gate.
+                fill(cg, 90, 92, 16, 32, UIColor(red: 0.05, green: 0.04, blue: 0.06, alpha: 1))
+                fill(cg, 90, 92, 16, 3, stoneRim.withAlpha(0.6))
+                // Ember windows (pulsed at runtime via the ruin overlays).
+                fill(cg, 80, 58, 6, 9, ember)
+                fill(cg, 110, 58, 6, 9, ember)
+                fill(cg, 97, 70, 8, 8, ember.withAlpha(0.8))
+                // War banners on the ramparts.
+                for bx in [56, 134] {
+                    fill(cg, bx, 8, 2, 16, stone)
+                    fill(cg, bx + 2, 8, 10, 6, UIColor(red: 0.75, green: 0.15, blue: 0.10, alpha: 1))
+                }
+            }
             // Mist bed along the base.
             for px in 0..<PW {
                 let wobble = hash(px, 7, 2) * 8 / 100
@@ -369,6 +475,7 @@ enum TwilightRuinsBG {
             // Pixel dither where ranges meet the mist.
             for px in 0..<PW where hash(px, 118, 4) < 22 {
                 fill(cg, px, 118, 1, 1, mistBlue.withAlpha(0.8))
+            }
             }
         }
         let pano = SKSpriteNode(texture: tex)
@@ -392,12 +499,68 @@ enum TwilightRuinsBG {
         }
 
         // Dim veil so the panorama sits behind gameplay.
-        let veil = SKSpriteNode(color: SKColor(red: 0.05, green: 0.06, blue: 0.16, alpha: 0.38),
+        // Sunscorch stays bright: thin warm haze instead of dusk dim.
+        // Sandhold keeps a dark warm dusk over the keep.
+        // Dunesea keeps it bright: thin golden haze over the mesas.
+        let theme0 = Balance.active.theme
+        let veil = SKSpriteNode(color: theme0 == .sunscorch
+            ? SKColor(red: 0.90, green: 0.82, blue: 0.66, alpha: 0.18)
+            : theme0 == .dunesea
+            ? SKColor(red: 0.95, green: 0.80, blue: 0.55, alpha: 0.20)
+            : theme0 == .oasis
+            ? SKColor(red: 0.86, green: 0.92, blue: 0.68, alpha: 0.20)
+            : theme0 == .sandhold
+            ? SKColor(red: 0.10, green: 0.06, blue: 0.08, alpha: 0.30)
+            : SKColor(red: 0.05, green: 0.06, blue: 0.16, alpha: 0.38),
                                 size: CGSize(width: panoW, height: sceneSize.height * 0.62))
         veil.anchorPoint = CGPoint(x: 0, y: 0.5)
         veil.position = pano.position
         veil.zPosition = 2
         layer.addChild(veil)
+
+        // Sandhold shadow flyers: dark glider silhouettes circling the far
+        // range — slow wing beats, glide + bob loops, looping forever.
+        if theme0 == .sandhold {
+            var frng = SeededRNG(seed: 60606)
+            for i in 0..<5 {
+                let s = frng.cgFloat(in: 0.6...1.3)
+                let flyer = SKNode()
+                flyer.setScale(s)
+                flyer.alpha = 0.55
+                let wingPath = CGMutablePath()
+                wingPath.move(to: CGPoint(x: -26, y: 0))
+                wingPath.addLine(to: CGPoint(x: -6, y: 7))
+                wingPath.addLine(to: CGPoint(x: 0, y: 0))
+                wingPath.addLine(to: CGPoint(x: 6, y: 7))
+                wingPath.addLine(to: CGPoint(x: 26, y: 0))
+                wingPath.addLine(to: CGPoint(x: 6, y: -3))
+                wingPath.addLine(to: CGPoint(x: -6, y: -3))
+                wingPath.closeSubpath()
+                let wings = SKShapeNode(path: wingPath)
+                wings.fillColor = SKColor(white: 0.05, alpha: 1)
+                wings.strokeColor = SKColor(red: 1.0, green: 0.5, blue: 0.2, alpha: 0.35)
+                wings.lineWidth = 1
+                flyer.addChild(wings)
+                flyer.position = CGPoint(x: frng.cgFloat(in: -sceneSize.width * 0.5...sceneSize.width * 0.5),
+                                         y: frng.cgFloat(in: -20...90))
+                flyer.zPosition = 1
+                layer.addChild(flyer)
+                flyer.run(.repeatForever(.sequence([
+                    .scaleY(to: 0.6, duration: 0.9), .scaleY(to: 1.0, duration: 0.9),
+                ])))
+                let span = sceneSize.width * frng.cgFloat(in: 0.4...0.7)
+                let glide = SKAction.moveBy(x: frng.cgFloat(in: -1...1) > 0 ? span : -span,
+                                            y: frng.cgFloat(in: -14...14),
+                                            duration: frng.double(in: 13...20))
+                let bob = SKAction.repeatForever(.sequence([
+                    .moveBy(x: 0, y: 12, duration: 2.4),
+                    .moveBy(x: 0, y: -12, duration: 2.4),
+                ]))
+                flyer.run(bob)
+                flyer.run(.repeatForever(.sequence([glide, glide.reversed()])))
+                _ = i
+            }
+        }
     }
 
     // MARK: - Mid treeline (ONE strip, never tiled)
@@ -408,18 +571,39 @@ enum TwilightRuinsBG {
     /// autumn), amber fireflies instead of green.
     /// Dawn theme: open dry treeline (single pass, olive-gold) — the
     /// atoll feels airy after three night woods.
+    /// Sunscorch theme: high-noon expanse — lowest, sparsest dry scrub,
+    /// bleached rims, heat-dust instead of fireflies.
+    /// Sandhold theme: desert-keep dusk — broken sandstone wall chunks in
+    /// the scrub line, dead brush, rising ember sparks.
     static func buildMid(in layer: SKNode, sceneSize: CGSize) {
+        // Oasis theme: palm-fringed sand ridges with crawling creatures
+        // stalking the crest (instead of the bare dune ridges).
+        if Balance.active.theme == .oasis {
+            buildOasisRidges(in: layer, sceneSize: sceneSize)
+            return
+        }
+        // Dunesea theme skips the treeline: hazy dune-ridge panorama.
+        if Balance.active.theme == .dunesea {
+            buildDuneRidges(in: layer, sceneSize: sceneSize)
+            return
+        }
         let travel = Balance.levelWidth * Balance.parallaxMid
         let panoW: CGFloat = sceneSize.width + travel + 500
         let theme = Balance.active.theme
         let overgrown = theme == .overgrown
         let bastion = theme == .bastion
         let dawn = theme == .dawn
+        let sunscorch = theme == .sunscorch
+        let sandhold = theme == .sandhold
         let wooded = overgrown || bastion
-        let canopy = overgrown ? UIColor(red: 0.05, green: 0.22, blue: 0.14, alpha: 1)
+        let canopy = sandhold ? UIColor(red: 0.25, green: 0.15, blue: 0.10, alpha: 1)
+            : sunscorch ? UIColor(red: 0.30, green: 0.28, blue: 0.16, alpha: 1)
+            : overgrown ? UIColor(red: 0.05, green: 0.22, blue: 0.14, alpha: 1)
             : bastion ? UIColor(red: 0.22, green: 0.11, blue: 0.07, alpha: 1)
             : dawn ? UIColor(red: 0.16, green: 0.18, blue: 0.10, alpha: 1) : treeDark
-        let rim = overgrown ? UIColor(red: 0.30, green: 0.62, blue: 0.32, alpha: 1)
+        let rim = sandhold ? UIColor(red: 1.0, green: 0.60, blue: 0.30, alpha: 1)
+            : sunscorch ? UIColor(red: 1.0, green: 0.90, blue: 0.60, alpha: 1)
+            : overgrown ? UIColor(red: 0.30, green: 0.62, blue: 0.32, alpha: 1)
             : bastion ? UIColor(red: 0.80, green: 0.48, blue: 0.20, alpha: 1)
             : dawn ? UIColor(red: 0.85, green: 0.70, blue: 0.45, alpha: 1) : treeRim
         let PW = 800, PH = 90
@@ -432,7 +616,9 @@ enum TwilightRuinsBG {
                 var x = -10 + pass * 23
                 while x < PW + 10 {
                     let w = rng.int(in: 46...90)
-                    let h = rng.int(in: 30...58) + (pass == 1 ? 10 : 0)
+                    // Sunscorch: low sparse scrub, not tall forest.
+                    var h = rng.int(in: 30...58) + (pass == 1 ? 10 : 0)
+                    if sunscorch { h = rng.int(in: 14...26) }
                     let top = PH - h - rng.int(in: 0...10) - (pass == 1 ? 6 : 0)
                     for px in x..<(x + w) {
                         guard px >= 0 && px < PW else { continue }
@@ -471,9 +657,26 @@ enum TwilightRuinsBG {
                 fill(cg, px + 8, PH - h - 18, 2, h, ruinRim.withAlpha(0.5))
                 fill(cg, px - 6, PH - 22, 22, 6, ruinBody) // toppled chunk
             }
+            // Sandhold: broken sandstone wall chunks with crenellations
+            // holding the scrub line like a ruined curtain wall.
+            if sandhold {
+                let wall = UIColor(red: 0.30, green: 0.19, blue: 0.13, alpha: 1)
+                for wx in [120, 360, 620] {
+                    let wh = 26 + hash(wx, 2, 61) * 14 / 100
+                    fill(cg, wx, PH - wh - 14, 64, wh, wall)
+                    for m in stride(from: wx, to: wx + 64, by: 12) {
+                        fill(cg, m, PH - wh - 20, 7, 7, wall)
+                    }
+                    fill(cg, wx, PH - wh - 14, 64, 2, rim.withAlpha(0.6))
+                    // Breach hole.
+                    fill(cg, wx + 24, PH - 30, 12, 16, UIColor(red: 0.08, green: 0.05, blue: 0.05, alpha: 1))
+                }
+            }
             // Firefly dots baked faintly into the canopy (denser wooded).
+            // Sunscorch: almost none — bleached scrub, not glowing woods.
+            // Sandhold: ember sparks in the dusk.
             var frng = SeededRNG(seed: 777)
-            for _ in 0..<(wooded ? 44 : 26) {
+            for _ in 0..<(sandhold ? 34 : sunscorch ? 8 : wooded ? 44 : 26) {
                 let fx = frng.int(in: 0...(PW - 1))
                 let fy = frng.int(in: 8...(PH - 8))
                 fill(cg, fx, fy, 1, 1, heartY.withAlpha(0.85))
@@ -505,13 +708,20 @@ enum TwilightRuinsBG {
 
         // Live fireflies: warm dots floating above the treeline
         // (more + greener for the overgrown jungle; amber for the bastion).
-        for i in 0..<(wooded ? 22 : 14) {
+        // Sunscorch: thin heat-dust, few and pale.
+        // Sandhold: ember sparks rising off the scrub line.
+        let liveCount = sandhold ? 18 : sunscorch ? 6 : (wooded ? 22 : 14)
+        for i in 0..<liveCount {
             let green = overgrown && i % 3 == 0
-            let f = SKSpriteNode(color: green
+            let f = SKSpriteNode(color: sandhold
+                ? SKColor(red: 1, green: 0.45, blue: 0.15, alpha: 0.9)
+                : sunscorch
+                ? SKColor(red: 1, green: 0.95, blue: 0.80, alpha: 0.6)
+                : green
                 ? SKColor(red: 0.55, green: 1, blue: 0.6, alpha: 0.95)
                 : SKColor(red: 1, green: 0.85, blue: 0.4, alpha: 0.95),
                                  size: CGSize(width: 3, height: 3))
-            f.position = CGPoint(x: CGFloat(i) * (panoW / CGFloat(wooded ? 22 : 14)) + rng.cgFloat(in: -20...20),
+            f.position = CGPoint(x: CGFloat(i) * (panoW / CGFloat(liveCount)) + rng.cgFloat(in: -20...20),
                                  y: -sceneSize.height * 0.22 + rng.cgFloat(in: -10...70))
             f.zPosition = 2
             layer.addChild(f)
@@ -523,6 +733,376 @@ enum TwilightRuinsBG {
                                            .fadeAlpha(to: 1.0, duration: 1.6)])]),
                 float_.reversed(),
             ])))
+        }
+    }
+
+    // MARK: - Dunesea: dune-ridge panorama + rolling dune field
+
+    private static var ridgeCache: [SKTexture] = []
+
+    static func duneRidgeTexture(variant: Int) -> SKTexture {
+        let v = ((variant % 3) + 3) % 3
+        while ridgeCache.count <= v { ridgeCache.append(renderRidge(variant: ridgeCache.count)) }
+        return ridgeCache[v]
+    }
+
+    /// Pixel dune-ridge silhouette (200x64, upscaled with .nearest so the
+    /// crest steps stay chunky): sand body below a smooth sine crest, lit
+    /// crest pixels, stepped shade bands + dither with depth. Row 0 = top.
+    private static func renderRidge(variant: Int) -> SKTexture {
+        let tex = render(w: 200, h: 64) { cg in
+            drawRidge(cg, variant: variant)
+        }
+        tex.filteringMode = .nearest
+        return tex
+    }
+
+    private static func drawRidge(_ cg: CGContext, variant: Int) {
+        cg.clear(CGRect(x: 0, y: 0, width: 200, height: 64))
+        let cols: [UIColor] = [UIColor(red: 0.85, green: 0.68, blue: 0.47, alpha: 1),
+                               UIColor(red: 0.78, green: 0.58, blue: 0.36, alpha: 1),
+                               UIColor(red: 0.64, green: 0.44, blue: 0.25, alpha: 1)]
+        let shade = UIColor(red: 0.45, green: 0.30, blue: 0.17, alpha: 1)
+        let hi = UIColor(red: 1.0, green: 0.90, blue: 0.66, alpha: 1)
+        let bases: [Int] = [18, 28, 38]
+        let amps: [Int] = [9, 13, 17]
+        let phases: [Double] = [0.0, 1.7, 3.4]
+        let base: Int = bases[variant]
+        let amp: Int = amps[variant]
+        let ph: Double = phases[variant]
+        for x in 0..<200 {
+            drawRidgeColumn(cg, x: x, base: base, amp: amp, ph: ph,
+                            body: cols[variant], shade: shade, hi: hi, variant: variant)
+        }
+    }
+
+    private static func drawRidgeColumn(_ cg: CGContext, x: Int, base: Int, amp: Int,
+                                       ph: Double, body: UIColor, shade: UIColor,
+                                       hi: UIColor, variant: Int) {
+        let crest: Int = base + Int(Double(amp) * sin(Double(x) * 0.06 + ph)
+            + Double(amp) * 0.35 * sin(Double(x) * 0.17 + ph * 1.8))
+        // Sand body below the crest, darkening in stepped bands.
+        for yy in crest..<64 {
+            let depth: Int = (yy - crest) / 8
+            var c: UIColor = body
+            if depth >= 2 || hash(x, yy, variant) < depth * 18 { c = shade }
+            fill(cg, x, yy, 1, 1, c)
+        }
+        // Lit crest pixel + a bright pixel kissing the slip face.
+        fill(cg, x, crest, 1, 1, hi)
+        if crest + 1 < 64, hash(x, 7, variant) < 45 {
+            fill(cg, x, crest + 1, 1, 1, hi.withAlpha(0.5))
+        }
+    }
+
+    /// Oasis far sheet: hazy warm range, a broken desert ruin arch and a
+    /// bone field. All pixel rows, chunky when scaled.
+    private static func drawOasisRange(_ cg: CGContext, PW: Int, PH: Int) {
+        let rock = UIColor(red: 0.62, green: 0.45, blue: 0.28, alpha: 1)
+        let rim = UIColor(red: 1.0, green: 0.88, blue: 0.62, alpha: 1)
+        let stone = UIColor(red: 0.55, green: 0.40, blue: 0.25, alpha: 1)
+        let bone = UIColor(red: 0.93, green: 0.88, blue: 0.72, alpha: 1)
+        // Hazy back range.
+        let back: [(x: Int, peak: Int, half: Int)] = [
+            (70, 126, 96), (230, 146, 118), (400, 122, 88),
+            (560, 148, 124), (720, 134, 100),
+        ]
+        for b in back {
+            for px in (b.x - b.half)..<(b.x + b.half) {
+                guard px >= 0 && px < PW else { continue }
+                let k = 1 - abs(CGFloat(px - b.x)) / CGFloat(b.half)
+                let top = b.peak - Int(k * 50)
+                fill(cg, px, top, 1, PH - top, rock)
+                if hash(px, 1, 5) < 28 { fill(cg, px, top, 1, 2, rim) }
+            }
+        }
+        // Broken desert ruin arch (center-right).
+        let rx = 330, ry = 104
+        fill(cg, rx, ry, 14, 60, stone)
+        fill(cg, rx + 74, ry, 14, 44, stone)
+        fill(cg, rx, ry, 88, 8, stone)
+        fill(cg, rx, ry, 88, 2, rim.withAlpha(0.7))
+        fill(cg, rx + 10, ry + 4, 62, 8, UIColor(red: 0.86, green: 0.78, blue: 0.60, alpha: 1))
+        // Chipped top edge.
+        for k in stride(from: 0, to: 88, by: 10) {
+            if hash(k, 1, 33) < 40 { fill(cg, rx + k, ry + 8, 6, 4, stone) }
+        }
+        // Bone field along the sand line.
+        for bx in stride(from: 20, to: PW - 20, by: 46) {
+            let by = 150 + hash(bx, 2, 41) % 10
+            fill(cg, bx, by, 9, 2, bone)
+            fill(cg, bx + 1, by - 3, 2, 3, bone)
+            fill(cg, bx + 5, by - 3, 2, 3, bone)
+            if hash(bx, 3, 42) < 40 { fill(cg, bx + 11, by + 2, 6, 2, bone) }
+        }
+    }
+
+    /// Mid-layer for the oasis: pixel sand ridges fringed with palms,
+    /// bone spires and scrub. Replaces the bare dune ridges on Level 8.
+    static func buildOasisRidges(in layer: SKNode, sceneSize: CGSize) {
+        let travel = Balance.levelWidth * Balance.parallaxMid
+        let panoW: CGFloat = sceneSize.width + travel + 500
+        let panoH = sceneSize.height * 0.30
+        let baseY = -sceneSize.height * 0.22
+        let frond = UIColor(red: 0.22, green: 0.46, blue: 0.22, alpha: 1)
+        let frondHi = UIColor(red: 0.34, green: 0.62, blue: 0.28, alpha: 1)
+        let trunk = UIColor(red: 0.42, green: 0.30, blue: 0.18, alpha: 1)
+        let bone = UIColor(red: 0.92, green: 0.87, blue: 0.70, alpha: 1)
+
+        // Pixel ridge silhouettes (same chunky tiles as the dune sea, with
+        // a greener wash on the nearest one).
+        for (ri, lift) in [30, 10, -10].enumerated() {
+            let ridge = SKSpriteNode(texture: duneRidgeTexture(variant: ri))
+            ridge.anchorPoint = CGPoint(x: 0, y: 0.5)
+            ridge.size = CGSize(width: panoW, height: panoH)
+            ridge.position = CGPoint(x: -sceneSize.width * 0.6, y: baseY + CGFloat(lift))
+            ridge.zPosition = CGFloat(ri)
+            if ri == 2 {
+                // Slight green tint over the near ridge: sand near water.
+                ridge.colorBlendFactor = 0.18
+                ridge.color = UIColor(red: 0.55, green: 0.70, blue: 0.45, alpha: 1)
+            }
+            layer.addChild(ridge)
+        }
+
+        // Palms + bone spires studded along the ridge line.
+        var rng = SeededRNG(seed: 51515)
+        let ornamentCount = 26
+        for i in 0..<ornamentCount {
+            let ox = rng.cgFloat(in: 0...panoW)
+            let oy = baseY + rng.cgFloat(in: -6...40)
+            let node = SKNode()
+            node.position = CGPoint(x: ox, y: oy)
+            node.zPosition = 2
+            node.setScale(rng.cgFloat(in: 0.7...1.2))
+            layer.addChild(node)
+            if i % 3 == 0 {
+                drawPalmNode(node, frond: frond, frondHi: frondHi, trunk: trunk,
+                             sway: Double(i % 5) - 2)
+            } else if i % 3 == 1 {
+                // Bone spire: ribbed skull tower.
+                let h: CGFloat = rng.cgFloat(in: 16...30)
+                let spire = SKSpriteNode(color: bone, size: CGSize(width: 5, height: h))
+                spire.position = CGPoint(x: 0, y: h / 2)
+                node.addChild(spire)
+                let cap = SKSpriteNode(color: bone.withAlphaComponent(0.8),
+                                       size: CGSize(width: 9, height: 5))
+                cap.position = CGPoint(x: 0, y: h)
+                node.addChild(cap)
+                for r in 1..<3 {
+                    let rib = SKSpriteNode(color: bone.withAlphaComponent(0.7),
+                                           size: CGSize(width: 3, height: 4))
+                    rib.position = CGPoint(x: 6, y: h * CGFloat(r) / 3)
+                    node.addChild(rib)
+                }
+            } else {
+                // Scrub tuft.
+                for b in 0..<3 {
+                    let blade = SKSpriteNode(color: frond.withAlphaComponent(0.8),
+                                             size: CGSize(width: 2, height: 9))
+                    blade.position = CGPoint(x: CGFloat(b) * 3 - 3, y: 4)
+                    blade.zRotation = 0.3 * CGFloat(b) - 0.3
+                    node.addChild(blade)
+                }
+            }
+            _ = frondHi
+        }
+    }
+
+    /// One pixel palm as a live node (fronds as small sprites).
+    private static func drawPalmNode(_ node: SKNode, frond: UIColor, frondHi: UIColor,
+                                     trunk: UIColor, sway: Double) {
+        let th: CGFloat = 26
+        let pole = SKSpriteNode(color: trunk, size: CGSize(width: 3, height: th))
+        pole.position = CGPoint(x: 0, y: th / 2)
+        node.addChild(pole)
+        let top = CGPoint(x: 0, y: th)
+        let angles: [Double] = [-1.0, -0.5, 0.0, 0.5, 1.0]
+        for i in 0..<angles.count {
+            let a = angles[i]
+            let len = abs(a) * 16 + 8
+            let fr = SKSpriteNode(color: i == 2 ? frondHi : frond,
+                                  size: CGSize(width: len, height: 2))
+            fr.anchorPoint = CGPoint(x: a < 0 ? 1 : 0, y: 0.5)
+            fr.position = top
+            fr.zRotation = CGFloat(a) * 0.7
+            node.addChild(fr)
+        }
+        let crown = SKSpriteNode(color: frondHi, size: CGSize(width: 5, height: 4))
+        crown.position = top
+        node.addChild(crown)
+        if sway != 0 {
+            node.run(.repeatForever(.sequence([
+                .rotate(toAngle: CGFloat(sway) * 0.04, duration: 2.4),
+                .rotate(toAngle: -CGFloat(sway) * 0.04, duration: 2.4),
+            ])))
+        }
+    }
+
+
+    /// Mid-layer for the dune sea: three pixel-art ridge silhouettes
+    /// stacked far -> near (hazier + paler behind, darker + taller ahead),
+    /// plus drifting pixel-sand clusters. Replaces the treeline on dune
+    /// levels.
+    static func buildDuneRidges(in layer: SKNode, sceneSize: CGSize) {
+        let travel = Balance.levelWidth * Balance.parallaxMid
+        let panoW: CGFloat = sceneSize.width + travel + 500
+        let panoH = sceneSize.height * 0.30
+        let baseY = -sceneSize.height * 0.22
+        for (ri, lift) in [30, 10, -10].enumerated() {
+            let ridge = SKSpriteNode(texture: duneRidgeTexture(variant: ri))
+            ridge.anchorPoint = CGPoint(x: 0, y: 0.5)
+            ridge.size = CGSize(width: panoW, height: panoH)
+            ridge.position = CGPoint(x: -sceneSize.width * 0.6, y: baseY + CGFloat(lift))
+            ridge.zPosition = CGFloat(ri)
+            layer.addChild(ridge)
+        }
+        // Drifting pixel-sand clusters (dynamic, translucent grains).
+        var rng = SeededRNG(seed: 4141)
+        for i in 0..<4 {
+            let cluster = SKNode()
+            cluster.position = CGPoint(x: rng.cgFloat(in: 0...panoW * 0.6),
+                                       y: baseY + rng.cgFloat(in: -10...60))
+            cluster.zPosition = 3
+            layer.addChild(cluster)
+            for k in 0..<6 {
+                let grain = SKSpriteNode(
+                    color: SKColor(red: 1.0, green: 0.88, blue: 0.62, alpha: 0.5),
+                    size: CGSize(width: 3, height: 3))
+                grain.position = CGPoint(x: rng.cgFloat(in: 0...120),
+                                         y: rng.cgFloat(in: -8...8))
+                cluster.addChild(grain)
+                _ = k
+            }
+            let drift = SKAction.moveBy(x: rng.cgFloat(in: 80...160), y: 0,
+                                        duration: rng.double(in: 6...10))
+            cluster.run(.repeatForever(.sequence([drift, drift.reversed()])))
+            _ = i
+        }
+    }
+
+    private static var sandTile: SKTexture?
+
+    /// Pixel sand tile (110x26 @4x = 440x104): pale crest, wind-ripple
+    /// scallops, shaded foot, grain speckles. Row 0 = top.
+    static func sandTileTexture() -> SKTexture {
+        if let sandTile { return sandTile }
+        let tex = render(w: 110, h: 26) { cg in
+            let crest = UIColor(red: 0.98, green: 0.88, blue: 0.62, alpha: 1)
+            let mid = UIColor(red: 0.82, green: 0.64, blue: 0.38, alpha: 1)
+            let dark = UIColor(red: 0.58, green: 0.42, blue: 0.23, alpha: 1)
+            let foot = UIColor(red: 0.66, green: 0.48, blue: 0.28, alpha: 1)
+            fill(cg, 0, 0, 110, 26, mid)
+            // Pale crest rows.
+            fill(cg, 0, 0, 110, 2, crest)
+            // Wind-ripple scallops: dark double-row arcs marching right.
+            for x in 0..<110 {
+                let arc = Int(2.0 * sin(Double(x) * 0.30) + 2.0) // 0...4
+                fill(cg, x, 5 + arc, 1, 2, dark)
+            }
+            // Shaded foot.
+            fill(cg, 0, 14, 110, 12, foot)
+            fill(cg, 0, 14, 110, 1, dark.withAlpha(0.6))
+            // Grain speckles, light + dark.
+            for g in 0..<90 {
+                let gx = hash(g, 1, 7) * 110 / 100
+                let gy = 2 + hash(g, 3, 8) * 22 / 100
+                fill(cg, gx, gy, 1, 1,
+                     hash(g, 5, 9) < 50 ? crest.withAlpha(0.8) : dark.withAlpha(0.8))
+            }
+        }
+        tex.filteringMode = .nearest
+        sandTile = tex
+        return tex
+    }
+
+    /// Flat dune-sea field for the desert level: pixel sand tiles with a
+    /// pale crest lip, sandstone strata below, team washes, ripple ticks
+    /// + pebbles on the deck. Straight like the other lanes.
+    static func buildDuneGround(in world: SKNode) {
+        let width = Balance.levelWidth
+        let gy = Balance.groundTopY
+        let tile = sandTileTexture()
+        let tileW: CGFloat = 440, tileH: CGFloat = 104 // 110x26 @4x
+        var x: CGFloat = 0
+        var i = 0
+        while x < width {
+            let t = SKSpriteNode(texture: tile)
+            t.anchorPoint = CGPoint(x: 0, y: 1)
+            t.size = CGSize(width: tileW, height: tileH)
+            if i % 2 == 1 {
+                t.xScale = -1
+                t.position = CGPoint(x: x + tileW, y: gy)
+            } else {
+                t.position = CGPoint(x: x, y: gy)
+            }
+            t.zPosition = 1
+            world.addChild(t)
+            x += tileW
+            i += 1
+        }
+        // Pale crest lip on the walkable edge.
+        let lip = SKSpriteNode(color: SKColor(red: 1.0, green: 0.93, blue: 0.70, alpha: 0.8),
+                               size: CGSize(width: width, height: 3))
+        lip.anchorPoint = CGPoint(x: 0, y: 1)
+        lip.position = CGPoint(x: 0, y: gy + 1)
+        lip.zPosition = 2
+        world.addChild(lip)
+        // Sandstone strata under the sand, then dark depth.
+        var y = gy - tileH
+        for (depth, color) in [(60, SKColor(red: 0.55, green: 0.38, blue: 0.22, alpha: 1)),
+                              (120, SKColor(red: 0.40, green: 0.27, blue: 0.15, alpha: 1))] as [(CGFloat, SKColor)] {
+            let d = min(depth, y)
+            guard d > 0 else { break }
+            let band = SKSpriteNode(color: color, size: CGSize(width: width, height: d))
+            band.anchorPoint = CGPoint(x: 0, y: 1)
+            band.position = CGPoint(x: 0, y: y)
+            band.zPosition = 0
+            world.addChild(band)
+            y -= d
+        }
+        if y > 0 {
+            let deep = SKSpriteNode(color: SKColor(red: 0.20, green: 0.13, blue: 0.08, alpha: 1),
+                                    size: CGSize(width: width, height: y))
+            deep.anchorPoint = CGPoint(x: 0, y: 1)
+            deep.position = CGPoint(x: 0, y: y)
+            deep.zPosition = 0
+            world.addChild(deep)
+        }
+        // Team washes: faint so the desert grade survives.
+        let half = width / 2
+        let washL = SKSpriteNode(color: SKColor(red: 0.3, green: 0.5, blue: 1, alpha: 0.07),
+                                 size: CGSize(width: half, height: tileH))
+        washL.anchorPoint = CGPoint(x: 0, y: 1)
+        washL.position = CGPoint(x: 0, y: gy)
+        washL.zPosition = 2
+        world.addChild(washL)
+        let washR = SKSpriteNode(color: SKColor(red: 1, green: 0.3, blue: 0.25, alpha: 0.07),
+                                 size: CGSize(width: half, height: tileH))
+        washR.anchorPoint = CGPoint(x: 0, y: 1)
+        washR.position = CGPoint(x: half, y: gy)
+        washR.zPosition = 2
+        world.addChild(washR)
+        // Ripple ticks + pebbles + pale speckles (pixel squares on the deck).
+        var rng = SeededRNG(seed: 70707)
+        var px: CGFloat = 20
+        while px < width - 20 {
+            px += rng.cgFloat(in: 90...200)
+            let tick = SKSpriteNode(color: SKColor(red: 0.58, green: 0.42, blue: 0.23, alpha: 0.7),
+                                    size: CGSize(width: rng.cgFloat(in: 10...20), height: 2))
+            tick.position = CGPoint(x: px, y: gy + 3)
+            tick.zPosition = 2
+            world.addChild(tick)
+            let peb = SKSpriteNode(color: SKColor(red: 0.42, green: 0.30, blue: 0.18, alpha: 1),
+                                   size: CGSize(width: 3, height: 3))
+            peb.position = CGPoint(x: px + rng.cgFloat(in: -30...30), y: gy + 2)
+            peb.zPosition = 2
+            world.addChild(peb)
+            let sp = SKSpriteNode(color: SKColor(red: 1.0, green: 0.93, blue: 0.70, alpha: 0.85),
+                                  size: CGSize(width: 2, height: 2))
+            sp.position = CGPoint(x: px + rng.cgFloat(in: -30...30), y: gy + 2)
+            sp.zPosition = 2
+            world.addChild(sp)
         }
     }
 
@@ -777,7 +1357,12 @@ enum TwilightRuinsBG {
 
     /// Full ground build: 6-variant turf tiles + textured brick cliff +
     /// contact AO + washes + unique scatter (stones, vines, shroom glows, pollen).
+    /// Dune levels branch to the rolling dune-sea renderer instead.
     static func buildGround(in world: SKNode) {
+        if Balance.dunes {
+            buildDuneGround(in: world)
+            return
+        }
         let tileW: CGFloat = 500
         let tileH: CGFloat = 104 // 125x26 @4x
         var x: CGFloat = 0

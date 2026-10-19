@@ -372,10 +372,11 @@ final class HeroNode: SKSpriteNode {
         let head = position.y + halfH
         grounded = false
 
-        // Ground strip (walkable surface at Balance.groundTopY).
-        if velocity.dy <= 0 && feet <= Balance.groundTopY {
-            position.y = Balance.groundTopY + halfH
-            feet = Balance.groundTopY
+        // Ground strip (walkable surface, flat on every level).
+        let gy = Balance.groundY(at: position.x)
+        if velocity.dy <= 0 && feet <= gy {
+            position.y = gy + halfH
+            feet = gy
             velocity.dy = 0
             grounded = true
         }
@@ -538,9 +539,10 @@ final class HeroNode: SKSpriteNode {
 
     // MARK: - Movement dust (pixel puffs that sell weight)
 
-    /// Twilight-lane dust: pale moss tint, darkens on platforms.
+    /// Lane dust: pale moss tint, sandy gold on dune levels.
     private func groundDustColor() -> SKColor {
-        SKColor(red: 0.75, green: 0.78, blue: 0.85, alpha: 1)
+        Balance.dunes ? SKColor(red: 0.90, green: 0.76, blue: 0.52, alpha: 1)
+            : SKColor(red: 0.75, green: 0.78, blue: 0.85, alpha: 1)
     }
 
     /// Skid puff when slamming into a reversal at speed.

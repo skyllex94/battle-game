@@ -16,7 +16,15 @@ enum Balance {
     /// Thornwood Bastion (Level 3): ember-amber timber grade, russet canopy.
     /// Dune Atoll (Level 4): early dawn — a touch brighter, pale-gold
     /// horizon, dry open treeline, sandy lane wash.
-    enum BGTheme { case twilight, overgrown, bastion, dawn }
+    /// Sunscorch Expanse (Level 5): high noon — brightest so far, bleached
+    /// sky, open rolling fields, no platforms.
+    /// Sandhold Citadel (Level 6): burnt-orange desert-keep dusk, fortress
+    /// silhouette, shadow flyers circling the far range.
+    /// Sirocco Dunes (Level 7): golden desert day — rolling dune sea,
+    /// wavy walkable fields, hazy ridge lines, drifting sand.
+    /// Oasis Waste (Level 8): greener desert — palm oases + ruin arches
+    /// + bone fields in the distance, crawling sand creatures.
+    enum BGTheme { case twilight, overgrown, bastion, dawn, sunscorch, sandhold, dunesea, oasis }
 
     // MARK: - Per-level battlefield layout
     struct LevelLayout {
@@ -47,9 +55,20 @@ enum Balance {
         /// Every Nth summon rushes out a Reaver axe-fighter instead
         /// (0 = never — Levels 1-3 never see axes; Brutes win ties).
         var reaverEvery: Int
+        /// Every Nth summon scuttles out a Skitter zergling instead
+        /// (0 = never — Levels 1-5 never see claws; Brutes then
+        /// Reavers win ties).
+        var skitterEvery: Int
+        /// Every Nth summon flies in a Jet gun-robot instead
+        /// (0 = never — Levels 1-6 never see jets; Brutes, Reavers,
+        /// then Skitters win ties).
+        var jetEvery: Int
         // MARK: - Structure durability (matches the LevelDef dossier)
         var towerHP: CGFloat
         var baseHP: CGFloat
+        /// Enemy marcher HP multiplier (1.0 = base stats; Level 5+ = 1.05,
+        /// later levels stack further). Applies to raider/brute/reaver.
+        var enemyHPScale: CGFloat
     }
 
     /// Level 1: the original 5200pt Twilight lane, 2 towers per side.
@@ -60,22 +79,21 @@ enum Balance {
         enemyTowerXs: [3750, 4400],
         enemyBaseX: 4980,
         heroSpawnX: 420,
-        platforms: [
-            CGRect(x: 1960, y: 300, width: 320, height: 36),
-            CGRect(x: 2440, y: 420, width: 320, height: 36),
-            CGRect(x: 2920, y: 300, width: 320, height: 36),
-        ],
+        platforms: [],
         theme: .twilight,
         flags: false,
         alienBirds: false,
         lushFlora: false,
         summonInterval: 8.0,
         doubleChance: 0.0,
-        maxEnemies: 6,
+        maxEnemies: 20,
         bruteEvery: 0,
         reaverEvery: 0,
+        skitterEvery: 0,
+        jetEvery: 0,
         towerHP: 200,
-        baseHP: 500
+        baseHP: 500,
+        enemyHPScale: 1.0
     )
 
     /// Level 2 Rootwall Thicket: bigger 6800pt overgrown map, 3 towers per
@@ -87,29 +105,26 @@ enum Balance {
         enemyTowerXs: [4600, 5300, 6000],
         enemyBaseX: 6580,
         heroSpawnX: 420,
-        platforms: [
-            CGRect(x: 2560, y: 300, width: 320, height: 36),
-            CGRect(x: 3040, y: 420, width: 320, height: 36),
-            CGRect(x: 3520, y: 300, width: 320, height: 36),
-            CGRect(x: 4000, y: 420, width: 320, height: 36),
-            CGRect(x: 4480, y: 300, width: 320, height: 36),
-        ],
+        platforms: [],
         theme: .overgrown,
         flags: true,
         alienBirds: true,
         lushFlora: true,
         summonInterval: 7.0,
         doubleChance: 0.45,
-        maxEnemies: 8,
+        maxEnemies: 20,
         bruteEvery: 0,
         reaverEvery: 0,
+        skitterEvery: 0,
+        jetEvery: 0,
         towerHP: 220,
-        baseHP: 550
+        baseHP: 550,
+        enemyHPScale: 1.0
     )
 
     /// Level 3 Thornwood Bastion: longest lane yet (7200pt), 3 towers per
-    /// side like Level 2 but shifted inward, and a stepped bastion-approach
-    /// platform run with a high perch mid-lane. Timber-ember grade.
+    /// side like Level 2 but shifted inward. Open fields, no platforms.
+    /// Timber-ember grade.
     /// Easy-to-medium flow: steady raiders, occasional pairs, and every
     /// 4th summon a Brute (first one ~25s in — easy start, medium punch).
     private static let layout3 = LevelLayout(
@@ -119,28 +134,25 @@ enum Balance {
         enemyTowerXs: [5050, 5750, 6450],
         enemyBaseX: 6980,
         heroSpawnX: 420,
-        platforms: [
-            CGRect(x: 2500, y: 280, width: 300, height: 36),
-            CGRect(x: 2960, y: 400, width: 300, height: 36),
-            CGRect(x: 3420, y: 480, width: 280, height: 36),
-            CGRect(x: 3860, y: 360, width: 300, height: 36),
-            CGRect(x: 4320, y: 280, width: 320, height: 36),
-        ],
+        platforms: [],
         theme: .bastion,
         flags: true,
         alienBirds: true,
         lushFlora: true,
         summonInterval: 6.0,
         doubleChance: 0.35,
-        maxEnemies: 9,
+        maxEnemies: 20,
         bruteEvery: 4,
         reaverEvery: 0,
+        skitterEvery: 0,
+        jetEvery: 0,
         towerHP: 250,
-        baseHP: 600
+        baseHP: 600,
+        enemyHPScale: 1.0
     )
 
     /// Level 4 Dune Atoll: open 7400pt white-sand crossing, 3 towers per
-    /// side pushed wider apart, and a low-high-low dune platform rhythm.
+    /// side pushed wider apart. Open fields, no platforms.
     /// Dawn grade (see .dawn). Hotter flow: raiders every 5.5s with frequent
     /// pairs, a Reaver axe-rush every 3rd summon, and a Brute every 6th
     /// (Brutes win the 6th-summon tie) — plus the Scatter unlock in hand.
@@ -151,24 +163,143 @@ enum Balance {
         enemyTowerXs: [5200, 5900, 6600],
         enemyBaseX: 7180,
         heroSpawnX: 420,
-        platforms: [
-            CGRect(x: 2480, y: 300, width: 320, height: 36),
-            CGRect(x: 2980, y: 420, width: 280, height: 36),
-            CGRect(x: 3440, y: 300, width: 320, height: 36),
-            CGRect(x: 3920, y: 440, width: 280, height: 36),
-            CGRect(x: 4380, y: 320, width: 300, height: 36),
-        ],
+        platforms: [],
         theme: .dawn,
         flags: true,
         alienBirds: true,
         lushFlora: false,
         summonInterval: 5.5,
         doubleChance: 0.40,
-        maxEnemies: 10,
+        maxEnemies: 20,
         bruteEvery: 6,
         reaverEvery: 3,
+        skitterEvery: 0,
+        jetEvery: 0,
         towerHP: 260,
-        baseHP: 650
+        baseHP: 650,
+        enemyHPScale: 1.0
+    )
+
+    /// Level 5 Sunscorch Expanse: longest lane yet (8000pt), 3 towers per
+    /// side spread wide, ZERO jumping platforms — open rolling fields with
+    /// very small dips and a gentle ascent mid-lane (visual swells only,
+    /// gameplay stays flat). High-noon grade: brightest sky so far.
+    /// Flow untouched for now (same summon line as Level 4); units + game
+    /// tuning lands next. Structure HP matches the LevelDef dossier.
+    private static let layout5 = LevelLayout(
+        width: 8000,
+        playerBaseX: 220,
+        playerTowerXs: [700, 1450, 2200],
+        enemyTowerXs: [5600, 6350, 7100],
+        enemyBaseX: 7780,
+        heroSpawnX: 420,
+        platforms: [],
+        theme: .sunscorch,
+        flags: true,
+        alienBirds: false,
+        lushFlora: false,
+        summonInterval: 5.5,
+        doubleChance: 0.40,
+        maxEnemies: 20,
+        bruteEvery: 6,
+        reaverEvery: 3,
+        skitterEvery: 0,
+        jetEvery: 0,
+        towerHP: 300,
+        baseHP: 700,
+        enemyHPScale: 1.05
+    )
+
+    /// Level 6 Sandhold Citadel: 8400pt desert-keep siege lane, 3 towers
+    /// per side. Open fields, no platforms. Burnt-orange
+    /// keep-dusk grade with shadow flyers circling far. Hotter flow:
+    /// pairs often, Reavers every 3rd, Skitter zerg-rush every 2nd, Brute
+    /// every 6th (Brutes then Reavers win ties). Enemy HP ×1.1025 (+5%
+    /// over Level 5, compounding). Structure HP matches the dossier.
+    private static let layout6 = LevelLayout(
+        width: 8400,
+        playerBaseX: 220,
+        playerTowerXs: [700, 1450, 2200],
+        enemyTowerXs: [6000, 6750, 7500],
+        enemyBaseX: 8180,
+        heroSpawnX: 420,
+        platforms: [],
+        theme: .sandhold,
+        flags: true,
+        alienBirds: false,
+        lushFlora: false,
+        summonInterval: 5.0,
+        doubleChance: 0.45,
+        maxEnemies: 20,
+        bruteEvery: 6,
+        reaverEvery: 3,
+        skitterEvery: 2,
+        jetEvery: 0,
+        towerHP: 320,
+        baseHP: 800,
+        enemyHPScale: 1.1025
+    )
+
+    /// Level 7 Sirocco Dunes: 8800pt desert siege lane, 3 towers
+    /// per side. Straight sand field like the other lanes; the dunes
+    /// live in the background art. Golden desert-day grade
+    /// with pixel ridge lines + drifting sand. Hotter flow: pairs often,
+    /// Reavers every 3rd, Skitters every 2nd, Brute every 6th (Brutes then
+    /// Reavers win ties). Enemy HP ×1.1576 (+5% over Level 6,
+    /// compounding). Structure HP matches the dossier.
+    private static let layout7 = LevelLayout(
+        width: 8800,
+        playerBaseX: 220,
+        playerTowerXs: [750, 1500, 2250],
+        enemyTowerXs: [6350, 7100, 7850],
+        enemyBaseX: 8580,
+        heroSpawnX: 420,
+        platforms: [],
+        theme: .dunesea,
+        flags: false,
+        alienBirds: false,
+        lushFlora: false,
+        summonInterval: 5.0,
+        doubleChance: 0.45,
+        maxEnemies: 20,
+        bruteEvery: 6,
+        reaverEvery: 3,
+        skitterEvery: 2,
+        jetEvery: 5,
+        towerHP: 350,
+        baseHP: 900,
+        enemyHPScale: 1.1576
+    )
+
+    /// Level 8 Oasis Waste: 9200pt desert-oasis siege lane, 3 towers
+    /// per side. Desert again but greener + ornamented: palm oases,
+    /// ruin arches and bone fields in the distance, crawling sand
+    /// creatures stalking the ridges. Straight sand field. Hotter flow:
+    /// pairs often, Reavers every 3rd, Jets every 5th, Skitters every
+    /// 2nd, Brute every 6th. Enemy HP ×1.2155 (+5% over Level 7,
+    /// compounding). Structure HP matches the dossier.
+    private static let layout8 = LevelLayout(
+        width: 9200,
+        playerBaseX: 220,
+        playerTowerXs: [750, 1500, 2250],
+        enemyTowerXs: [6650, 7400, 8150],
+        enemyBaseX: 8980,
+        heroSpawnX: 420,
+        platforms: [],
+        theme: .oasis,
+        flags: true,
+        alienBirds: false,
+        lushFlora: false,
+        summonInterval: 4.5,
+        doubleChance: 0.45,
+        maxEnemies: 20,
+        bruteEvery: 6,
+        reaverEvery: 3,
+        skitterEvery: 2,
+        jetEvery: 5,
+        towerHP: 400,
+        baseHP: 1000,
+        enemyHPScale: 1.2155
     )
 
     /// Active battlefield. GameScene sets this from the level id before
@@ -180,6 +311,10 @@ enum Balance {
         case 2: return layout2
         case 3: return layout3
         case 4: return layout4
+        case 5: return layout5
+        case 6: return layout6
+        case 7: return layout7
+        case 8: return layout8
         default: return layout1
         }
     }
@@ -187,6 +322,14 @@ enum Balance {
     // MARK: - Level layout (points; follow `active`)
     static var levelWidth: CGFloat { active.width }
     static var groundTopY: CGFloat = 120        // y of the walkable surface
+    /// True on desert themes (dune sand + sand dressing; Level 7-8).
+    static var dunes: Bool { active.theme == .dunesea || active.theme == .oasis }
+    /// Walkable surface height at world x. Flat on every level, dunes
+    /// included — straight fields everywhere.
+    static func groundY(at x: CGFloat) -> CGFloat {
+        _ = x
+        return groundTopY
+    }
     static var groundThickness: CGFloat = 120
     static var viewHeight: CGFloat = 750        // logical scene height
 
@@ -197,7 +340,7 @@ enum Balance {
     static var enemyTowerXs: [CGFloat] { active.enemyTowerXs }
     static var enemyBaseX: CGFloat { active.enemyBaseX }
 
-    // MARK: - Platforms (mid-map verticality for the hero; physics lands next stage)
+    // MARK: - Platforms (empty on all levels: open fields only)
     static var platforms: [CGRect] { active.platforms }
 
     // MARK: - Hero (visual only this stage; movement stats used next stage)
@@ -210,7 +353,7 @@ enum Balance {
     // rules: ~6 frames to full speed, ~3-5 to stop, no ice)
     static let heroRunSpeed: CGFloat = 520
     static let heroJumpVelocity: CGFloat = 1000
-    static let heroGravity: CGFloat = -2100   // rise: crisp, apex ≈ 238pt + speed bonus clears the 216pt platform rise
+    static let heroGravity: CGFloat = -2100   // rise: crisp, apex ≈ 238pt
     static let heroFallMultiplier: CGFloat = 1.5 // fall faster than rise: snappy, precise landings
     static let heroApexWindow: CGFloat = 140  // |vy| below this = apex hang zone
     static let heroApexScale: CGFloat = 0.55  // gravity inside the hang zone (floaty top, easy to steer)
@@ -271,9 +414,12 @@ enum Balance {
     static var maxEnemies: Int { active.maxEnemies }
     static var bruteEvery: Int { active.bruteEvery }
     static var reaverEvery: Int { active.reaverEvery }
+    static var skitterEvery: Int { active.skitterEvery }
+    static var jetEvery: Int { active.jetEvery }
     static let firstSummonDelay: Double = 5.0
-    /// Raider (the classic marcher — Levels 1+).
-    static let enemyHP: CGFloat = 40
+    /// Raider (the classic marcher — Levels 1+). Base 40; Level 5+ scales
+    /// via the layout's enemyHPScale (L5 = ×1.05, L6 = ×1.1025).
+    static var enemyHP: CGFloat { 40 * active.enemyHPScale }
     static let enemySpeed: CGFloat = 120
     static let killReward: Int = 100           // Unity KillEnemy gold
     // Ranged troopers: advance, stop at shooting range, fire bolts.
@@ -282,8 +428,8 @@ enum Balance {
     static let enemyFireCooldown: Double = 1.7
     static let enemyBoltDamage: CGFloat = 8
     /// Brute (bulky siege marcher — Level 3+): slow, tanky, hits like a
-    /// tower bolt and pays a premium when dropped.
-    static let bruteHP: CGFloat = 150
+    /// tower bolt and pays a premium when dropped. Base 150, scaled.
+    static var bruteHP: CGFloat { 150 * active.enemyHPScale }
     static let bruteSpeed: CGFloat = 70
     static let bruteReward: Int = 175
     static let bruteSightRange: CGFloat = 500
@@ -292,7 +438,8 @@ enum Balance {
     static let bruteBoltDamage: CGFloat = 16
     /// Reaver (axe melee rusher — Level 4+): fast, closes to arm's length
     /// and chops for heavy damage. No bolts — the axe is the weapon.
-    static let reaverHP: CGFloat = 90
+    /// Base 90, scaled.
+    static var reaverHP: CGFloat { 90 * active.enemyHPScale }
     static let reaverSpeed: CGFloat = 135
     static let reaverReward: Int = 150
     static let reaverSightRange: CGFloat = 560
@@ -304,6 +451,32 @@ enum Balance {
     static let reaverBurstRange: CGFloat = 280
     static let reaverBurstTime: Double = 0.6
     static let reaverBurstSpeed: CGFloat = 1.8
+    /// Skitter (claw melee rusher — Level 6+): zergling-fast, paper-thin,
+    /// shreds in swarms. No bolts — the claws are the weapon. Base 50, scaled.
+    static var skitterHP: CGFloat { 50 * active.enemyHPScale }
+    static let skitterSpeed: CGFloat = 205
+    static let skitterReward: Int = 70
+    static let skitterSightRange: CGFloat = 620
+    static let skitterMeleeRange: CGFloat = 62
+    static let skitterSwingCooldown: Double = 1.2
+    static let skitterMeleeDamage: CGFloat = 12
+    /// Jetpack droid (flying gun-robot — Level 7+): hovers low over the
+    /// lane on twin thrusters and shoots down at the line. Counts
+    /// incoming shots and jukes up/down around every 5th bullet.
+    /// Base 120, scaled.
+    static var jetHP: CGFloat { 120 * active.enemyHPScale }
+    static let jetSpeed: CGFloat = 165
+    static let jetReward: Int = 200
+    static let jetSightRange: CGFloat = 640
+    static let jetShootRange: CGFloat = 400
+    static let jetFireCooldown: Double = 1.6
+    static let jetBoltDamage: CGFloat = 11
+    static let jetHoverHeight: CGFloat = 90  // low cruise over the deck
+    static let jetJukeHeight: CGFloat = 40   // dodge dip/rise amplitude
+    /// How many jetpack droids fly out together (one after another).
+    static let jetPairSize: Int = 2
+    static let jetJukeTime: Double = 0.45    // out-and-back dodge duration
+    static let jetJukeCooldown: Double = 0.6 // min gap between dodge triggers
     static let enemyBoltSpeed: CGFloat = 520
     static let enemyBoltLife: Double = 1.2     // range ≈ 624: outranged by the hero
 
@@ -327,7 +500,9 @@ enum Balance {
     static let droidHoverHeight: CGFloat = 95 // above the hero's head
 
     // MARK: - Player army (summoned from cards, marches toward the enemy base)
-    static let maxAllies: Int = 10    // Trooper: cheap, fast, light. Heavy: pricey, slow, tanky + hard-hitting.
+    // Army cap: the player can field this many units at once. The card
+    // says FULL and the deploy toast explains it — never a silent no-op.
+    static let maxAllies: Int = 20
     static let trooperCost: Int = 100
     static let trooperHP: CGFloat = 60
     static let trooperSpeed: CGFloat = 150
@@ -351,6 +526,15 @@ enum Balance {
     static let rangerFireCooldown: Double = 1.1
     static let rangerRange: CGFloat = 520
     static let rangerSightRange: CGFloat = 650
+    // Truck: Level 6 fast gun-truck. Fastest ally on wheels, turret gunner
+    // on top — pricey, sturdy, hits hard on the move.
+    static let truckCost: Int = 300
+    static let truckHP: CGFloat = 240
+    static let truckSpeed: CGFloat = 210
+    static let truckDamage: CGFloat = 16
+    static let truckFireCooldown: Double = 1.2
+    static let truckRange: CGFloat = 420
+    static let truckSightRange: CGFloat = 620
 
     // MARK: - Parallax scroll factors (ported from your Unity Parallaxing.cs idea:
     // background moves slower than the camera; factor 1.0 = locked to world)

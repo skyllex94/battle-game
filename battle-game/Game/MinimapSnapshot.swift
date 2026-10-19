@@ -36,4 +36,11 @@ struct MinimapSnapshot {
     var winTime: Double = 0
     // Defeat channel: last hero heart lost (no respawn coming).
     var lost: Bool = false
+    // Deploy cooldowns straight from the scene (seconds left per unit) —
+    // the scene is the authority so the card never disagrees with the gate.
+    var summonCooldowns: [ArmyKind: Double] = [:]
+    // Live army count + the cap (so the UI can say FULL instead of silently
+    // refusing a deploy).
+    var allyCount: Int = 0
+    var allyCap: Int = 20
 }

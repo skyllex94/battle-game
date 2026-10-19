@@ -5,19 +5,64 @@ import SpriteKit
 /// hits like a tower bolt, pays a premium when dropped.
 /// .reaver is the axe rusher debuting in Level 4 — fast, closes to arm's
 /// length and chops for heavy melee damage (no bolts).
+/// .skitter is the claw rusher debuting in Level 6 — zergling-fast swarm
+/// melee, thin armor, shreds up close (no bolts).
+/// .jet is the jetpack droid debuting in Level 7 — hovers low over the
+/// lane on twin thrusters raining bolts, and jukes up/down around every
+/// 5th incoming shot.
 enum EnemyKind: Int, CaseIterable {
     case raider
     case brute
     case reaver
+    case skitter
+    case jet
 
-    /// True for axe fighters (swing + direct damage); false for shooters.
-    var isMelee: Bool { self == .reaver }
+    /// True for claw/axe fighters (swing + direct damage); false for shooters.
+    var isMelee: Bool { self == .reaver || self == .skitter }
+    /// True for the flying gun-robot (hover cruise + dodge jukes).
+    var isFlying: Bool { self == .jet }
+
+    /// Display name (briefings + intel cards).
+    var displayName: String {
+        switch self {
+        case .raider: return "Raider"
+        case .brute: return "Brute"
+        case .reaver: return "Reaver"
+        case .skitter: return "Skitter"
+        case .jet: return "Jetpack Droid"
+        }
+    }
+
+    /// Campaign level this enemy first marches out (drives the "new enemy
+    /// units" briefing callout; 1 = the baseline raider).
+    var unlockLevel: Int {
+        switch self {
+        case .raider: return 1
+        case .brute: return 3
+        case .reaver: return 4
+        case .skitter: return 6
+        case .jet: return 7
+        }
+    }
+
+    /// One-line threat read for the briefing callout.
+    var threatBlurb: String {
+        switch self {
+        case .raider: return "Standard trooper. Shoots from mid range."
+        case .brute: return "Siege bruiser. Slow, armored, heavy bolts."
+        case .reaver: return "Axe rusher. Closes and chops."
+        case .skitter: return "Claw zergling. Fast, fragile, swarms."
+        case .jet: return "Flying droid. Hovers and jukes around your fire."
+        }
+    }
 
     var hp: CGFloat {
         switch self {
         case .raider: return Balance.enemyHP
         case .brute: return Balance.bruteHP
         case .reaver: return Balance.reaverHP
+        case .skitter: return Balance.skitterHP
+        case .jet: return Balance.jetHP
         }
     }
 
@@ -26,6 +71,8 @@ enum EnemyKind: Int, CaseIterable {
         case .raider: return Balance.enemySpeed
         case .brute: return Balance.bruteSpeed
         case .reaver: return Balance.reaverSpeed
+        case .skitter: return Balance.skitterSpeed
+        case .jet: return Balance.jetSpeed
         }
     }
 
@@ -34,15 +81,19 @@ enum EnemyKind: Int, CaseIterable {
         case .raider: return Balance.enemySightRange
         case .brute: return Balance.bruteSightRange
         case .reaver: return Balance.reaverSightRange
+        case .skitter: return Balance.skitterSightRange
+        case .jet: return Balance.jetSightRange
         }
     }
 
-    /// Shooters stop and fire here; reavers close to axe length here.
+    /// Shooters stop and fire here; melee kinds close to claw/axe length here.
     var shootRange: CGFloat {
         switch self {
         case .raider: return Balance.enemyShootRange
         case .brute: return Balance.bruteShootRange
         case .reaver: return Balance.reaverMeleeRange
+        case .skitter: return Balance.skitterMeleeRange
+        case .jet: return Balance.jetShootRange
         }
     }
 
@@ -51,6 +102,8 @@ enum EnemyKind: Int, CaseIterable {
         case .raider: return Balance.enemyFireCooldown
         case .brute: return Balance.bruteFireCooldown
         case .reaver: return Balance.reaverSwingCooldown
+        case .skitter: return Balance.skitterSwingCooldown
+        case .jet: return Balance.jetFireCooldown
         }
     }
 
@@ -59,14 +112,17 @@ enum EnemyKind: Int, CaseIterable {
         case .raider: return Balance.enemyBoltDamage
         case .brute: return Balance.bruteBoltDamage
         case .reaver: return 0
+        case .skitter: return 0
+        case .jet: return Balance.jetBoltDamage
         }
     }
 
-    /// Axe chop damage (reavers only).
+    /// Claw/axe chop damage (melee kinds only).
     var meleeDamage: CGFloat {
         switch self {
         case .reaver: return Balance.reaverMeleeDamage
-        case .raider, .brute: return 0
+        case .skitter: return Balance.skitterMeleeDamage
+        case .raider, .brute, .jet: return 0
         }
     }
 
@@ -75,6 +131,8 @@ enum EnemyKind: Int, CaseIterable {
         case .raider: return Balance.killReward
         case .brute: return Balance.bruteReward
         case .reaver: return Balance.reaverReward
+        case .skitter: return Balance.skitterReward
+        case .jet: return Balance.jetReward
         }
     }
 }
@@ -103,6 +161,14 @@ final class EnemyNode: SKSpriteNode {
     /// range, then dashes at burst speed while the timer runs down.
     var burstUsed: Bool = false
     var burstTimer: TimeInterval = 0
+    /// Dodge-juke state (jets): counts incoming shots; every 5th triggers
+    /// a vertical juke (see jukeOffset). The scene drives these.
+    var incomingShots: Int = 0
+    var jukeCooldown: TimeInterval = 0
+    var jukeOffset: CGFloat = 0   // current dodge displacement (eases to 0)
+    var jukeTarget: CGFloat = 0   // dodge peak the offset chases, then clears
+    /// Thruster-exhaust timer (jets puff exhaust while flying).
+    var jetExhaustTimer: TimeInterval = 0
     /// Overhead-chop offset added to the arm angle (see swing()).
     private var swingOffset: CGFloat = 0
 
@@ -137,6 +203,8 @@ final class EnemyNode: SKSpriteNode {
             case .raider: return UnitPixelArt.Kind.enemy
             case .brute: return .brute
             case .reaver: return .reaver
+            case .skitter: return .skitter
+            case .jet: return .jet
             }
         }())
         let size: CGSize
@@ -144,6 +212,8 @@ final class EnemyNode: SKSpriteNode {
         case .raider: size = CGSize(width: 40, height: 64)
         case .brute: size = CGSize(width: 58, height: 88)
         case .reaver: size = CGSize(width: 44, height: 68)
+        case .skitter: size = CGSize(width: 36, height: 48)
+        case .jet: size = CGSize(width: 84, height: 60)
         }
         super.init(texture: nil, color: .clear, size: size)
         name = "enemy"
@@ -203,6 +273,8 @@ final class EnemyNode: SKSpriteNode {
             case .raider: return UnitPixelArt.Kind.enemy
             case .brute: return .brute
             case .reaver: return .reaver
+            case .skitter: return .skitter
+            case .jet: return .jet
             }
         }())
         armTex.filteringMode = .nearest
@@ -210,12 +282,14 @@ final class EnemyNode: SKSpriteNode {
         spikeSprite = SKSpriteNode(texture: armTex)
         spikeSprite.setScale(s)
         spikeSprite.anchorPoint = CGPoint(x: CGFloat(UnitPixelArt.armGripX) / CGFloat(UnitPixelArt.armW),
-                                          y: 0.5)
+                                           y: 0.5)
         armPivot.position = {
             switch kind {
             case .brute: return CGPoint(x: 8, y: 10)
             case .reaver: return CGPoint(x: 7, y: 9)
+            case .skitter: return CGPoint(x: 5, y: 6)
             case .raider: return CGPoint(x: 6, y: 8)
+            case .jet: return CGPoint(x: 13, y: 0)
             }
         }()
         armPivot.addChild(spikeSprite)

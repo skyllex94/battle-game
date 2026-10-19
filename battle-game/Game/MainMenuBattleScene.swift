@@ -31,14 +31,30 @@ final class MainMenuBattleScene: SKScene {
     /// the layer nodes would crash ("already has a parent"), so build once.
     private var didBuild = false
 
+    /// Level this diorama is dressed for. Pins Balance.active before the
+    /// layers build so the briefing backdrop shows the battlefield the
+    /// player is about to play, not the last one they finished.
+    let levelId: Int
+
     /// Slow cinematic pan amplitude (points). Small so the towers never
     /// leave the frame; layers scale it by their parallax factor.
     private let panAmplitude: CGFloat = 130
 
     override init(size: CGSize) {
+        levelId = 1
         super.init(size: size)
         scaleMode = .aspectFill
         backgroundColor = .black
+    }
+
+    /// Designated entry: dresses the diorama for a specific level.
+    init(size: CGSize, levelId: Int) {
+        self.levelId = levelId
+        super.init(size: size)
+        scaleMode = .aspectFill
+        backgroundColor = .black
+        // Pin the layout/theme before any layer reads Balance.
+        Balance.active = Balance.layout(for: levelId)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
@@ -46,6 +62,9 @@ final class MainMenuBattleScene: SKScene {
     override func didMove(to view: SKView) {
         guard !didBuild else { return }
         didBuild = true
+        // Re-pin: the scene may sit in a @State while the player plays a
+        // different level and comes back to this briefing.
+        Balance.active = Balance.layout(for: levelId)
         anchorPoint = CGPoint(x: 0.5, y: 0.5)
         addChild(skyLayer)
         addChild(farLayer)
@@ -85,10 +104,17 @@ final class MainMenuBattleScene: SKScene {
         let tileW: CGFloat = 500
         let tileH: CGFloat = 104 // 125x26 @4x
         let groundY = -size.height * 0.22
+        // Desert levels dress the diorama lane in sand, not moss turf.
+        let sand = Balance.dunes
+        let lipColor = sand
+            ? SKColor(red: 1.0, green: 0.93, blue: 0.70, alpha: 0.8)
+            : SKColor(red: 0.80, green: 0.78, blue: 0.94, alpha: 0.55)
         var x: CGFloat = -laneW / 2
         var i = 0
         while x < laneW / 2 {
-            let tile = SKSpriteNode(texture: TwilightRuinsBG.tileTexture(variant: i))
+            let tile = SKSpriteNode(texture: sand
+                ? TwilightRuinsBG.sandTileTexture()
+                : TwilightRuinsBG.tileTexture(variant: i))
             tile.anchorPoint = CGPoint(x: 0, y: 1)
             tile.size = CGSize(width: tileW, height: tileH)
             if i % 6 == 5 {
@@ -103,7 +129,7 @@ final class MainMenuBattleScene: SKScene {
             i += 1
         }
         // Moonlit walkable lip + soft AO so units sit grounded.
-        let lip = SKSpriteNode(color: SKColor(red: 0.80, green: 0.78, blue: 0.94, alpha: 0.55),
+        let lip = SKSpriteNode(color: lipColor,
                                size: CGSize(width: laneW, height: 3))
         lip.anchorPoint = CGPoint(x: 0.5, y: 1)
         lip.position = CGPoint(x: 0, y: groundY + 1)

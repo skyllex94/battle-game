@@ -292,24 +292,26 @@ enum HeroWeapon: Int, CaseIterable {
     // MARK: - Unlock gating (milestone grants + diamond buyouts)
 
     /// Campaign level that grants this gun free (0 = available from the
-    /// start). Spread across the 35-level campaign; guns past the built
-    /// levels are diamond-only until their levels land.
+    /// start). FOR NOW: Blaster only — everything else is locked (99) and
+    /// the Scatter arrives via the Level 5 grant modals, not a milestone.
+    /// (Original spread was scatter 4 / repeater 6 / cannon 7 … oblivion 35;
+    /// restore it when later levels land.)
     var unlockLevel: Int {
         switch self {
         case .blaster: return 0
-        case .scatter: return 4
-        case .repeater: return 6
-        case .cannon: return 7
-        case .piercer: return 10
-        case .shredder: return 13
-        case .sunder: return 16
-        case .hornet: return 19
-        case .lancer: return 22
-        case .tempest: return 25
-        case .mauler: return 28
-        case .nova: return 30
-        case .requiem: return 32
-        case .oblivion: return 35
+        case .scatter: return 99
+        case .repeater: return 99
+        case .cannon: return 99
+        case .piercer: return 99
+        case .shredder: return 99
+        case .sunder: return 99
+        case .hornet: return 99
+        case .lancer: return 99
+        case .tempest: return 99
+        case .mauler: return 99
+        case .nova: return 99
+        case .requiem: return 99
+        case .oblivion: return 99
         }
     }
 
@@ -420,8 +422,8 @@ enum GunLocker {
     private static let selectedKey = "campaign.selectedGun"
 
     /// DEBUG — explore mode: every gun unlocked while we tune the arsenal.
-    /// Flip to false for release (milestones + buyouts take over again).
-    static let debugUnlockAll = true
+    /// OFF for now: only the Blaster is available until the Level 5 grant.
+    static let debugUnlockAll = false
 
     /// A gun is selectable once its campaign milestone is reached — or
     /// once its diamond buyout is claimed early via UnlockStore.

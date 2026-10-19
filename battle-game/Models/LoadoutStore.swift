@@ -1,13 +1,14 @@
 import Foundation
 
 /// Gun loadout: the hero carries slotted guns into battle (starter = slot
-/// 1, the HUD switch cycles the rest). Starts at 2 slots, purchasable to
-/// 6 with diamonds. Order matters; empties allowed past slot 1.
+/// 1, the HUD switch cycles the rest). Starts at 1 slot; slot 2 is bought
+/// or granted free at Level 5, then purchasable to 6 with diamonds.
+/// Order matters; empties allowed past slot 1.
 enum LoadoutStore {
     private static let loadoutKey = "loadout.guns.v1"
     private static let slotsKey = "loadout.slots.v1"
 
-    static let baseSlots = 2
+    static let baseSlots = 1
     static let maxSlotsCap = 6
 
     /// Purchased extra slots (persisted count).
@@ -34,6 +35,13 @@ enum LoadoutStore {
               WalletStore.shared.spend(cost) else { return false }
         extraSlots += 1
         return true
+    }
+
+    /// Free grant (Level 5 modal): adds one slot with no charge.
+    /// No-op when already at cap.
+    static func grantSlot() {
+        guard slotCount < maxSlotsCap else { return }
+        extraSlots += 1
     }
 
     /// Filled slots in order (never empty — falls back to Blaster).

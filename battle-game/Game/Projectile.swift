@@ -300,6 +300,229 @@ enum ProjectileFactory {
         return flash
     }
 
+    /// Beige dust kicked up behind rolling wheels. Drifts back, grows,
+    /// fades. Runs its own remove action.
+    static func makeDustPuff() -> SKShapeNode {
+        let puff = SKShapeNode(circleOfRadius: 7)
+        puff.fillColor = SKColor(red: 0.78, green: 0.70, blue: 0.53, alpha: 0.55)
+        puff.strokeColor = .clear
+        puff.zPosition = 8
+        let drift = SKAction.moveBy(x: -34, y: 20, duration: 0.55)
+        let grow = SKAction.group([
+            .scale(to: 2.2, duration: 0.55),
+            .fadeOut(withDuration: 0.55),
+        ])
+        puff.run(.sequence([.group([drift, grow]), .removeFromParent()]))
+        return puff
+    }
+
+    /// Jetpack exhaust: hot orange flicker + a wisp of smoke trailing
+    /// down behind the thrusters. Self-removes (~0.5s).
+    static func makeJetExhaust() -> SKNode {
+        let root = SKNode()
+        root.zPosition = 8
+        let flame = SKShapeNode(circleOfRadius: 4)
+        flame.fillColor = SKColor(red: 1.0, green: 0.6, blue: 0.15, alpha: 0.95)
+        flame.strokeColor = .clear
+        root.addChild(flame)
+        flame.run(.sequence([
+            .group([.moveBy(x: 0, y: -22, duration: 0.3),
+                    .scale(to: 0.2, duration: 0.3),
+                    .fadeOut(withDuration: 0.3)]),
+            .removeFromParent(),
+        ]))
+        let smoke = SKShapeNode(circleOfRadius: 5)
+        smoke.fillColor = SKColor(white: 0.25, alpha: 0.5)
+        smoke.strokeColor = .clear
+        root.addChild(smoke)
+        smoke.run(.sequence([
+            .wait(forDuration: 0.08),
+            .group([.moveBy(x: 6, y: -30, duration: 0.45),
+                    .scale(to: 1.8, duration: 0.45),
+                    .fadeOut(withDuration: 0.45)]),
+            .removeFromParent(),
+        ]))
+        root.run(.sequence([.wait(forDuration: 0.6), .removeFromParent()]))
+        return root
+    }
+
+    /// Jetpack-droid airburst: core flash + fireballs + smoke plume +
+    /// wreck chunks raining down + spark spray. Self-removes (~1.4s).
+    static func makeJetExplosion() -> SKNode {
+        let root = SKNode()
+        // Core flash.
+        let flash = SKShapeNode(circleOfRadius: 20)
+        flash.fillColor = SKColor(red: 1, green: 0.85, blue: 0.5, alpha: 1)
+        flash.strokeColor = .clear
+        flash.zPosition = 16
+        root.addChild(flash)
+        flash.run(.sequence([.group([.scale(to: 1.8, duration: 0.2),
+                                     .fadeOut(withDuration: 0.2)]),
+                             .removeFromParent()]))
+        // Fireballs blooming outward.
+        let fireOffsets = [CGPoint(x: -20, y: 8), CGPoint(x: 18, y: 16),
+                           CGPoint(x: 2, y: 26), CGPoint(x: -6, y: -10)]
+        for (i, off) in fireOffsets.enumerated() {
+            let fire = SKShapeNode(circleOfRadius: 10)
+            fire.fillColor = SKColor(red: 1, green: 0.45 + CGFloat(i) * 0.08,
+                                     blue: 0.12, alpha: 1)
+            fire.strokeColor = .clear
+            fire.position = .zero
+            fire.zPosition = 16
+            root.addChild(fire)
+            fire.run(.sequence([
+                .wait(forDuration: Double(i) * 0.05),
+                .group([.move(to: off, duration: 0.32),
+                        .scale(to: 0.3, duration: 0.32),
+                        .fadeOut(withDuration: 0.32)]),
+                .removeFromParent(),
+            ]))
+        }
+        // Smoke plume rising off the blast.
+        for i in 0..<4 {
+            let smoke = SKShapeNode(circleOfRadius: 9)
+            smoke.fillColor = SKColor(white: 0.16, alpha: 0.75)
+            smoke.strokeColor = .clear
+            smoke.position = CGPoint(x: CGFloat(i - 1) * 8, y: 6)
+            smoke.zPosition = 15
+            root.addChild(smoke)
+            smoke.run(.sequence([
+                .wait(forDuration: 0.08 + Double(i) * 0.06),
+                .group([.moveBy(x: CGFloat(i - 1) * 10, y: 90, duration: 0.9),
+                        .scale(to: 2.4, duration: 0.9),
+                        .fadeOut(withDuration: 0.9)]),
+                .removeFromParent(),
+            ]))
+        }
+        // Burning wreck chunks raining down.
+        let debrisKicks = [CGVector(dx: -70, dy: -140), CGVector(dx: -30, dy: -180),
+                           CGVector(dx: 25, dy: -160), CGVector(dx: 60, dy: -120),
+                           CGVector(dx: 0, dy: -200)]
+        for (i, kick) in debrisKicks.enumerated() {
+            let chunk = SKSpriteNode(color: SKColor(white: 0.1, alpha: 1),
+                                     size: CGSize(width: 7, height: 5))
+            chunk.position = .zero
+            chunk.zPosition = 16
+            chunk.zRotation = CGFloat(i) * 0.6
+            root.addChild(chunk)
+            chunk.run(.sequence([
+                .wait(forDuration: Double(i) * 0.03),
+                .group([.moveBy(x: kick.dx, y: kick.dy, duration: 0.65),
+                        .rotate(byAngle: CGFloat(i + 1) * 1.4, duration: 0.65),
+                        .sequence([.wait(forDuration: 0.35),
+                                   .fadeOut(withDuration: 0.3)])]),
+                .removeFromParent(),
+            ]))
+        }
+        // Spark spray.
+        for i in 0..<6 {
+            let spark = SKShapeNode(circleOfRadius: 2.5)
+            spark.fillColor = SKColor(red: 1, green: 0.8, blue: 0.3, alpha: 1)
+            spark.strokeColor = .clear
+            spark.position = .zero
+            spark.zPosition = 17
+            root.addChild(spark)
+            let a = CGFloat(i) * .pi / 3
+            spark.run(.sequence([
+                .group([.moveBy(x: cos(a) * 60, y: sin(a) * 45, duration: 0.38),
+                        .fadeOut(withDuration: 0.38)]),
+                .removeFromParent(),
+            ]))
+        }
+        root.run(.sequence([.wait(forDuration: 1.4), .removeFromParent()]))
+        return root
+    }
+
+    /// Vehicle kill: core flash + fireballs + rising smoke + arcing debris
+    /// + spark spray, all looping-free SKActions. Self-removes (~1.6s).
+    static func makeTruckExplosion() -> SKNode {
+        let root = SKNode()
+        // Core flash.
+        let flash = SKShapeNode(circleOfRadius: 26)
+        flash.fillColor = SKColor(red: 1, green: 0.85, blue: 0.5, alpha: 1)
+        flash.strokeColor = .clear
+        flash.zPosition = 16
+        root.addChild(flash)
+        flash.run(.sequence([.group([.scale(to: 1.8, duration: 0.22),
+                                     .fadeOut(withDuration: 0.22)]),
+                             .removeFromParent()]))
+        // Fireballs: orange, staggered outward.
+        let fireOffsets = [CGPoint(x: -24, y: 10), CGPoint(x: 20, y: 22),
+                           CGPoint(x: 4, y: 34), CGPoint(x: -8, y: -6)]
+        for (i, off) in fireOffsets.enumerated() {
+            let fire = SKShapeNode(circleOfRadius: 12)
+            fire.fillColor = SKColor(red: 1, green: 0.45 + CGFloat(i) * 0.08,
+                                     blue: 0.12, alpha: 1)
+            fire.strokeColor = .clear
+            fire.position = .zero
+            fire.zPosition = 16
+            root.addChild(fire)
+            fire.run(.sequence([
+                .wait(forDuration: Double(i) * 0.05),
+                .group([.move(to: off, duration: 0.35),
+                        .scale(to: 0.3, duration: 0.35),
+                        .fadeOut(withDuration: 0.35)]),
+                .removeFromParent(),
+            ]))
+        }
+        // Smoke: dark gray, rising + growing + fading over ~1.2s.
+        let smokeOffsets = [CGPoint(x: -30, y: 90), CGPoint(x: -10, y: 110),
+                            CGPoint(x: 12, y: 100), CGPoint(x: 28, y: 85),
+                            CGPoint(x: 0, y: 120)]
+        for (i, off) in smokeOffsets.enumerated() {
+            let smoke = SKShapeNode(circleOfRadius: 10)
+            smoke.fillColor = SKColor(white: 0.16, alpha: 0.75)
+            smoke.strokeColor = .clear
+            smoke.position = CGPoint(x: CGFloat(i - 2) * 8, y: 10)
+            smoke.zPosition = 15
+            root.addChild(smoke)
+            smoke.run(.sequence([
+                .wait(forDuration: 0.1 + Double(i) * 0.06),
+                .group([.move(to: off, duration: 1.0),
+                        .scale(to: 2.6, duration: 1.0),
+                        .fadeOut(withDuration: 1.0)]),
+                .removeFromParent(),
+            ]))
+        }
+        // Debris: small dark hull chunks arcing out.
+        let debrisKicks = [CGVector(dx: -90, dy: 120), CGVector(dx: -40, dy: 160),
+                           CGVector(dx: 30, dy: 150), CGVector(dx: 80, dy: 110),
+                           CGVector(dx: 0, dy: 180), CGVector(dx: -70, dy: 70)]
+        for (i, kick) in debrisKicks.enumerated() {
+            let chunk = SKSpriteNode(color: SKColor(white: 0.1, alpha: 1),
+                                     size: CGSize(width: 8, height: 6))
+            chunk.position = .zero
+            chunk.zPosition = 16
+            chunk.zRotation = CGFloat(i) * 0.5
+            root.addChild(chunk)
+            chunk.run(.sequence([
+                .wait(forDuration: Double(i) * 0.03),
+                .group([.moveBy(x: kick.dx, y: kick.dy, duration: 0.7),
+                        .rotate(byAngle: CGFloat(i + 1) * 1.2, duration: 0.7),
+                        .sequence([.wait(forDuration: 0.4),
+                                   .fadeOut(withDuration: 0.3)])]),
+                .removeFromParent(),
+            ]))
+        }
+        // Spark spray: tiny hot dots, fast outward.
+        for i in 0..<6 {
+            let spark = SKShapeNode(circleOfRadius: 2.5)
+            spark.fillColor = SKColor(red: 1, green: 0.8, blue: 0.3, alpha: 1)
+            spark.strokeColor = .clear
+            spark.position = .zero
+            spark.zPosition = 17
+            root.addChild(spark)
+            let a = CGFloat(i) * .pi / 3
+            spark.run(.sequence([
+                .group([.moveBy(x: cos(a) * 70, y: sin(a) * 50 + 30, duration: 0.4),
+                        .fadeOut(withDuration: 0.4)]),
+                .removeFromParent(),
+            ]))
+        }
+        root.run(.sequence([.wait(forDuration: 1.6), .removeFromParent()]))
+        return root
+    }
+
     /// Tower bolt, team-tinted so ownership reads at a glance:
     /// blue for player tower, red for enemy tower. Same 24x7 shape as hero bolts.
     static func makeTowerBolt(team: Team) -> SKShapeNode {

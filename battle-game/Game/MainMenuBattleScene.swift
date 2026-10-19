@@ -48,13 +48,14 @@ final class MainMenuBattleScene: SKScene {
     }
 
     /// Designated entry: dresses the diorama for a specific level.
+    /// NOTE: this does NOT touch Balance.active — the global layout belongs
+    /// to whoever is on screen. The diorama only claims it while it is the
+    /// visible scene and no battle is running (see didMove).
     init(size: CGSize, levelId: Int) {
         self.levelId = levelId
         super.init(size: size)
         scaleMode = .aspectFill
         backgroundColor = .black
-        // Pin the layout/theme before any layer reads Balance.
-        Balance.active = Balance.layout(for: levelId)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
@@ -62,9 +63,11 @@ final class MainMenuBattleScene: SKScene {
     override func didMove(to view: SKView) {
         guard !didBuild else { return }
         didBuild = true
-        // Re-pin: the scene may sit in a @State while the player plays a
-        // different level and comes back to this briefing.
-        Balance.active = Balance.layout(for: levelId)
+        // Claim the layout for this diorama — but never while a battle is
+        // running (that scene owns the battlefield).
+        if !Balance.battleOwnsLayout {
+            Balance.active = Balance.layout(for: levelId)
+        }
         anchorPoint = CGPoint(x: 0.5, y: 0.5)
         addChild(skyLayer)
         addChild(farLayer)

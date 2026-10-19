@@ -15,10 +15,17 @@ final class SoundEngine {
     // MARK: - Settings
 
     private let sfxKey = "settings.sfx"
+    private let sfxVolumeKey = "settings.sfxVolume"
     var sfxEnabled: Bool {
         // Default ON until the user flips it in Settings.
         if UserDefaults.standard.object(forKey: sfxKey) == nil { return true }
         return UserDefaults.standard.bool(forKey: sfxKey)
+    }
+
+    /// Master SFX level from Settings (0...1), applied to every voice.
+    var sfxVolume: Float {
+        if UserDefaults.standard.object(forKey: sfxVolumeKey) == nil { return 0.8 }
+        return Float(min(1, max(0, UserDefaults.standard.double(forKey: sfxVolumeKey))))
     }
 
     // MARK: - Engine
@@ -127,10 +134,25 @@ final class SoundEngine {
         return UserDefaults.standard.bool(forKey: "settings.music")
     }
 
+    /// Music level from Settings (0...1), scaled by the mix headroom so the
+    /// loop sits under gunfire.
+    private var musicVolume: Float {
+        let key = "settings.musicVolume"
+        if UserDefaults.standard.object(forKey: key) == nil { return 0.7 * 0.42 }
+        let raw = Float(min(1, max(0, UserDefaults.standard.double(forKey: key))))
+        return raw * 0.42
+    }
+
+    /// Live-updates the playing loop after a volume slider drag.
+    func applyVolumes() {
+        lock.lock()
+        defer { lock.unlock() }
+        musicNode?.volume = musicVolume
+    }
+
     private var musicNode: AVAudioPlayerNode?
     private var musicLoop: AVAudioPCMBuffer?
     private var musicOn = false
-    private let musicVolume: Float = 0.30
 
     /// Starts the battle loop (idempotent while playing). Safe to call on
     /// every level start: a stopped node gets its loop buffer re-scheduled
@@ -426,7 +448,7 @@ final class SoundEngine {
         cursor = (cursor + 1) % players.count
         lock.unlock()
 
-        node.volume = volume * gain
+        node.volume = volume * gain * sfxVolume
         node.pan = pan
         node.scheduleBuffer(buffer, at: nil, options: [])
         // Per-play pitch via a fresh rate each trigger.
@@ -915,6 +937,7 @@ final class SoundEngine {
 enum Haptics {
     /// Tower / HQ destroyed: heavy slam + success (enemy fell) or error (we fell).
     static func structureDestroyed(playerOwned: Bool) {
+        guard GameSettings.hapticsEnabled else { return }
         impact(.heavy)
         dispatch {
             let note = UINotificationFeedbackGenerator()
@@ -923,6 +946,7 @@ enum Haptics {
     }
 
     static func heroDeath() {
+        guard GameSettings.hapticsEnabled else { return }
         impact(.heavy)
         dispatch {
             UINotificationFeedbackGenerator().notificationOccurred(.error)

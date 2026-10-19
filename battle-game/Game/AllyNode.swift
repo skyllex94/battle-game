@@ -115,6 +115,16 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         }
     }
 
+    /// Short battlefield role for the army library.
+    var roleLabel: String {
+        switch self {
+        case .trooper: return "RIFLE"
+        case .heavy: return "TANK"
+        case .ranger: return "MARKSMAN"
+        case .truck: return "SIEGE"
+        }
+    }
+
     /// One-line dossier for intel cards and showcases.
     var blurb: String {
         switch self {

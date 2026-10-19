@@ -16,11 +16,14 @@ enum EnemyKind: Int, CaseIterable {
     case reaver
     case skitter
     case jet
+    case mech
 
     /// True for claw/axe fighters (swing + direct damage); false for shooters.
     var isMelee: Bool { self == .reaver || self == .skitter }
     /// True for the flying gun-robot (hover cruise + dodge jukes).
     var isFlying: Bool { self == .jet }
+    /// True for the heavy mech walker (huge, slow, burst-firing).
+    var isMech: Bool { self == .mech }
 
     /// Display name (briefings + intel cards).
     var displayName: String {
@@ -30,6 +33,7 @@ enum EnemyKind: Int, CaseIterable {
         case .reaver: return "Reaver"
         case .skitter: return "Skitter"
         case .jet: return "Jetpack Droid"
+        case .mech: return "Mech Walker"
         }
     }
 
@@ -42,6 +46,7 @@ enum EnemyKind: Int, CaseIterable {
         case .reaver: return 4
         case .skitter: return 6
         case .jet: return 7
+        case .mech: return 9
         }
     }
 
@@ -53,6 +58,7 @@ enum EnemyKind: Int, CaseIterable {
         case .reaver: return "Axe rusher. Closes and chops."
         case .skitter: return "Claw zergling. Fast, fragile, swarms."
         case .jet: return "Flying droid. Hovers and jukes around your fire."
+        case .mech: return "Walking gun platform. Heavy armor, burst fire."
         }
     }
 
@@ -63,6 +69,7 @@ enum EnemyKind: Int, CaseIterable {
         case .reaver: return Balance.reaverHP
         case .skitter: return Balance.skitterHP
         case .jet: return Balance.jetHP
+        case .mech: return Balance.mechHP
         }
     }
 
@@ -73,6 +80,7 @@ enum EnemyKind: Int, CaseIterable {
         case .reaver: return Balance.reaverSpeed
         case .skitter: return Balance.skitterSpeed
         case .jet: return Balance.jetSpeed
+        case .mech: return Balance.mechSpeed
         }
     }
 
@@ -83,6 +91,7 @@ enum EnemyKind: Int, CaseIterable {
         case .reaver: return Balance.reaverSightRange
         case .skitter: return Balance.skitterSightRange
         case .jet: return Balance.jetSightRange
+        case .mech: return Balance.mechSightRange
         }
     }
 
@@ -94,6 +103,7 @@ enum EnemyKind: Int, CaseIterable {
         case .reaver: return Balance.reaverMeleeRange
         case .skitter: return Balance.skitterMeleeRange
         case .jet: return Balance.jetShootRange
+        case .mech: return Balance.mechShootRange
         }
     }
 
@@ -104,6 +114,7 @@ enum EnemyKind: Int, CaseIterable {
         case .reaver: return Balance.reaverSwingCooldown
         case .skitter: return Balance.skitterSwingCooldown
         case .jet: return Balance.jetFireCooldown
+        case .mech: return Balance.mechFireCooldown
         }
     }
 
@@ -114,6 +125,7 @@ enum EnemyKind: Int, CaseIterable {
         case .reaver: return 0
         case .skitter: return 0
         case .jet: return Balance.jetBoltDamage
+        case .mech: return Balance.mechBoltDamage
         }
     }
 
@@ -122,7 +134,7 @@ enum EnemyKind: Int, CaseIterable {
         switch self {
         case .reaver: return Balance.reaverMeleeDamage
         case .skitter: return Balance.skitterMeleeDamage
-        case .raider, .brute, .jet: return 0
+        case .raider, .brute, .jet, .mech: return 0
         }
     }
 
@@ -133,7 +145,43 @@ enum EnemyKind: Int, CaseIterable {
         case .reaver: return Balance.reaverReward
         case .skitter: return Balance.skitterReward
         case .jet: return Balance.jetReward
+        case .mech: return Balance.mechReward
         }
+    }
+
+    /// Pixel-art kind used for library + briefing portraits.
+    var pixelKind: UnitPixelArt.Kind {
+        switch self {
+        case .raider: return .enemy
+        case .brute: return .brute
+        case .reaver: return .reaver
+        case .skitter: return .skitter
+        case .jet: return .jet
+        case .mech: return .mech
+        }
+    }
+
+    /// Short battlefield role for the enemy library.
+    var roleLabel: String {
+        switch self {
+        case .raider: return "SHOOTER"
+        case .brute: return "SIEGE"
+        case .reaver: return "MELEE"
+        case .skitter: return "SWARM"
+        case .jet: return "FLYER"
+        case .mech: return "HEAVY"
+        }
+    }
+
+    /// Baseline HP (before per-level scaling) for the library readout.
+    var baseHP: CGFloat {
+        let scale = Balance.active.enemyHPScale
+        return scale > 0 ? hp / scale : hp
+    }
+
+    /// Bolt or melee damage, whichever this kind uses.
+    var attackDamage: CGFloat {
+        boltDamage > 0 ? boltDamage : meleeDamage
     }
 }
 
@@ -169,6 +217,10 @@ final class EnemyNode: SKSpriteNode {
     var jukeTarget: CGFloat = 0   // dodge peak the offset chases, then clears
     /// Thruster-exhaust timer (jets puff exhaust while flying).
     var jetExhaustTimer: TimeInterval = 0
+    /// Machine-gun burst ramp (mech): volley size cycles 1 -> 2 -> 3.
+    var mechBurstStep: Int = 0
+    /// Footfall dust timer (mech): heavy steps kick up sand.
+    var footDustTimer: TimeInterval = 0
     /// Overhead-chop offset added to the arm angle (see swing()).
     private var swingOffset: CGFloat = 0
 
@@ -180,6 +232,10 @@ final class EnemyNode: SKSpriteNode {
     /// Pixel sprite (4 walk frames) + cached frames for the march cycle.
     private var bodySprite = SKSpriteNode()
     private var frames: [SKTexture]
+    /// Mech only: the two legs animate independently so the gait reads.
+    private var mechLegFront = SKSpriteNode()
+    private var mechLegBack = SKSpriteNode()
+    private var mechLegPhase: Int = 0
     /// Aimable spike-arm: shoulder pivot + barrel-tip socket (see aimAt).
     private let armPivot = SKNode()
     private var spikeSprite = SKSpriteNode()
@@ -205,6 +261,7 @@ final class EnemyNode: SKSpriteNode {
             case .reaver: return .reaver
             case .skitter: return .skitter
             case .jet: return .jet
+            case .mech: return .mech
             }
         }())
         let size: CGSize
@@ -214,6 +271,7 @@ final class EnemyNode: SKSpriteNode {
         case .reaver: size = CGSize(width: 44, height: 68)
         case .skitter: size = CGSize(width: 36, height: 48)
         case .jet: size = CGSize(width: 84, height: 60)
+        case .mech: size = CGSize(width: 112, height: 104)
         }
         super.init(texture: nil, color: .clear, size: size)
         name = "enemy"
@@ -257,11 +315,21 @@ final class EnemyNode: SKSpriteNode {
     }
 
     private func buildVisuals() {
+        // The mech is built from a torso + two articulated legs so it can
+        // actually walk instead of sliding.
+        if kind == .mech {
+            buildMechVisuals()
+            return
+        }
         // Pixel sprite body: red alien invader with spike rifle.
+        // Body scale comes from the texture's own height so the gun arm
+        // matches it (the mech's canvas is taller than the usual 32px).
+        var bodyScale: CGFloat = size.height / 32
         if let first = frames.first {
             bodySprite = SKSpriteNode(texture: first)
             first.filteringMode = .nearest
-            bodySprite.setScale(size.height / first.size().height)
+            bodyScale = size.height / first.size().height
+            bodySprite.setScale(bodyScale)
         }
         body.addChild(bodySprite)
         addChild(body)
@@ -275,10 +343,11 @@ final class EnemyNode: SKSpriteNode {
             case .reaver: return .reaver
             case .skitter: return .skitter
             case .jet: return .jet
+            case .mech: return .mech
             }
         }())
         armTex.filteringMode = .nearest
-        let s = size.height / 32
+        let s = bodyScale
         spikeSprite = SKSpriteNode(texture: armTex)
         spikeSprite.setScale(s)
         spikeSprite.anchorPoint = CGPoint(x: CGFloat(UnitPixelArt.armGripX) / CGFloat(UnitPixelArt.armW),
@@ -290,6 +359,7 @@ final class EnemyNode: SKSpriteNode {
             case .skitter: return CGPoint(x: 5, y: 6)
             case .raider: return CGPoint(x: 6, y: 8)
             case .jet: return CGPoint(x: 13, y: 0)
+            case .mech: return CGPoint(x: 41, y: 19)
             }
         }()
         armPivot.addChild(spikeSprite)
@@ -299,11 +369,64 @@ final class EnemyNode: SKSpriteNode {
         body.addChild(armPivot)
     }
 
+    /// Mech build: torso sprite + two separately animated legs hung off
+    /// the hip line, so the walker has a real gait (strike, plant,
+    /// push-off, swing) instead of sliding on a static body.
+    private func buildMechVisuals() {
+        let bodyTex = UnitPixelArt.mechBodyTexture()
+        bodyTex.filteringMode = .nearest
+        // 26px torso + 20px legs = 46px of canvas in 104pt of height.
+        let s = size.height / 46
+        bodySprite = SKSpriteNode(texture: bodyTex)
+        bodySprite.setScale(s)
+        bodySprite.anchorPoint = CGPoint(x: 0.5, y: 0)
+        // Hips sit where the torso's bottom row lands.
+        let hipY = size.height / 2 - 26 * s
+        bodySprite.position = CGPoint(x: 0, y: hipY)
+        body.addChild(bodySprite)
+
+        // Legs: back leg behind the body, front leg in front.
+        let legTexBack = UnitPixelArt.mechLegTexture(front: false, phase: 0)
+        legTexBack.filteringMode = .nearest
+        mechLegBack = SKSpriteNode(texture: legTexBack)
+        mechLegBack.setScale(s)
+        mechLegBack.anchorPoint = CGPoint(x: 0.5, y: 1)
+        mechLegBack.position = CGPoint(x: -8, y: hipY + 2)
+        mechLegBack.zPosition = -1
+        body.addChild(mechLegBack)
+
+        let legTexFront = UnitPixelArt.mechLegTexture(front: true, phase: 0)
+        legTexFront.filteringMode = .nearest
+        mechLegFront = SKSpriteNode(texture: legTexFront)
+        mechLegFront.setScale(s)
+        mechLegFront.anchorPoint = CGPoint(x: 0.5, y: 1)
+        mechLegFront.position = CGPoint(x: 8, y: hipY + 2)
+        mechLegFront.zPosition = 1
+        body.addChild(mechLegFront)
+
+        // Gatling arm on the gun-side shoulder.
+        let armTex = UnitPixelArt.armTexture(for: .mech)
+        armTex.filteringMode = .nearest
+        spikeSprite = SKSpriteNode(texture: armTex)
+        spikeSprite.setScale(s)
+        spikeSprite.anchorPoint = CGPoint(x: CGFloat(UnitPixelArt.armGripX) / CGFloat(UnitPixelArt.armW),
+                                           y: 0.5)
+        armPivot.position = CGPoint(x: 32, y: 0)
+        armPivot.zPosition = 2
+        armPivot.addChild(spikeSprite)
+        gunTip.position = CGPoint(x: CGFloat(UnitPixelArt.armTipX - UnitPixelArt.armGripX) * s,
+                                  y: 0)
+        armPivot.addChild(gunTip)
+        body.addChild(armPivot)
+
+        addChild(body)
+    }
+
     private func buildHPBar() {
         // Pro chunky pixel bar, same language as TowerNode/BaseNode:
         // dark padded BG + thin light border + left-anchored fill that
         // drains from the right side only. Brutes wear a wider bar.
-        let barW: CGFloat = kind == .brute ? 56 : 44
+        let barW: CGFloat = kind == .brute ? 56 : (kind.isMech ? 64 : 44)
         let barH: CGFloat = 7
         // Soft + sunk: more transparent than the structure bars, and pinned
         // deep behind so the hero always covers it when passing by units.
@@ -334,20 +457,62 @@ final class EnemyNode: SKSpriteNode {
     /// and eases the spike-arm toward its target (levels out when idle).
     /// Called by the scene.
     func animateMarch(dt: TimeInterval, advancing: Bool) {
-        if advancing {
-            marchPhase += dt * 10
-            if frames.count == 4 {
-                bodySprite.texture = frames[Int(marchPhase) % 4]
+        if kind == .mech {
+            animateMech(dt: dt, advancing: advancing)
+        } else {
+            if advancing {
+                marchPhase += dt * 10
+                if frames.count == 4 {
+                    bodySprite.texture = frames[Int(marchPhase) % 4]
+                }
+            } else if frames.count == 4 {
+                bodySprite.texture = frames[0]
             }
-        } else if frames.count == 4 {
-            bodySprite.texture = frames[0]
+            // Bob around the resting height the scene sets (offset only).
+            yBob = advancing ? sin(marchPhase) * 2.5 : 0
+            body.zRotation = advancing ? sin(marchPhase) * 0.03 : 0
         }
-        // Bob around the resting height the scene sets (offset only).
-        yBob = advancing ? sin(marchPhase) * 2.5 : 0
-        body.zRotation = advancing ? sin(marchPhase) * 0.03 : 0
         let target = desiredAim ?? 0
         aimAngle += (target - aimAngle) * min(1, 12 * dt)
         armPivot.zRotation = aimAngle + swingOffset
+    }
+
+    /// Mech gait: the two legs run a 4-phase cycle half a cycle apart
+    /// (front: strike/plant/push/swing, back: the opposite), and the
+    /// torso dips as each foot plants. Idle: legs settle to a neutral
+    /// stance with the body level.
+    private func animateMech(dt: TimeInterval, advancing: Bool) {
+        let s = size.height / 46
+        let hipY = size.height / 2 - 26 * s
+        // The torso carries the bob; the node itself stays planted.
+        yBob = 0
+        body.zRotation = 0
+        if advancing {
+            // Heavy machine: a slow, deliberate lumber (half the cadence
+            // of the infantry march).
+            marchPhase += dt * 3.0
+            let phase = Int(marchPhase) % 4
+            if phase != mechLegPhase {
+                mechLegPhase = phase
+                mechLegFront.texture = UnitPixelArt.mechLegTexture(front: true, phase: phase)
+                mechLegBack.texture = UnitPixelArt.mechLegTexture(front: false,
+                                                                   phase: (phase + 2) % 4)
+            }
+            // Torso rides the gait: lowest as a foot plants, highest at
+            // the strike/swing moments.
+            let bob = 2.2 * cos(marchPhase * .pi)
+            bodySprite.position = CGPoint(x: 0, y: hipY + bob)
+            // Slight forward lean while striding.
+            bodySprite.zRotation = 0.05
+        } else {
+            if mechLegPhase != 1 {
+                mechLegPhase = 1
+                mechLegFront.texture = UnitPixelArt.mechLegTexture(front: true, phase: 1)
+                mechLegBack.texture = UnitPixelArt.mechLegTexture(front: false, phase: 1)
+            }
+            bodySprite.position = CGPoint(x: 0, y: hipY)
+            bodySprite.zRotation = 0
+        }
     }
 
     /// Overhead axe chop for reavers: fast wind-up then slam. The offset

@@ -9,7 +9,7 @@ import UIKit
 /// advancing for a scuttling march cycle.
 enum UnitPixelArt {
 
-    enum Kind { case trooper, heavy, ranger, truck, enemy, brute, reaver, skitter, jet }
+    enum Kind { case trooper, heavy, ranger, truck, enemy, brute, reaver, skitter, jet, mech }
 
     /// Walk frames for a kind: full 4-step stride
     /// (contact -> support -> toe-off -> swing). Generated once, shared.
@@ -25,7 +25,15 @@ enum UnitPixelArt {
         case .reaver: return (0...3).map { reaver(pose: $0) }
         case .skitter: return (0...3).map { skitter(pose: $0) }
         case .jet: return (0...3).map { jet(pose: $0) }
+        case .mech: return [mechBody(), mechBody(), mechBody(), mechBody()]
         }
+    }
+
+    /// Mech torso + leg textures (the mech animates its legs separately
+    /// from its body — see EnemyNode's mech visuals).
+    static func mechBodyTexture() -> SKTexture { mechBody() }
+    static func mechLegTexture(front: Bool, phase: Int) -> SKTexture {
+        mechLeg(front: front, phase: phase)
     }
 
     // MARK: - Canvas
@@ -80,6 +88,44 @@ enum UnitPixelArt {
             portraitCache[kind] = portrait
             return portrait
         }
+        // Mech portrait: the walker is taller + wider than the 24x32
+        // trooper crop, so show the whole machine (scaled to fit) with
+        // its gatling arm raised over the shoulder.
+        if kind == .mech {
+            _ = frames(for: kind)
+            _ = armTexture(for: kind)
+            // Legs live outside the body frames; generate the two pose
+            // textures the portrait composes so the library isn't blank on
+            // first view (before any walker has spawned).
+            _ = mechLeg(front: true, phase: 1)
+            _ = mechLeg(front: false, phase: 3)
+            guard let body = imageCache["body-mech-v5"],
+                  let arm = imageCache["arm-mech-v3"],
+                  let legF = imageCache["mech-leg-f-1"],
+                  let legB = imageCache["mech-leg-b-3"] else { return UIImage() }
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            format.opaque = false
+            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
+                                                   format: format).image { ctx in
+                let cg = ctx.cgContext
+                // Whole walker: two legs under the torso, aspect kept.
+                let s: CGFloat = min(36.0 / 48.0, 24.0 / 46.0)
+                let bw = 48 * s, bh = 26 * s, lw = 16 * s, lh = 20 * s
+                let x0 = (36 - bw) / 2
+                // Back leg (behind the body), then the body, then the front leg.
+                legB.draw(in: CGRect(x: x0 + bw * 0.30, y: bh, width: lw, height: lh))
+                body.draw(in: CGRect(x: x0, y: 0, width: bw, height: bh))
+                legF.draw(in: CGRect(x: x0 + bw * 0.52, y: bh, width: lw, height: lh))
+                cg.saveGState()
+                cg.translateBy(x: 20, y: 8)
+                cg.rotate(by: -0.20)
+                arm.draw(in: CGRect(x: -3, y: -4, width: 18, height: 9))
+                cg.restoreGState()
+            }
+            portraitCache[kind] = portrait
+            return portrait
+        }
         let bodyKey: String
         let armKey: String
         let shoulder: CGPoint // grip point in portrait px
@@ -110,6 +156,9 @@ enum UnitPixelArt {
             shoulder = CGPoint(x: 16, y: 16)
         case .jet:
             bodyKey = "body-jet-0"; armKey = "arm-jet"
+            shoulder = CGPoint(x: 14, y: 15)
+        case .mech:
+            bodyKey = "body-mech-v5"; armKey = "arm-mech-v3"
             shoulder = CGPoint(x: 14, y: 15)
         }
         // Warm the cache (no-ops once textures exist).
@@ -675,6 +724,7 @@ enum UnitPixelArt {
         case .reaver: return reaverArm()
         case .skitter: return skitterArm()
         case .jet: return jetArm()
+        case .mech: return mechArm()
         }
     }
 
@@ -963,6 +1013,231 @@ enum UnitPixelArt {
             fill(cg, x: 15, y: 5, w: 6, h: 3, O)
             fill(cg, x: 16, y: 6, w: 4, h: 1, metalD)
             fill(cg, x: 19, y: 5, w: 2, h: 3, trim)
+        }
+    }
+
+    // MARK: - Mech walker (Level 9 heavy robot)
+
+    /// Mech torso (48x26): a squat olive siege walker in the reference
+    /// style — rounded carapace, big ball pauldron on the back side, pale
+    /// racing stripes, a front sensor eye + grille, a hanging fist arm, and
+    /// a top turret ring. The shooting cannon is a separate arm sprite
+    /// (see mechArm); the legs are separate too (see mechLeg) so the gait
+    /// can articulate instead of sliding.
+    private static func mechBody() -> SKTexture {
+        canvas(w: 48, h: 26, key: "body-mech-v5") { cg in
+            let olive = UIColor(red: 0.31, green: 0.36, blue: 0.19, alpha: 1)
+            let oliveHi = UIColor(red: 0.48, green: 0.54, blue: 0.29, alpha: 1)
+            let oliveLt = UIColor(red: 0.62, green: 0.66, blue: 0.42, alpha: 1)
+            let oliveD = UIColor(red: 0.19, green: 0.23, blue: 0.11, alpha: 1)
+            let oliveDk = UIColor(red: 0.11, green: 0.14, blue: 0.07, alpha: 1)
+            let yellow = UIColor(red: 0.94, green: 0.71, blue: 0.16, alpha: 1)
+            let eye = UIColor(red: 0.24, green: 0.56, blue: 1.0, alpha: 1)
+            let eyeHi = UIColor(red: 0.75, green: 0.92, blue: 1.0, alpha: 1)
+            let metal = UIColor(red: 0.30, green: 0.33, blue: 0.29, alpha: 1)
+            let metalHi = UIColor(red: 0.56, green: 0.59, blue: 0.52, alpha: 1)
+            let black = UIColor(red: 0.07, green: 0.08, blue: 0.07, alpha: 1)
+            let O = outline
+
+            // --- Big ball pauldron on the back side.
+            fill(cg, x: 5, y: 6, w: 9, h: 2, O)
+            fill(cg, x: 3, y: 8, w: 13, h: 3, O)
+            fill(cg, x: 2, y: 11, w: 15, h: 9, O)
+            fill(cg, x: 4, y: 20, w: 11, h: 2, O)
+            fill(cg, x: 6, y: 22, w: 7, h: 1, O)
+            fill(cg, x: 4, y: 9, w: 11, h: 10, olive)
+            fill(cg, x: 6, y: 7, w: 7, h: 1, oliveHi)
+            fill(cg, x: 4, y: 9, w: 4, h: 2, oliveLt)
+            fill(cg, x: 5, y: 12, w: 2, h: 5, oliveLt)
+            fill(cg, x: 4, y: 18, w: 10, h: 2, oliveD)
+            fill(cg, x: 6, y: 21, w: 7, h: 1, oliveDk)
+            // Yellow stripe wrapping the visible crescent of the ball.
+            fill(cg, x: 5, y: 8, w: 2, h: 2, yellow)
+            fill(cg, x: 6, y: 10, w: 1, h: 5, yellow)
+            fill(cg, x: 5, y: 15, w: 2, h: 2, yellow)
+            fill(cg, x: 6, y: 12, w: 1, h: 1, oliveDk)
+            fill(cg, x: 7, y: 11, w: 1, h: 1, oliveHi)
+
+            // --- Rear arm + black fist hanging below the ball.
+            fill(cg, x: 3, y: 19, w: 7, h: 4, O)
+            fill(cg, x: 4, y: 20, w: 5, h: 2, oliveD)
+            fill(cg, x: 4, y: 20, w: 5, h: 1, olive)
+            fill(cg, x: 1, y: 22, w: 9, h: 4, O)
+            fill(cg, x: 2, y: 23, w: 7, h: 2, black)
+            fill(cg, x: 3, y: 23, w: 1, h: 1, metal)
+            fill(cg, x: 6, y: 23, w: 1, h: 1, metal)
+            fill(cg, x: 9, y: 22, w: 1, h: 2, oliveD)
+
+            // --- Rounded main carapace.
+            fill(cg, x: 13, y: 0, w: 22, h: 2, O)
+            fill(cg, x: 10, y: 2, w: 28, h: 2, O)
+            fill(cg, x: 8, y: 4, w: 34, h: 2, O)
+            fill(cg, x: 7, y: 6, w: 36, h: 12, O)
+            fill(cg, x: 8, y: 18, w: 34, h: 2, O)
+            fill(cg, x: 11, y: 20, w: 28, h: 1, O)
+            fill(cg, x: 13, y: 1, w: 22, h: 1, olive)
+            fill(cg, x: 11, y: 3, w: 26, h: 1, olive)
+            fill(cg, x: 9, y: 5, w: 32, h: 1, olive)
+            fill(cg, x: 8, y: 7, w: 34, h: 10, olive)
+            fill(cg, x: 9, y: 17, w: 32, h: 2, olive)
+            fill(cg, x: 12, y: 19, w: 26, h: 1, olive)
+            fill(cg, x: 13, y: 1, w: 18, h: 1, oliveHi)
+            fill(cg, x: 11, y: 3, w: 16, h: 1, oliveHi)
+            fill(cg, x: 9, y: 5, w: 12, h: 1, oliveHi)
+            fill(cg, x: 9, y: 7, w: 3, h: 8, oliveLt)
+            fill(cg, x: 10, y: 17, w: 30, h: 1, oliveD)
+            fill(cg, x: 10, y: 18, w: 30, h: 1, oliveD)
+            fill(cg, x: 12, y: 19, w: 26, h: 1, oliveDk)
+
+            // --- Pelvis skirt down to the leg sockets (keeps the body
+            // visually bolted to the legs instead of floating above them).
+            fill(cg, x: 17, y: 19, w: 14, h: 7, O)
+            fill(cg, x: 18, y: 20, w: 12, h: 5, oliveD)
+            fill(cg, x: 19, y: 20, w: 10, h: 2, olive)
+            fill(cg, x: 19, y: 20, w: 10, h: 1, oliveHi)
+            fill(cg, x: 18, y: 24, w: 12, h: 1, oliveDk)
+            fill(cg, x: 18, y: 23, w: 5, h: 3, O)
+            fill(cg, x: 19, y: 24, w: 3, h: 1, metal)
+            fill(cg, x: 25, y: 23, w: 5, h: 3, O)
+            fill(cg, x: 26, y: 24, w: 3, h: 1, metal)
+
+            // --- Panel lines, hatch, bolts, racing stripes.
+            fill(cg, x: 24, y: 7, w: 1, h: 10, oliveD)
+            fill(cg, x: 12, y: 9, w: 11, h: 1, oliveD)
+            fill(cg, x: 26, y: 12, w: 10, h: 1, oliveD)
+            fill(cg, x: 12, y: 11, w: 7, h: 4, oliveD)
+            fill(cg, x: 13, y: 12, w: 5, h: 2, olive)
+            fill(cg, x: 13, y: 12, w: 5, h: 1, oliveHi)
+            fill(cg, x: 11, y: 7, w: 1, h: 1, oliveLt)
+            fill(cg, x: 40, y: 7, w: 1, h: 1, oliveLt)
+            fill(cg, x: 11, y: 16, w: 1, h: 1, oliveLt)
+            fill(cg, x: 30, y: 6, w: 2, h: 10, oliveLt)
+            fill(cg, x: 34, y: 6, w: 1, h: 10, oliveLt)
+            fill(cg, x: 12, y: 18, w: 3, h: 1, yellow)
+            fill(cg, x: 17, y: 18, w: 3, h: 1, yellow)
+
+            // --- Front face: grille + round blue sensor eye.
+            fill(cg, x: 37, y: 7, w: 7, h: 9, O)
+            fill(cg, x: 38, y: 8, w: 5, h: 7, oliveDk)
+            fill(cg, x: 38, y: 9, w: 2, h: 1, metal)
+            fill(cg, x: 38, y: 11, w: 2, h: 1, metal)
+            fill(cg, x: 38, y: 13, w: 2, h: 1, metal)
+            fill(cg, x: 40, y: 9, w: 4, h: 4, O)
+            fill(cg, x: 41, y: 10, w: 2, h: 2, eye)
+            fill(cg, x: 41, y: 10, w: 1, h: 1, eyeHi)
+
+            // --- Turret ring on top (the animated cannon mounts here).
+            fill(cg, x: 33, y: 1, w: 10, h: 4, O)
+            fill(cg, x: 34, y: 2, w: 8, h: 2, metal)
+            fill(cg, x: 35, y: 2, w: 6, h: 1, metalHi)
+            fill(cg, x: 34, y: 4, w: 8, h: 1, oliveD)
+
+            // --- Front arm + black fist hanging under the shoulder.
+            fill(cg, x: 34, y: 13, w: 9, h: 6, O)
+            fill(cg, x: 35, y: 14, w: 7, h: 4, oliveD)
+            fill(cg, x: 35, y: 14, w: 7, h: 1, olive)
+            fill(cg, x: 33, y: 18, w: 12, h: 5, O)
+            fill(cg, x: 34, y: 19, w: 10, h: 3, olive)
+            fill(cg, x: 34, y: 19, w: 10, h: 1, oliveHi)
+            fill(cg, x: 34, y: 21, w: 10, h: 1, yellow)
+        }
+    }
+
+    /// One hero-style mech leg (16x20): thigh + shin with a forward-bent
+    /// knee, armored knee pad, and a boot with a yellow cap, black sole and
+    /// a pointed toe claw. The stride table mirrors the astronaut walk
+    /// cycle (contact / support / toe-off / swing) so it reads as the same
+    /// gait, just slower and heavier.
+    private static func mechLeg(front: Bool, phase: Int) -> SKTexture {
+        canvas(w: 16, h: 20, key: "mech-leg-\(front ? "f" : "b")-\(phase)") { cg in
+            let olive = front
+                ? UIColor(red: 0.31, green: 0.36, blue: 0.19, alpha: 1)
+                : UIColor(red: 0.17, green: 0.21, blue: 0.10, alpha: 1)
+            let oliveHi = front
+                ? UIColor(red: 0.50, green: 0.56, blue: 0.30, alpha: 1)
+                : UIColor(red: 0.27, green: 0.31, blue: 0.16, alpha: 1)
+            let oliveD = front
+                ? UIColor(red: 0.18, green: 0.22, blue: 0.10, alpha: 1)
+                : UIColor(red: 0.10, green: 0.12, blue: 0.06, alpha: 1)
+            let yellow = front
+                ? UIColor(red: 0.94, green: 0.71, blue: 0.16, alpha: 1)
+                : UIColor(red: 0.52, green: 0.38, blue: 0.10, alpha: 1)
+            let black = UIColor(red: 0.06, green: 0.07, blue: 0.06, alpha: 1)
+            let O = outline
+            // Astronaut-style stride: (forward offset, foot lift).
+            let strides = [(3, 0), (0, 0), (-3, 1), (1, 3)]
+            let stride = strides[phase % 4]
+            let hipX = 8, top = 1, len = 16
+            let footX = hipX + stride.0
+            let footY = top + len - stride.1
+            let kneeX = (hipX + footX) / 2 + 1
+            let kneeY = (top + footY) / 2
+
+            // Hip ball joint.
+            fill(cg, x: 5, y: 0, w: 7, h: 4, O)
+            fill(cg, x: 6, y: 1, w: 5, h: 2, oliveD)
+            fill(cg, x: 6, y: 1, w: 2, h: 1, oliveHi)
+
+            // Thigh + shin.
+            segment(cg, x0: hipX, y0: top, x1: kneeX, y1: kneeY, w: 6, color: O)
+            segment(cg, x0: hipX, y0: top, x1: kneeX, y1: kneeY, w: 4, color: olive)
+            segment(cg, x0: kneeX, y0: kneeY, x1: footX, y1: footY, w: 5, color: O)
+            segment(cg, x0: kneeX, y0: kneeY, x1: footX, y1: footY, w: 3, color: oliveD)
+
+            // Armored knee pad with a yellow accent.
+            fill(cg, x: kneeX - 3, y: kneeY - 2, w: 6, h: 5, O)
+            fill(cg, x: kneeX - 2, y: kneeY - 1, w: 4, h: 3, oliveHi)
+            fill(cg, x: kneeX - 2, y: kneeY - 1, w: 4, h: 1, olive)
+            fill(cg, x: kneeX - 1, y: kneeY + 1, w: 2, h: 1, yellow)
+
+            // Boot: yellow cap, olive body, black sole.
+            fill(cg, x: footX - 3, y: footY, w: 7, h: 3, O)
+            fill(cg, x: footX - 2, y: footY, w: 5, h: 2, olive)
+            fill(cg, x: footX - 2, y: footY, w: 5, h: 1, yellow)
+            fill(cg, x: footX - 2, y: footY + 2, w: 5, h: 1, black)
+            // Pointed toe claw + heel.
+            fill(cg, x: footX + 2, y: footY + 1, w: 2, h: 2, O)
+            fill(cg, x: footX + 2, y: footY + 2, w: 1, h: 1, black)
+            fill(cg, x: footX - 3, y: footY + 1, w: 1, h: 2, black)
+            fill(cg, x: hipX + 2, y: top + 1, w: 1, h: 1, yellow)
+        }
+    }
+
+    /// Mech turret cannon: an olive armored mantlet wrapping the grip with
+    /// a yellow hazard band, feeding three stacked gatling barrels with
+    /// ring bands and a hot muzzle block. Mounts on the top turret ring and
+    /// steers/fires like the truck's cannon.
+    private static func mechArm() -> SKTexture {
+        canvas(w: armW, h: armH, key: "arm-mech-v3") { cg in
+            let olive = UIColor(red: 0.31, green: 0.36, blue: 0.19, alpha: 1)
+            let oliveHi = UIColor(red: 0.50, green: 0.56, blue: 0.30, alpha: 1)
+            let oliveD = UIColor(red: 0.16, green: 0.20, blue: 0.09, alpha: 1)
+            let yellow = UIColor(red: 0.94, green: 0.71, blue: 0.16, alpha: 1)
+            let metal = UIColor(red: 0.24, green: 0.27, blue: 0.25, alpha: 1)
+            let metalHi = UIColor(red: 0.55, green: 0.58, blue: 0.52, alpha: 1)
+            let hot = UIColor(red: 1.0, green: 0.50, blue: 0.14, alpha: 1)
+            let O = outline
+            // Rounded mantlet wrapping the grip (x=5).
+            fill(cg, x: 1, y: 2, w: 10, h: 8, O)
+            fill(cg, x: 2, y: 3, w: 8, h: 6, olive)
+            fill(cg, x: 2, y: 3, w: 8, h: 1, oliveHi)
+            fill(cg, x: 2, y: 6, w: 8, h: 1, yellow)
+            fill(cg, x: 2, y: 8, w: 8, h: 1, oliveD)
+            fill(cg, x: 4, y: 4, w: 1, h: 1, oliveHi)
+            // Three stacked gatling barrels.
+            fill(cg, x: 10, y: 3, w: 12, h: 2, O)
+            fill(cg, x: 11, y: 3, w: 11, h: 1, metalHi)
+            fill(cg, x: 10, y: 5, w: 12, h: 2, O)
+            fill(cg, x: 11, y: 5, w: 11, h: 1, metal)
+            fill(cg, x: 10, y: 7, w: 12, h: 2, O)
+            fill(cg, x: 11, y: 7, w: 11, h: 1, metalHi)
+            // Ring bands around the cluster.
+            fill(cg, x: 15, y: 2, w: 1, h: 8, metal)
+            fill(cg, x: 19, y: 2, w: 1, h: 8, metal)
+            // Muzzle block + hot bore.
+            fill(cg, x: 21, y: 2, w: 3, h: 8, O)
+            fill(cg, x: 22, y: 3, w: 1, h: 6, metal)
+            fill(cg, x: 22, y: 5, w: 1, h: 2, hot)
         }
     }
 }

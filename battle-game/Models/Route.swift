@@ -6,6 +6,8 @@ import Foundation
 /// are released instead of stacking in memory.
 enum Route: Hashable {
     case map
+    case settings
     case detail(levelId: Int)
+    case prep(levelId: Int)
     case game(levelId: Int, heroId: String)
 }

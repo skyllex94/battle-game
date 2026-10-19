@@ -170,6 +170,8 @@ final class GameScene: SKScene {
         super.init(size: size)
         scaleMode = .aspectFill
         backgroundColor = .black
+        // The battle owns the global layout while it runs.
+        Balance.battleOwnsLayout = true
         Balance.active = Balance.layout(for: levelId)
     }
 
@@ -178,6 +180,7 @@ final class GameScene: SKScene {
     override func didMove(to view: SKView) {
         guard !didBuild else { return }
         didBuild = true
+        Balance.battleOwnsLayout = true
         Balance.active = Balance.layout(for: levelId)
         anchorPoint = CGPoint(x: 0, y: 0)
         addChild(skyLayer)
@@ -320,6 +323,7 @@ final class GameScene: SKScene {
         if Balance.active.theme == .sandhold { LevelDressing.buildSandholdKeep(in: world) }
         if Balance.active.theme == .dunesea { LevelDressing.buildDuneSea(in: world) }
         if Balance.active.theme == .oasis { LevelDressing.buildOasisWaste(in: world) }
+        if Balance.active.theme == .duskdesert { LevelDressing.buildDuskFlats(in: world) }
     }
 
     // MARK: - Layer 0: twilight ruins sky (static, factor 0.0)
@@ -519,6 +523,10 @@ final class GameScene: SKScene {
         if dt > 1.0 / 30 || dt < 0 { dt = 1.0 / 60 }
         lastUpdate = currentTime
         sceneTime += dt
+        // Safety net: the battle owns the battlefield. Re-pin the layout
+        // every frame so no other scene (menu / briefing diorama) can swap
+        // the map out from under a running fight.
+        Balance.active = Balance.layout(for: levelId)
         hero.step(dt: dt, now: currentTime)
         // Shield orb feed: the bubble tracks the live charge every frame.
         hero.shieldFrac = shieldMax > 0 ? max(0, shieldHP / shieldMax) : 0
@@ -937,6 +945,9 @@ final class GameScene: SKScene {
                         kind = .brute
                     } else if Balance.reaverEvery > 0, summonCount % Balance.reaverEvery == 0 {
                         kind = .reaver
+                    } else if Balance.mechEvery > 0, summonCount % Balance.mechEvery == 0,
+                              !enemies.contains(where: { $0.alive && $0.kind == .mech }) {
+                        kind = .mech
                     } else if Balance.skitterEvery > 0, summonCount % Balance.skitterEvery == 0 {
                         kind = .skitter
                     } else if Balance.jetEvery > 0, summonCount % Balance.jetEvery == 0 {
@@ -1071,8 +1082,7 @@ final class GameScene: SKScene {
     /// back to cruise. One trigger per cooldown so a single volley can't
     /// chain-count.
     private func updateJetDodge(_ e: EnemyNode, dt: TimeInterval) {
-        e.jukeCooldown = max(0, e.jukeCooldown - dt)
-        // Thruster exhaust puffing while flying.
+        e.jukeCooldown = max(0, e.jukeCooldown - dt)        // Thruster exhaust puffing while flying.
         e.jetExhaustTimer -= dt
         if e.jetExhaustTimer <= 0 {
             e.jetExhaustTimer = 0.09
@@ -1191,6 +1201,17 @@ final class GameScene: SKScene {
                 e.burstTimer = max(0, e.burstTimer - dt)
                 e.position.x = max(40, e.position.x + dir * pace * CGFloat(dt))
                 e.animateMarch(dt: dt, advancing: true)
+                // Heavy walkers kick up dust with every step.
+                if e.kind.isMech {
+                    e.footDustTimer -= dt
+                    if e.footDustTimer <= 0 {
+                        e.footDustTimer = 0.34
+                        let dust = ProjectileFactory.makeFootfallDust()
+                        dust.position = CGPoint(x: e.position.x - e.facing * 18,
+                                               y: Balance.groundY(at: e.position.x) + 6)
+                        world.addChild(dust)
+                    }
+                }
             } else {
                 // In range: stop and shoot — or stop and chop for reavers.
                 e.animateMarch(dt: dt, advancing: false)
@@ -1200,6 +1221,8 @@ final class GameScene: SKScene {
                         e.swing()
                         SoundEngine.shared.enemyFire(at: e.position.x)
                         meleeStrike(from: e)
+                    } else if e.kind.isMech {
+                        fireMechBurst(from: e, to: aim)
                     } else {
                         fireEnemyBolt(from: e, to: aim)
                     }
@@ -1294,6 +1317,46 @@ final class GameScene: SKScene {
                                       team: .enemy))
         let flash = ProjectileFactory.makeMuzzleFlash()
         flash.setScale(0.7)
+        flash.position = muzzle
+        world.addChild(flash)
+    }
+
+    /// Mech machine-gun burst: the volley ramps 1 -> 2 -> 3 rounds, each
+    /// round a hair after the last (gatling chatter). The mech keeps
+    /// firing at the same spot while the burst plays out.
+    private func fireMechBurst(from e: EnemyNode, to target: CGPoint) {
+        let rounds = min(Balance.mechBurstMax, e.mechBurstStep + 1)
+        e.mechBurstStep = (e.mechBurstStep + 1) % Balance.mechBurstMax
+        for r in 0..<rounds {
+            let delay = Double(r) * Balance.mechBurstGap
+            if delay == 0 {
+                fireMechRound(from: e, to: target)
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    guard let self, e.alive else { return }
+                    self.fireMechRound(from: e, to: target)
+                }
+            }
+        }
+    }
+
+    /// One gatling round: fat tracer + a hot muzzle flash.
+    private func fireMechRound(from e: EnemyNode, to target: CGPoint) {
+        let muzzle = e.muzzle()
+        var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
+        let len = max(1, hypot(dir.dx, dir.dy))
+        dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
+        SoundEngine.shared.enemyFire(at: muzzle.x)
+        let bolt = ProjectileFactory.makeTowerBolt(team: .enemy)
+        bolt.setScale(1.15)
+        bolt.position = muzzle
+        bolt.zRotation = atan2(dir.dy, dir.dx)
+        world.addChild(bolt)
+        projectiles.append(Projectile(node: bolt, dir: dir, life: Balance.enemyBoltLife,
+                                      speed: Balance.mechBoltSpeed, damage: e.boltDamage,
+                                      team: .enemy))
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.setScale(1.2)
         flash.position = muzzle
         world.addChild(flash)
     }
@@ -1850,7 +1913,12 @@ final class GameScene: SKScene {
                                   heroWeapon.startReserve * 2)
             }
             maybeSpawnDrop(at: e.position)
-            if e.kind.isFlying {
+            if e.kind.isMech {
+                // Mech walkers come apart in a heavy blast.
+                let boom = ProjectileFactory.makeMechExplosion()
+                boom.position = e.position
+                world.addChild(boom)
+            } else if e.kind.isFlying {
                 // Jetpack droids go out in a mid-air fireball + falling wreck.
                 let boom = ProjectileFactory.makeJetExplosion()
                 boom.position = e.position

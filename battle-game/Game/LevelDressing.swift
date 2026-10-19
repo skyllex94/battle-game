@@ -768,4 +768,151 @@ enum LevelDressing {
             placed += 1
         }
     }
+
+    // MARK: - Duskfall flats (Level 9, desert at sundown)
+
+    /// Sundown dressing: dead scrub trees, bleached rib piles, scattered
+    /// stones and a few lit braziers marking the old road. Cold, sparse,
+    /// and ember-lit — the desert after the sun drops.
+    static func buildDuskFlats(in world: SKNode) {
+        let width = Balance.levelWidth
+        var rng = DressingRNG(seed: 90909)
+
+        // Dead scrub trees: bare forked branches.
+        var placed = 0, guard_ = 0
+        while placed < 16, guard_ < 300 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 70...(width - 70))
+            guard isClear(x, margin: 190) else { continue }
+            let gy = Balance.groundY(at: x)
+            let tree = SKNode()
+            tree.position = CGPoint(x: x, y: gy)
+            tree.zPosition = 3
+            world.addChild(tree)
+            let h: CGFloat = rng.cgFloat(in: 34...58)
+            let bark = SKColor(red: 0.16, green: 0.12, blue: 0.13, alpha: 1)
+            let trunk = SKSpriteNode(color: bark, size: CGSize(width: 6, height: h))
+            trunk.anchorPoint = CGPoint(x: 0.5, y: 0)
+            trunk.position = CGPoint(x: 0, y: 0)
+            tree.addChild(trunk)
+            for b in 0..<3 {
+                let by = h * (0.55 + CGFloat(b) * 0.15)
+                let dir: CGFloat = b % 2 == 0 ? 1 : -1
+                let len: CGFloat = rng.cgFloat(in: 12...24)
+                let branch = SKSpriteNode(color: bark,
+                                          size: CGSize(width: len, height: 4))
+                branch.anchorPoint = CGPoint(x: dir > 0 ? 0 : 1, y: 0.5)
+                branch.position = CGPoint(x: 0, y: by)
+                branch.zRotation = dir * 0.5
+                tree.addChild(branch)
+                let twig = SKSpriteNode(color: bark, size: CGSize(width: len * 0.6, height: 3))
+                twig.anchorPoint = CGPoint(x: dir > 0 ? 0 : 1, y: 0.5)
+                twig.position = CGPoint(x: dir * len * 0.6, y: by + 7)
+                twig.zRotation = dir * 0.9
+                tree.addChild(twig)
+            }
+            placed += 1
+        }
+
+        // Bleached rib piles half-buried in the sand.
+        placed = 0; guard_ = 0
+        while placed < 12, guard_ < 300 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 90...(width - 90))
+            guard isClear(x, margin: 170) else { continue }
+            let gy = Balance.groundY(at: x)
+            let pile = SKNode()
+            pile.position = CGPoint(x: x, y: gy)
+            pile.zPosition = 3
+            world.addChild(pile)
+            let bone = SKColor(red: 0.80, green: 0.76, blue: 0.68, alpha: 1)
+            for r in 0..<4 {
+                let rib = SKSpriteNode(color: bone, size: CGSize(width: 4, height: 13 + CGFloat(r) * 3))
+                rib.position = CGPoint(x: CGFloat(r) * 8 - 12, y: 4)
+                rib.zRotation = -0.3 + CGFloat(r) * 0.15
+                pile.addChild(rib)
+            }
+            let skull = SKSpriteNode(color: bone, size: CGSize(width: 12, height: 9))
+            skull.position = CGPoint(x: 16, y: 3)
+            pile.addChild(skull)
+            let eye = SKSpriteNode(color: SKColor(red: 0.25, green: 0.20, blue: 0.18, alpha: 1),
+                                   size: CGSize(width: 4, height: 3))
+            eye.position = CGPoint(x: 19, y: 5)
+            pile.addChild(eye)
+            placed += 1
+        }
+
+        // Braziers: iron bowls with a live ember, marking the road.
+        placed = 0; guard_ = 0
+        while placed < 10, guard_ < 300 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 140...(width - 140))
+            guard isClear(x, margin: 200) else { continue }
+            let gy = Balance.groundY(at: x)
+            let brazier = SKNode()
+            brazier.position = CGPoint(x: x, y: gy)
+            brazier.zPosition = 3
+            world.addChild(brazier)
+            let iron = SKColor(red: 0.18, green: 0.15, blue: 0.15, alpha: 1)
+            for leg in 0..<3 {
+                let a = CGFloat(leg) * 2.1
+                let legNode = SKSpriteNode(color: iron, size: CGSize(width: 4, height: 34))
+                legNode.anchorPoint = CGPoint(x: 0.5, y: 0)
+                legNode.position = CGPoint(x: cos(a) * 7, y: 0)
+                legNode.zRotation = -sin(a) * 0.18
+                brazier.addChild(legNode)
+            }
+            let bowl = SKSpriteNode(color: iron, size: CGSize(width: 26, height: 12))
+            bowl.position = CGPoint(x: 0, y: 34)
+            brazier.addChild(bowl)
+            let fire = SKShapeNode(circleOfRadius: 9)
+            fire.fillColor = SKColor(red: 1.0, green: 0.5, blue: 0.15, alpha: 0.95)
+            fire.strokeColor = .clear
+            fire.position = CGPoint(x: 0, y: 42)
+            brazier.addChild(fire)
+            let halo = SKShapeNode(ellipseOf: CGSize(width: 70, height: 40))
+            halo.fillColor = SKColor(red: 1.0, green: 0.45, blue: 0.12, alpha: 0.16)
+            halo.strokeColor = .clear
+            halo.position = fire.position
+            brazier.addChild(halo)
+            halo.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.45, duration: 0.8), .fadeAlpha(to: 1.0, duration: 0.8),
+            ])))
+            fire.run(.repeatForever(.sequence([
+                .scale(to: 1.2, duration: 0.4), .scale(to: 1.0, duration: 0.4),
+            ])))
+            // Ember motes rising off the bowl.
+            for m in 0..<4 {
+                let mote = SKSpriteNode(color: SKColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 0.9),
+                                        size: CGSize(width: 3, height: 3))
+                mote.position = CGPoint(x: 0, y: 44)
+                brazier.addChild(mote)
+                let home = CGPoint(x: 0, y: 44)
+                mote.run(.repeatForever(.sequence([
+                    .group([.moveBy(x: rng.cgFloat(in: -14...14), y: rng.cgFloat(in: 40...80),
+                                    duration: rng.double(in: 1.2...2.2)),
+                            .fadeOut(withDuration: 1.8)]),
+                    .run { mote.position = home },
+                    .fadeIn(withDuration: 0.3),
+                ])))
+            }
+            placed += 1
+        }
+
+        // Scattered cold stones.
+        placed = 0; guard_ = 0
+        while placed < 26, guard_ < 300 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 40...(width - 40))
+            guard isClear(x) else { continue }
+            let s = rng.cgFloat(in: 4...9)
+            let stone = SKSpriteNode(
+                color: SKColor(red: 0.30, green: 0.26, blue: 0.28, alpha: 1),
+                size: CGSize(width: s, height: s * 0.7))
+            stone.position = CGPoint(x: x, y: Balance.groundY(at: x) + 2)
+            stone.zPosition = 2
+            world.addChild(stone)
+            placed += 1
+        }
+    }
 }

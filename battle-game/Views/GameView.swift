@@ -739,6 +739,8 @@ struct GameView: View {
         }
         .onDisappear {
             SoundEngine.shared.stopBattleMusic()
+            // Hand the global layout back to the menu/briefing dioramas.
+            Balance.battleOwnsLayout = false
         }
     }
 
@@ -754,21 +756,20 @@ struct GameView: View {
         CampaignData.levels.first(where: { $0.id == level.id + 1 })
     }
 
-    /// Continue: pops the finished battle (its scene is released) and
-    /// pushes the next briefing in a single path update — BACK from that
-    /// briefing lands on the map, never on this battle.
+    /// Continue: pops the finished battle + its deployment screen + the
+    /// old briefing (its scene is released) and pushes the next briefing in
+    /// a single path update — BACK from that briefing lands on the map.
     private func continueToNextLevel() {
         var p = path
-        if !p.isEmpty { p.removeLast() }
+        while p.count > 1 { p.removeLast() }
         p.append(Route.detail(levelId: level.id + 1))
         path = p
     }
 
-    /// Pops battle + briefing back to the map.
+    /// Pops battle + deployment + briefing back to the map.
     private func popToMap() {
         var p = path
-        if !p.isEmpty { p.removeLast() }
-        if !p.isEmpty { p.removeLast() }
+        while p.count > 1 { p.removeLast() }
         path = p
     }
 

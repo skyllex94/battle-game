@@ -24,7 +24,9 @@ enum Balance {
     /// wavy walkable fields, hazy ridge lines, drifting sand.
     /// Oasis Waste (Level 8): greener desert — palm oases + ruin arches
     /// + bone fields in the distance, crawling sand creatures.
-    enum BGTheme { case twilight, overgrown, bastion, dawn, sunscorch, sandhold, dunesea, oasis }
+    /// Duskfall Flats (Level 9): the sun going down over the desert —
+    /// darker, deep indigo sky, stars out, ember-lit mesas.
+    enum BGTheme { case twilight, overgrown, bastion, dawn, sunscorch, sandhold, dunesea, oasis, duskdesert }
 
     // MARK: - Per-level battlefield layout
     struct LevelLayout {
@@ -63,6 +65,10 @@ enum Balance {
         /// (0 = never — Levels 1-6 never see jets; Brutes, Reavers,
         /// then Skitters win ties).
         var jetEvery: Int
+        /// Every Nth summon rolls out a heavy Mech walker instead
+        /// (0 = never — the mech debuts late; Brutes and Reavers win
+        /// ties against it).
+        var mechEvery: Int
         // MARK: - Structure durability (matches the LevelDef dossier)
         var towerHP: CGFloat
         var baseHP: CGFloat
@@ -91,6 +97,7 @@ enum Balance {
         reaverEvery: 0,
         skitterEvery: 0,
         jetEvery: 0,
+        mechEvery: 0,
         towerHP: 200,
         baseHP: 500,
         enemyHPScale: 1.0
@@ -117,6 +124,7 @@ enum Balance {
         reaverEvery: 0,
         skitterEvery: 0,
         jetEvery: 0,
+        mechEvery: 0,
         towerHP: 220,
         baseHP: 550,
         enemyHPScale: 1.0
@@ -146,6 +154,7 @@ enum Balance {
         reaverEvery: 0,
         skitterEvery: 0,
         jetEvery: 0,
+        mechEvery: 0,
         towerHP: 250,
         baseHP: 600,
         enemyHPScale: 1.0
@@ -175,6 +184,7 @@ enum Balance {
         reaverEvery: 3,
         skitterEvery: 0,
         jetEvery: 0,
+        mechEvery: 0,
         towerHP: 260,
         baseHP: 650,
         enemyHPScale: 1.0
@@ -205,6 +215,7 @@ enum Balance {
         reaverEvery: 3,
         skitterEvery: 0,
         jetEvery: 0,
+        mechEvery: 0,
         towerHP: 300,
         baseHP: 700,
         enemyHPScale: 1.05
@@ -235,6 +246,7 @@ enum Balance {
         reaverEvery: 3,
         skitterEvery: 2,
         jetEvery: 0,
+        mechEvery: 0,
         towerHP: 320,
         baseHP: 800,
         enemyHPScale: 1.1025
@@ -266,6 +278,7 @@ enum Balance {
         reaverEvery: 3,
         skitterEvery: 2,
         jetEvery: 5,
+        mechEvery: 0,
         towerHP: 350,
         baseHP: 900,
         enemyHPScale: 1.1576
@@ -297,14 +310,53 @@ enum Balance {
         reaverEvery: 3,
         skitterEvery: 2,
         jetEvery: 5,
+        mechEvery: 0,
         towerHP: 400,
         baseHP: 1000,
         enemyHPScale: 1.2155
     )
 
+    /// Level 9 Duskfall Flats: 9600pt desert at sundown, 3 towers per
+    /// side. The sun is going down — indigo sky, stars out, ember-lit
+    /// mesas, colder sand. Straight field. The heavy Mech walker
+    /// debuts here (every 4th summon: Brutes/Reavers win ties, then
+    /// the Mech, then Skitters/Jets). Enemy HP ×1.2763 (+5% over
+    /// Level 8, compounding). Structure HP matches the dossier.
+    private static let layout9 = LevelLayout(
+        width: 9600,
+        playerBaseX: 220,
+        playerTowerXs: [780, 1550, 2320],
+        enemyTowerXs: [7000, 7750, 8500],
+        enemyBaseX: 9380,
+        heroSpawnX: 420,
+        platforms: [],
+        theme: .duskdesert,
+        flags: true,
+        alienBirds: false,
+        lushFlora: false,
+        summonInterval: 4.5,
+        doubleChance: 0.45,
+        maxEnemies: 20,
+        bruteEvery: 6,
+        reaverEvery: 3,
+        skitterEvery: 2,
+        jetEvery: 5,
+        mechEvery: 4,
+        towerHP: 440,
+        baseHP: 1100,
+        enemyHPScale: 1.2763
+    )
+
     /// Active battlefield. GameScene sets this from the level id before
     /// building (init + didMove). Defaults to Level 1 (menu previews etc.).
     static var active = layout1
+
+    /// True while a battle scene owns the active layout. The menu and
+    /// briefing dioramas dress themselves with it, but they must never
+    /// re-pin it underneath a running battle (the diorama is rebuilt
+    /// whenever SwiftUI re-renders, and a stale pin would swap the whole
+    /// battlefield mid-fight).
+    static var battleOwnsLayout = false
 
     static func layout(for levelId: Int) -> LevelLayout {
         switch levelId {
@@ -315,6 +367,7 @@ enum Balance {
         case 6: return layout6
         case 7: return layout7
         case 8: return layout8
+        case 9: return layout9
         default: return layout1
         }
     }
@@ -322,8 +375,11 @@ enum Balance {
     // MARK: - Level layout (points; follow `active`)
     static var levelWidth: CGFloat { active.width }
     static var groundTopY: CGFloat = 120        // y of the walkable surface
-    /// True on desert themes (dune sand + sand dressing; Level 7-8).
-    static var dunes: Bool { active.theme == .dunesea || active.theme == .oasis }
+    /// True on desert themes (dune sand + sand dressing; Level 7-9).
+    static var dunes: Bool {
+        let t = active.theme
+        return t == .dunesea || t == .oasis || t == .duskdesert
+    }
     /// Walkable surface height at world x. Flat on every level, dunes
     /// included — straight fields everywhere.
     static func groundY(at x: CGFloat) -> CGFloat {
@@ -416,6 +472,7 @@ enum Balance {
     static var reaverEvery: Int { active.reaverEvery }
     static var skitterEvery: Int { active.skitterEvery }
     static var jetEvery: Int { active.jetEvery }
+    static var mechEvery: Int { active.mechEvery }
     static let firstSummonDelay: Double = 5.0
     /// Raider (the classic marcher — Levels 1+). Base 40; Level 5+ scales
     /// via the layout's enemyHPScale (L5 = ×1.05, L6 = ×1.1025).
@@ -475,6 +532,20 @@ enum Balance {
     static let jetJukeHeight: CGFloat = 40   // dodge dip/rise amplitude
     /// How many jetpack droids fly out together (one after another).
     static let jetPairSize: Int = 2
+    /// Mech walker (heavy robot — Level 9+): a slow, huge gun-platform
+    /// that lobs machine-gun bursts (1, then 2, then 3 rounds a volley).
+    /// Base 260, scaled.
+    static var mechHP: CGFloat { 260 * active.enemyHPScale }
+    static let mechSpeed: CGFloat = 48
+    static let mechReward: Int = 350
+    static let mechSightRange: CGFloat = 700
+    static let mechShootRange: CGFloat = 520
+    static let mechFireCooldown: Double = 2.4
+    static let mechBoltDamage: CGFloat = 14
+    /// Machine-gun burst: rounds per volley, ramping 1 -> 2 -> 3.
+    static let mechBurstMax: Int = 3
+    static let mechBurstGap: Double = 0.12   // seconds between rounds
+    static let mechBoltSpeed: CGFloat = 640
     static let jetJukeTime: Double = 0.45    // out-and-back dodge duration
     static let jetJukeCooldown: Double = 0.6 // min gap between dodge triggers
     static let enemyBoltSpeed: CGFloat = 520

@@ -12,8 +12,16 @@ enum StructureFX {
         flash(at: pos, in: parent, scale: s)
         fireball(at: pos, in: parent, scale: s)
         shockwave(at: pos, in: parent, scale: s)
-        debris(at: pos, in: parent, team: team, scale: s)
-        smoke(at: pos, in: parent, scale: s)
+        // Graphics settings: debris/smoke follow Particle Effects + Quality,
+        // while the flash/fireball core always keeps kills readable.
+        let countScale = GameSettings.particleScale
+        guard countScale > 0 else { return }
+        debris(at: pos, in: parent, team: team, scale: s, countScale: countScale)
+        smoke(at: pos, in: parent, scale: s, countScale: countScale)
+    }
+
+    private static func fxCount(_ n: Int, _ scale: Double) -> Int {
+        max(1, Int((Double(n) * scale).rounded()))
     }
 
     // MARK: - Pieces
@@ -60,7 +68,8 @@ enum StructureFX {
     }
 
     /// Pixel debris squares flung upward/outward, fading as they fall.
-    private static func debris(at pos: CGPoint, in parent: SKNode, team: Team, scale: CGFloat) {
+    private static func debris(at pos: CGPoint, in parent: SKNode, team: Team,
+                               scale: CGFloat, countScale: Double) {
         let trim: SKColor = team == .player ? SKColor(red: 0.3, green: 0.65, blue: 1, alpha: 1)
                                             : SKColor(red: 1, green: 0.35, blue: 0.25, alpha: 1)
         let colors: [SKColor] = [
@@ -69,7 +78,7 @@ enum StructureFX {
             trim,                            // team chunk
             SKColor(red: 1, green: 0.6, blue: 0.2, alpha: 1), // ember
         ]
-        for _ in 0..<14 {
+        for _ in 0..<fxCount(14, countScale) {
             let side = CGFloat.random(in: 6...14) * scale
             let chunk = SKSpriteNode(color: colors.randomElement()!, size: CGSize(width: side, height: side))
             chunk.position = pos + CGVector(dx: CGFloat.random(in: -20...20) * scale,
@@ -93,8 +102,9 @@ enum StructureFX {
     }
 
     /// Grey smoke columns rising from the rubble, staggered.
-    private static func smoke(at pos: CGPoint, in parent: SKNode, scale: CGFloat) {
-        for i in 0..<6 {
+    private static func smoke(at pos: CGPoint, in parent: SKNode, scale: CGFloat,
+                              countScale: Double) {
+        for i in 0..<fxCount(6, countScale) {
             let puff = SKShapeNode(circleOfRadius: CGFloat.random(in: 10...18) * scale)
             puff.fillColor = SKColor(white: 0.25, alpha: 0.7)
             puff.strokeColor = .clear

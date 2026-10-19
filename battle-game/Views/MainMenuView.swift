@@ -6,8 +6,6 @@ import SwiftUI
 /// red towers trading fire) with a pixel-command UI on top.
 /// Landscape: war-room title left, DEPLOY + SETTINGS right.
 struct MainMenuView: View {
-    @StateObject private var settings = SettingsStore()
-    @State private var showSettings = false
     @State private var blink = false
     /// Campaign navigation path: menu → map → briefing → battle.
     /// Continue swaps the finished battle for the next briefing, so BACK
@@ -101,7 +99,10 @@ struct MainMenuView: View {
                                 PixelCommandButton(title: "CAMPAIGN", systemIcon: "flag.fill",
                                                    style: .war)
                             }
-                            Button { showSettings = true } label: {
+                            Button {
+                                SoundEngine.shared.uiTap()
+                                path.append(Route.settings)
+                            } label: {
                                 PixelCommandButton(title: "SETTINGS", systemIcon: "gearshape.fill",
                                                    style: .ghost)
                             }
@@ -128,15 +129,17 @@ struct MainMenuView: View {
                     _ = ImportedArt.uiImage(named: "MapBG")
                 }.value
             }
-            .sheet(isPresented: $showSettings) {
-                SettingsSheet(settings: settings)
-            }
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .map:
                     LevelMapView(path: $path)
+                case .settings:
+                    SettingsView()
                 case .detail(let id):
                     LevelDetailView(level: CampaignData.levels.first(where: { $0.id == id })
+                        ?? CampaignData.levels[0], path: $path)
+                case .prep(let id):
+                    BattlePrepView(level: CampaignData.levels.first(where: { $0.id == id })
                         ?? CampaignData.levels[0], path: $path)
                 case .game(let lid, let hid):
                     GameView(level: CampaignData.levels.first(where: { $0.id == lid })
@@ -218,37 +221,6 @@ private struct PixelMenuPanelShape: Shape {
         p.addLine(to: CGPoint(x: rect.minX, y: rect.minY + cut))
         p.closeSubpath()
         return p
-    }
-}
-
-private struct SettingsSheet: View {
-    @ObservedObject var settings: SettingsStore
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Audio") {
-                    Toggle("Music", isOn: $settings.musicEnabled)
-                    Toggle("SFX", isOn: $settings.sfxEnabled)
-                }
-                Section("Controls") {
-                    HStack {
-                        Text("Sensitivity")
-                        Slider(value: $settings.sensitivity, in: 0.5...1.5, step: 0.1)
-                        Text(String(format: "%.1f", settings.sensitivity))
-                            .monospacedDigit()
-                            .frame(width: 36)
-                    }
-                }
-                Section("Campaign") {
-                    Button("Reset progress", role: .destructive) {
-                        settings.resetCampaign()
-                    }
-                }
-            }
-            .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
-        }
     }
 }
 

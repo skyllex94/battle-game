@@ -15,8 +15,10 @@ struct LevelDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedHero: HeroDef = HeroRoster.selectedHero
     @State private var selectedGun: HeroWeapon = GunLocker.selectedGun
-    @State private var bgScene = MainMenuBattleScene(size: CGSize(width: 1334, height: 750),
-                                                levelId: CampaignData.levels.first?.id ?? 1)
+    /// Briefing diorama. Created lazily in onAppear (never in the @State
+    /// initial value — SwiftUI re-evaluates that on every re-render, and a
+    /// throwaway scene would fight the running battle for the layout).
+    @State private var bgScene: MainMenuBattleScene?
 
     /// Enemy kinds debuting on this level (briefing intel).
     private var newEnemies: [EnemyKind] {
@@ -27,9 +29,11 @@ struct LevelDetailView: View {
         GeometryReader { geo in
             ZStack {
                 // Animated terrain backdrop (no static image).
-                SpriteView(scene: bgScene, options: [.ignoresSiblingOrder])
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .ignoresSafeArea(edges: .all)
+                if let scene = bgScene {
+                    SpriteView(scene: scene, options: [.ignoresSiblingOrder])
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .ignoresSafeArea(edges: .all)
+                }
                 LinearGradient(colors: [.black.opacity(0.72), .black.opacity(0.34)],
                                startPoint: .leading, endPoint: .trailing)
                     .ignoresSafeArea(edges: .all)
@@ -138,7 +142,7 @@ struct LevelDetailView: View {
                         }
                         Button {
                             SoundEngine.shared.uiTap()
-                            path.append(Route.game(levelId: level.id, heroId: selectedHero.id))
+                            path.append(Route.prep(levelId: level.id))
                         } label: {
                             HStack {
                                 PixelIcon.bolt
@@ -290,8 +294,8 @@ struct LevelDetailView: View {
             selectedHero = HeroRoster.selectedHero
             selectedGun = GunLocker.selectedGun
             // Backdrop must dress THIS level's battlefield, not the last one
-            // played — rebuild when SwiftUI hands us a different briefing.
-            if bgScene.levelId != level.id {
+            // played — build it once per level.
+            if bgScene?.levelId != level.id {
                 bgScene = MainMenuBattleScene(size: CGSize(width: 1334, height: 750),
                                               levelId: level.id)
             }

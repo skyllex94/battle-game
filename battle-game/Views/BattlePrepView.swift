@@ -3,9 +3,11 @@ import SwiftUI
 import UIKit // UIImage portraits
 
 /// BattlePrep — the deployment screen between a mission briefing and the
-/// battle. Shows the level's live battlefield, the equipped hero + gun
-/// (both swappable in place), a direct line into the enemy library, and the
-/// final START BATTLE button that launches the fight.
+/// battle. Three columns keep the decision order obvious:
+///   1. MISSION BRIEF  — where you are and what is waiting.
+///   2. LOADOUT        — hero over gun, each swappable in place.
+///   3. FIELD INTEL    — hostile + army dossiers.
+/// A bottom action bar confirms the loadout and launches the fight.
 struct BattlePrepView: View {
     let level: LevelDef
     @Binding var path: NavigationPath
@@ -31,7 +33,7 @@ struct BattlePrepView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .ignoresSafeArea(edges: .all)
                 }
-                LinearGradient(colors: [.black.opacity(0.78), .black.opacity(0.30)],
+                LinearGradient(colors: [.black.opacity(0.80), .black.opacity(0.28)],
                                startPoint: .leading, endPoint: .trailing)
                     .ignoresSafeArea(edges: .all)
                     .allowsHitTesting(false)
@@ -40,19 +42,21 @@ struct BattlePrepView: View {
                     .ignoresSafeArea(edges: .all)
                     .allowsHitTesting(false)
 
-                VStack(spacing: tight ? 6 : 10) {
+                VStack(spacing: tight ? 6 : 9) {
                     topBar(tight: tight)
-                    HStack(alignment: .top, spacing: 12) {
-                        missionPanel(tight: tight)
-                            .frame(width: geo.size.width * 0.31)
-                        PrepHeroPanel(hero: selectedHero, tight: tight)
-                        PrepGunPanel(gun: selectedGun, tight: tight)
+                    // Left: mission brief + launch. Right: hero/weapon over
+                    // army/enemies. START BATTLE lives on the left rail.
+                    HStack(alignment: .top, spacing: 10) {
+                        leftColumn(tight: tight)
+                            .frame(width: geo.size.width * 0.34)
+                        rightDeck(tight: tight)
+                            .frame(maxWidth: .infinity)
                     }
                     .frame(maxHeight: .infinity)
                 }
-                .padding(.horizontal, 14)
-                .padding(.bottom, 12)
-                .padding(.top, 10)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 10)
+                .padding(.top, 8)
             }
         }
         .navigationBarBackButtonHidden(true)
@@ -80,7 +84,7 @@ struct BattlePrepView: View {
                     .font(.system(size: 12, weight: .black, design: .monospaced))
                     .tracking(2)
                     .foregroundStyle(.cyan)
-                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .padding(.horizontal, 14).padding(.vertical, 7)
                     .background(.black.opacity(0.65))
                     .clipShape(ShopPixelShape(cut: 6))
                     .overlay(ShopPixelShape(cut: 6).stroke(.cyan.opacity(0.6), lineWidth: 2))
@@ -98,21 +102,18 @@ struct BattlePrepView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
             Spacer()
-            HStack(spacing: 6) {
-                Rectangle().fill(.green).frame(width: 7, height: 7)
-                Text("LOADOUT READY")
-                    .font(.system(size: 10, weight: .black, design: .monospaced))
-                    .tracking(1)
-                    .foregroundStyle(.white.opacity(0.7))
-            }
+            Text("MISSION \(level.id) OF \(CampaignData.levels.count)")
+                .font(.system(size: 9, weight: .black, design: .monospaced))
+                .tracking(1)
+                .foregroundStyle(.white.opacity(0.55))
         }
     }
 
-    // MARK: - Mission panel
+    // MARK: - Column 1: mission brief
 
     private func missionPanel(tight: Bool) -> some View {
         VStack(alignment: .leading, spacing: tight ? 6 : 8) {
-            label("MISSION", color: .cyan)
+            label("MISSION BRIEF", color: .cyan)
             Text(level.name.uppercased())
                 .font(.system(size: 19, weight: .black, design: .monospaced))
                 .tracking(1)
@@ -128,7 +129,7 @@ struct BattlePrepView: View {
             Text(level.briefing)
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.85))
-                .lineLimit(tight ? 3 : 4)
+                .lineLimit(tight ? 3 : 5)
                 .minimumScaleFactor(0.85)
 
             HStack(spacing: 6) {
@@ -139,10 +140,12 @@ struct BattlePrepView: View {
 
             if let debut = newEnemies.first {
                 HStack(spacing: 7) {
+                    // Hostiles face left in battle, so the preview does too.
                     Image(uiImage: UnitPixelArt.portraitImage(for: debut.pixelKind))
                         .interpolation(.none)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
+                        .scaleEffect(x: -1, y: 1)
                         .frame(width: 42, height: 28)
                         .background(.black.opacity(0.6))
                         .clipShape(ShopPixelShape(cut: 4))
@@ -165,54 +168,10 @@ struct BattlePrepView: View {
                 .overlay(Rectangle().stroke(.red.opacity(0.4), lineWidth: 1))
             }
 
-            Spacer(minLength: 2)
-
-            // Both field dossiers live here: hostile intel + our own army.
-            HStack(spacing: 8) {
-                NavigationLink {
-                    EnemyLibraryView()
-                } label: {
-                    PrepLibraryButton(title: "ENEMIES",
-                                      subtitle: "\(EnemyKind.allCases.count) HOSTILES",
-                                      icon: "binoculars.fill",
-                                      tint: .red)
-                }
-                .simultaneousGesture(TapGesture().onEnded {
-                    SoundEngine.shared.uiTap()
-                })
-                NavigationLink {
-                    ArmyLibraryView()
-                } label: {
-                    PrepLibraryButton(title: "OUR ARMY",
-                                      subtitle: "\(ArmyKind.allCases.count) UNITS",
-                                      icon: "person.3.fill",
-                                      tint: .cyan)
-                }
-                .simultaneousGesture(TapGesture().onEnded {
-                    SoundEngine.shared.uiTap()
-                })
-            }
-
-            Button {
-                SoundEngine.shared.uiTap()
-                path.append(Route.game(levelId: level.id, heroId: selectedHero.id))
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "bolt.fill")
-                        .font(.system(size: 15, weight: .black))
-                    Text("START BATTLE")
-                        .font(.system(size: 15, weight: .black, design: .monospaced))
-                        .tracking(2)
-                }
-                .frame(maxWidth: .infinity, minHeight: tight ? 44 : 50)
-                .background(.red)
-                .foregroundStyle(.white)
-                .clipShape(ShopPixelShape(cut: 8))
-                .overlay(ShopPixelShape(cut: 8).stroke(.white.opacity(0.7), lineWidth: 3))
-                .shadow(color: .red.opacity(0.45), radius: 10)
-            }
+            Spacer(minLength: 0)
         }
         .padding(12)
+        .frame(maxHeight: .infinity, alignment: .top)
         .background(.black.opacity(0.55))
         .clipShape(ShopPixelShape(cut: 10))
         .overlay(ShopPixelShape(cut: 10).stroke(.white.opacity(0.2), lineWidth: 2))
@@ -243,214 +202,500 @@ struct BattlePrepView: View {
         .background(.black.opacity(0.55))
         .overlay(Rectangle().stroke(.white.opacity(0.15), lineWidth: 1))
     }
+
+    // MARK: - Left rail: mission brief → deployment → launch
+
+    private func leftColumn(tight: Bool) -> some View {
+        VStack(alignment: .leading, spacing: tight ? 6 : 8) {
+            missionPanel(tight: tight)
+                .frame(maxHeight: .infinity)
+            deploySummary(tight: tight)
+            startButton(tight: tight)
+        }
+    }
+
+    // MARK: - Right deck: hero | weapon, army | enemies underneath
+
+    private func rightDeck(tight: Bool) -> some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                NavigationLink {
+                    HeroArmoryView()
+                } label: {
+                    PrepHeroCard(hero: selectedHero, tight: tight)
+                }
+                .buttonStyle(.plain)
+                .simultaneousGesture(TapGesture().onEnded { SoundEngine.shared.uiTap() })
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                NavigationLink {
+                    GunArmoryView()
+                } label: {
+                    PrepGunCard(gun: selectedGun, tight: tight)
+                }
+                .buttonStyle(.plain)
+                .simultaneousGesture(TapGesture().onEnded { SoundEngine.shared.uiTap() })
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            HStack(spacing: 8) {
+                PrepIntelCard(content: .army)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                PrepIntelCard(content: .enemies)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    // MARK: - Deploy summary
+
+    private func deploySummary(tight: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(uiImage: HeroPixelArt.portraitImage(for: selectedHero.pixelKind))
+                .interpolation(.none)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 34, height: 24)
+                .background(.black.opacity(0.5))
+                .clipShape(ShopPixelShape(cut: 4))
+            VStack(alignment: .leading, spacing: 1) {
+                Text("DEPLOYING")
+                    .font(.system(size: 7, weight: .black, design: .monospaced))
+                    .tracking(1)
+                    .foregroundStyle(.white.opacity(0.5))
+                HStack(spacing: 4) {
+                    Text(selectedHero.displayName.uppercased())
+                        .font(.system(size: 10, weight: .black, design: .monospaced))
+                        .foregroundStyle(.white)
+                    Text("/")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                    Text(selectedGun.name.uppercased())
+                        .font(.system(size: 10, weight: .black, design: .monospaced))
+                        .foregroundStyle(.cyan)
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            }
+            Spacer(minLength: 0)
+            if !tight {
+                Rectangle().fill(.green).frame(width: 7, height: 7)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(.black.opacity(0.62))
+        .clipShape(ShopPixelShape(cut: 6))
+        .overlay(ShopPixelShape(cut: 6).stroke(.white.opacity(0.18), lineWidth: 2))
+    }
+
+    // MARK: - Launch (left rail)
+
+    private func startButton(tight: Bool) -> some View {
+        Button {
+            SoundEngine.shared.uiTap()
+            path.append(Route.game(levelId: level.id, heroId: selectedHero.id))
+        } label: {
+            HStack(spacing: 9) {
+                PrepPixelIcon(glyph: .shield, color: .white, size: tight ? 19 : 23)
+                Text("START BATTLE")
+                    .font(.system(size: tight ? 13 : 15, weight: .black, design: .monospaced))
+                    .tracking(1.5)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity, minHeight: tight ? 42 : 50)
+            .background(.red)
+            .foregroundStyle(.white)
+            .clipShape(ShopPixelShape(cut: 8))
+            .overlay(ShopPixelShape(cut: 8).stroke(.white.opacity(0.7), lineWidth: 3))
+            .shadow(color: .red.opacity(0.45), radius: 10)
+        }
+        .buttonStyle(.plain)
+    }
 }
 
-// MARK: - Hero panel
+// MARK: - Hero card
 
-private struct PrepHeroPanel: View {
+private struct PrepHeroCard: View {
     let hero: HeroDef
     let tight: Bool
 
     var body: some View {
-        VStack(spacing: tight ? 6 : 9) {
-            header("YOUR HERO", color: .yellow)
-            ZStack(alignment: .bottomTrailing) {
+        VStack(alignment: .leading, spacing: tight ? 4 : 6) {
+            HStack(spacing: 6) {
+                PrepSectionLabel(title: "HERO", color: .yellow)
+                Spacer(minLength: 4)
+                PrepChangeChip(color: .yellow)
+            }
+
+            HStack(spacing: 10) {
                 Image(uiImage: HeroPixelArt.portraitImage(for: hero.pixelKind))
                     .interpolation(.none)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(10)
+                    .padding(7)
+                    .frame(width: tight ? 76 : 90)
+                    .frame(maxHeight: .infinity)
                     .background(
-                        LinearGradient(colors: [.yellow.opacity(0.14), .black.opacity(0.5)],
+                        LinearGradient(colors: [.yellow.opacity(0.16), .black.opacity(0.5)],
                                        startPoint: .top, endPoint: .bottom)
                     )
-                    .clipShape(ShopPixelShape(cut: 8))
-                    .overlay(ShopPixelShape(cut: 8).stroke(.yellow.opacity(0.6), lineWidth: 2))
-                PrepChangeBadge(color: .yellow)
-                    .padding(8)
+                    .clipShape(ShopPixelShape(cut: 6))
+                    .overlay(ShopPixelShape(cut: 6).stroke(.yellow.opacity(0.5), lineWidth: 2))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(hero.displayName.uppercased())
+                        .font(.system(size: tight ? 14 : 15, weight: .black, design: .monospaced))
+                        .tracking(1)
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    Text(hero.trait)
+                        .font(.system(size: 8, weight: .black, design: .monospaced))
+                        .tracking(1)
+                        .foregroundStyle(.yellow)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Spacer(minLength: 2)
+                    StatPips(label: "HP", value: hero.maxHealth, maxValue: 220,
+                             color: .green, compact: true)
+                    StatPips(label: "SPD", value: Int(hero.speed), maxValue: 20,
+                             color: .cyan, compact: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxHeight: .infinity)
-
-            VStack(spacing: 2) {
-                Text(hero.displayName.uppercased())
-                    .font(.system(size: 16, weight: .black, design: .monospaced))
-                    .tracking(1)
-                    .foregroundStyle(.white)
-                Text(hero.trait)
-                    .font(.system(size: 8, weight: .black, design: .monospaced))
-                    .tracking(1)
-                    .foregroundStyle(.yellow)
-            }
-            StatPips(label: "HP", value: hero.maxHealth, maxValue: 220, color: .green,
-                     compact: tight)
-            StatPips(label: "SPD", value: Int(hero.speed), maxValue: 20, color: .cyan,
-                     compact: tight)
-
-            NavigationLink {
-                HeroArmoryView()
-            } label: {
-                PrepWideButton(title: "CHANGE HERO", color: .yellow, dark: true)
-            }
-            .simultaneousGesture(TapGesture().onEnded {
-                SoundEngine.shared.uiTap()
-            })
         }
-        .padding(12)
+        .padding(9)
         .background(.black.opacity(0.55))
         .clipShape(ShopPixelShape(cut: 10))
         .overlay(ShopPixelShape(cut: 10).stroke(.yellow.opacity(0.35), lineWidth: 2))
     }
-
-    private func header(_ text: String, color: Color) -> some View {
-        HStack(spacing: 6) {
-            Rectangle().fill(color).frame(width: 8, height: 8)
-            Text(text)
-                .font(.system(size: 11, weight: .black, design: .monospaced))
-                .tracking(2)
-                .foregroundStyle(color)
-            Spacer()
-        }
-    }
 }
 
-// MARK: - Gun panel
+// MARK: - Gun card
 
-private struct PrepGunPanel: View {
+private struct PrepGunCard: View {
     let gun: HeroWeapon
     let tight: Bool
 
     var body: some View {
-        VStack(spacing: tight ? 6 : 9) {
-            header("YOUR GUN", color: .cyan)
-            ZStack(alignment: .bottomTrailing) {
+        VStack(alignment: .leading, spacing: tight ? 4 : 6) {
+            HStack(spacing: 6) {
+                PrepSectionLabel(title: "WEAPON", color: .cyan)
+                Spacer(minLength: 4)
+                PrepChangeChip(color: .cyan)
+            }
+
+            HStack(spacing: 10) {
                 Image(uiImage: PixelHeroArt.gunImage(gun))
                     .interpolation(.none)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(12)
+                    .padding(7)
+                    .frame(width: tight ? 76 : 90)
+                    .frame(maxHeight: .infinity)
                     .background(
-                        LinearGradient(colors: [.cyan.opacity(0.14), .black.opacity(0.5)],
+                        LinearGradient(colors: [.cyan.opacity(0.16), .black.opacity(0.5)],
                                        startPoint: .top, endPoint: .bottom)
                     )
-                    .clipShape(ShopPixelShape(cut: 8))
-                    .overlay(ShopPixelShape(cut: 8).stroke(.cyan.opacity(0.6), lineWidth: 2))
-                PrepChangeBadge(color: .cyan)
-                    .padding(8)
+                    .clipShape(ShopPixelShape(cut: 6))
+                    .overlay(ShopPixelShape(cut: 6).stroke(.cyan.opacity(0.5), lineWidth: 2))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(gun.name.uppercased())
+                        .font(.system(size: tight ? 14 : 15, weight: .black, design: .monospaced))
+                        .tracking(1)
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    Text(gun.hasInfiniteAmmo ? "∞ AMMO" : "\(gun.magSize) SHELLS / MAG")
+                        .font(.system(size: 8, weight: .black, design: .monospaced))
+                        .tracking(1)
+                        .foregroundStyle(.cyan)
+                        .lineLimit(1)
+                    Spacer(minLength: 2)
+                    StatPips(label: "DMG", value: Int(gun.damage), maxValue: 60,
+                             color: .red, compact: true)
+                    StatPips(label: "AMMO", value: gun.hasInfiniteAmmo ? 6 : min(gun.magSize, 12),
+                             maxValue: 12, color: .cyan, compact: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxHeight: .infinity)
-
-            VStack(spacing: 2) {
-                Text(gun.name.uppercased())
-                    .font(.system(size: 16, weight: .black, design: .monospaced))
-                    .tracking(1)
-                    .foregroundStyle(.white)
-                Text(gun.hasInfiniteAmmo ? "∞ AMMO" : "\(gun.magSize) SHELLS / MAG")
-                    .font(.system(size: 8, weight: .black, design: .monospaced))
-                    .tracking(1)
-                    .foregroundStyle(.cyan)
-            }
-            StatPips(label: "DMG", value: Int(gun.damage), maxValue: 60, color: .red,
-                     compact: tight)
-            StatPips(label: "AMMO", value: gun.hasInfiniteAmmo ? 6 : min(gun.magSize, 12),
-                     maxValue: 12, color: .cyan, compact: tight)
-
-            NavigationLink {
-                GunArmoryView()
-            } label: {
-                PrepWideButton(title: "CHANGE GUN", color: .cyan, dark: true)
-            }
-            .simultaneousGesture(TapGesture().onEnded {
-                SoundEngine.shared.uiTap()
-            })
         }
-        .padding(12)
+        .padding(9)
         .background(.black.opacity(0.55))
         .clipShape(ShopPixelShape(cut: 10))
         .overlay(ShopPixelShape(cut: 10).stroke(.cyan.opacity(0.35), lineWidth: 2))
     }
+}
 
-    private func header(_ text: String, color: Color) -> some View {
-        HStack(spacing: 6) {
-            Rectangle().fill(color).frame(width: 8, height: 8)
-            Text(text)
-                .font(.system(size: 11, weight: .black, design: .monospaced))
-                .tracking(2)
-                .foregroundStyle(color)
-            Spacer()
+// MARK: - Field intel card
+
+private struct PrepIntelCard: View {
+    enum Content { case enemies, army }
+
+    let content: Content
+
+    private var title: String {
+        switch content {
+        case .enemies: return "ENEMIES"
+        case .army: return "OUR ARMY"
         }
+    }
+
+    private var subtitle: String {
+        switch content {
+        case .enemies: return "HOSTILE DOSSIERS"
+        case .army: return "DEPLOYABLE UNITS"
+        }
+    }
+
+    private var tint: Color {
+        switch content {
+        case .enemies: return .red
+        case .army: return .cyan
+        }
+    }
+
+    private var glyph: PrepPixelGlyph {
+        switch content {
+        case .enemies: return .target
+        case .army: return .squad
+        }
+    }
+
+    private var kinds: [(UnitPixelArt.Kind, Bool)] {
+        switch content {
+        case .enemies:
+            return EnemyKind.allCases.map { ($0.pixelKind, true) }
+        case .army:
+            return ArmyKind.allCases.map { ($0.pixelKind, false) }
+        }
+    }
+
+    private var count: Int { kinds.count }
+
+    private var openLabel: String {
+        switch content {
+        case .enemies: return "OPEN HOSTILE INDEX"
+        case .army: return "OPEN ARMY INDEX"
+        }
+    }
+
+    var body: some View {
+        NavigationLink {
+            switch content {
+            case .enemies: EnemyLibraryView()
+            case .army: ArmyLibraryView()
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    PrepPixelIcon(glyph: glyph, color: tint, size: 13)
+                    Text(title)
+                        .font(.system(size: 12, weight: .black, design: .monospaced))
+                        .tracking(1)
+                    Spacer(minLength: 2)
+                    Text("\(count)")
+                        .font(.system(size: 13, weight: .black, design: .monospaced))
+                    Rectangle().fill(tint).frame(width: 7, height: 7)
+                }
+                .foregroundStyle(tint)
+
+                Text(subtitle)
+                    .font(.system(size: 8, weight: .black, design: .monospaced))
+                    .tracking(1)
+                    .foregroundStyle(.white.opacity(0.55))
+
+                Spacer(minLength: 2)
+
+                HStack(spacing: 4) {
+                    ForEach(0..<count, id: \.self) { i in
+                        // Enemy art is authored facing +x; battle hostiles
+                        // march left, so mirror their previews to match.
+                        Image(uiImage: UnitPixelArt.portraitImage(for: kinds[i].0))
+                            .interpolation(.none)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .scaleEffect(x: kinds[i].1 ? -1 : 1, y: 1)
+                            .padding(2)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .background(.black.opacity(0.55))
+                            .overlay(Rectangle().stroke(tint.opacity(0.18), lineWidth: 1))
+                    }
+                }
+                .frame(height: 46)
+
+                Spacer(minLength: 2)
+
+                HStack(spacing: 4) {
+                    Text(openLabel)
+                        .font(.system(size: 7, weight: .black, design: .monospaced))
+                        .tracking(1)
+                        .foregroundStyle(.white.opacity(0.45))
+                    Spacer(minLength: 2)
+                    PrepChevron(color: tint)
+                }
+            }
+            .padding(9)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .background(.black.opacity(0.55))
+            .clipShape(ShopPixelShape(cut: 10))
+            .overlay(ShopPixelShape(cut: 10).stroke(tint.opacity(0.45), lineWidth: 2))
+            .contentShape(Rectangle())
+        }
+        .simultaneousGesture(TapGesture().onEnded {
+            SoundEngine.shared.uiTap()
+        })
     }
 }
 
 // MARK: - Shared bits
 
-private struct PrepWideButton: View {
+private struct PrepSectionLabel: View {
     let title: String
     let color: Color
-    let dark: Bool
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "arrow.2.circlepath")
-                .font(.system(size: 11, weight: .black))
+            Rectangle().fill(color).frame(width: 8, height: 8)
             Text(title)
-                .font(.system(size: 11, weight: .black, design: .monospaced))
-                .tracking(1)
+                .font(.system(size: 10, weight: .black, design: .monospaced))
+                .tracking(2)
+                .foregroundStyle(color)
         }
-        .frame(maxWidth: .infinity, minHeight: 34)
-        .foregroundStyle(color)
-        .background(dark ? .black.opacity(0.75) : color)
-        .clipShape(ShopPixelShape(cut: 6))
-        .overlay(ShopPixelShape(cut: 6).stroke(color.opacity(0.7), lineWidth: 2))
-        .contentShape(Rectangle())
     }
 }
 
-private struct PrepChangeBadge: View {
+/// Small in-place swap affordance inside the hero / weapon headers.
+private struct PrepChangeChip: View {
     let color: Color
 
     var body: some View {
-        ZStack {
-            Rectangle().fill(color).frame(width: 24, height: 24)
-            Rectangle().stroke(.black, lineWidth: 2).frame(width: 24, height: 24)
-            Image(systemName: "arrow.2.circlepath")
-                .font(.system(size: 12, weight: .black))
-                .foregroundStyle(.black)
+        HStack(spacing: 3) {
+            PrepPixelIcon(glyph: .doubleChevron, color: color, size: 11)
+            Text("CHANGE")
+                .font(.system(size: 8, weight: .black, design: .monospaced))
+                .tracking(1)
         }
-        .shadow(color: .black.opacity(0.6), radius: 3)
+        .foregroundStyle(color)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(.black.opacity(0.7))
+        .clipShape(ShopPixelShape(cut: 5))
+        .overlay(ShopPixelShape(cut: 5).stroke(color.opacity(0.7), lineWidth: 1.5))
+        .contentShape(Rectangle())
     }
 }
 
-/// Compact dossier button (enemies / our army) for the mission panel.
-private struct PrepLibraryButton: View {
-    let title: String
-    let subtitle: String
-    let icon: String
-    let tint: Color
+private struct PrepChevron: View {
+    let color: Color
 
     var body: some View {
-        VStack(spacing: 2) {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: .black))
-                Text(title)
-                    .font(.system(size: 10, weight: .black, design: .monospaced))
-                    .tracking(0.5)
-                    .lineLimit(1)
+        HStack(spacing: 1.5) {
+            VStack(spacing: 1.5) {
+                ForEach(0..<5, id: \.self) { _ in
+                    color.frame(width: 5, height: 5)
+                }
             }
-            Text(subtitle)
-                .font(.system(size: 7, weight: .bold, design: .monospaced))
-                .tracking(0.5)
-                .opacity(0.72)
-                .lineLimit(1)
+            VStack(spacing: 1.5) {
+                Color.clear.frame(width: 5, height: 5)
+                Color.clear.frame(width: 5, height: 5)
+                color.frame(width: 5, height: 5)
+                Color.clear.frame(width: 5, height: 5)
+                Color.clear.frame(width: 5, height: 5)
+            }
         }
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity, minHeight: 38)
-        .background(.black.opacity(0.7))
-        .clipShape(ShopPixelShape(cut: 6))
-        .overlay(ShopPixelShape(cut: 6).stroke(tint.opacity(0.65), lineWidth: 2))
-        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Pixel icons
+
+private enum PrepPixelGlyph {
+    case shield, target, squad, doubleChevron
+
+    var rows: [String] {
+        switch self {
+        case .shield:
+            return [
+                ".######.",
+                "###..###",
+                "###..###",
+                "#......#",
+                "###..###",
+                ".######.",
+                "..####..",
+                "...##..."
+            ]
+        case .target:
+            return [
+                "...##...",
+                "...##...",
+                ".#....#.",
+                "#..##..#",
+                "#..##..#",
+                ".#....#.",
+                "...##...",
+                "...##..."
+            ]
+        case .squad:
+            return [
+                "..####..",
+                ".######.",
+                "########",
+                "########",
+                "##....##",
+                "##....##",
+                "..#..#..",
+                "..#..#.."
+            ]
+        case .doubleChevron:
+            return [
+                "........",
+                "..#..#..",
+                ".##..##.",
+                "##...##.",
+                ".##..##.",
+                "..#..#..",
+                "........",
+                "........"
+            ]
+        }
+    }
+}
+
+private struct PrepPixelIcon: View {
+    let glyph: PrepPixelGlyph
+    let color: Color
+    let size: CGFloat
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            let rows = glyph.rows
+            guard let columns = rows.first?.count, columns > 0, !rows.isEmpty else { return }
+            let cell = min(canvasSize.width / CGFloat(columns),
+                           canvasSize.height / CGFloat(rows.count))
+            let originX = (canvasSize.width - cell * CGFloat(columns)) / 2
+            let originY = (canvasSize.height - cell * CGFloat(rows.count)) / 2
+            for (rowIndex, row) in rows.enumerated() {
+                for (columnIndex, character) in row.enumerated() where character == "#" {
+                    let rect = CGRect(
+                        x: originX + CGFloat(columnIndex) * cell,
+                        y: originY + CGFloat(rowIndex) * cell,
+                        width: cell,
+                        height: cell
+                    )
+                    context.fill(Path(rect), with: .color(color))
+                }
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 }
 

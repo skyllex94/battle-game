@@ -26,7 +26,9 @@ enum Balance {
     /// + bone fields in the distance, crawling sand creatures.
     /// Duskfall Flats (Level 9): the sun going down over the desert —
     /// darker, deep indigo sky, stars out, ember-lit mesas.
-    enum BGTheme { case twilight, overgrown, bastion, dawn, sunscorch, sandhold, dunesea, oasis, duskdesert }
+    /// Moonveil Dunes (Level 10): the desert after dark — deep navy sky,
+    /// a huge cold moon, moonlit warm sand and glass-shard glitter.
+    enum BGTheme { case twilight, overgrown, bastion, dawn, sunscorch, sandhold, dunesea, oasis, duskdesert, nightdesert }
 
     // MARK: - Per-level battlefield layout
     struct LevelLayout {
@@ -69,6 +71,11 @@ enum Balance {
         /// (0 = never — the mech debuts late; Brutes and Reavers win
         /// ties against it).
         var mechEvery: Int
+        /// How many mechs leave the gate in one mech summon (1 = single).
+        /// Level 10 sends a pair, spaced by `mechPairDelay`.
+        var mechPairSize: Int = 1
+        /// Seconds between each mech in a pair.
+        var mechPairDelay: Double = 1.0
         // MARK: - Structure durability (matches the LevelDef dossier)
         var towerHP: CGFloat
         var baseHP: CGFloat
@@ -347,6 +354,39 @@ enum Balance {
         enemyHPScale: 1.2763
     )
 
+    /// Level 10 Moonveil Dunes: 10000pt desert under a cold moon, 3 towers
+    /// per side. Same straight sand field as the other dune lanes; the
+    /// night lives in the sky, ridge silhouettes and moonlit warm ground.
+    /// Flow holds Level 9's pressure, Mech walkers still every 4th
+    /// summon — but they now arrive as a pair, one beat apart, instead of
+    /// one at a time. Enemy HP ×1.3401 (+5% over Level 9, compounding).
+    /// Structure HP matches the dossier.
+    private static let layout10 = LevelLayout(
+        width: 10000,
+        playerBaseX: 220,
+        playerTowerXs: [820, 1620, 2420],
+        enemyTowerXs: [7350, 8150, 8950],
+        enemyBaseX: 9780,
+        heroSpawnX: 420,
+        platforms: [],
+        theme: .nightdesert,
+        flags: true,
+        alienBirds: false,
+        lushFlora: false,
+        summonInterval: 4.5,
+        doubleChance: 0.45,
+        maxEnemies: 20,
+        bruteEvery: 6,
+        reaverEvery: 3,
+        skitterEvery: 2,
+        jetEvery: 5,
+        mechEvery: 4,
+        mechPairSize: 2,
+        towerHP: 460,
+        baseHP: 1150,
+        enemyHPScale: 1.3401
+    )
+
     /// Active battlefield. GameScene sets this from the level id before
     /// building (init + didMove). Defaults to Level 1 (menu previews etc.).
     static var active = layout1
@@ -368,6 +408,7 @@ enum Balance {
         case 7: return layout7
         case 8: return layout8
         case 9: return layout9
+        case 10: return layout10
         default: return layout1
         }
     }
@@ -375,10 +416,10 @@ enum Balance {
     // MARK: - Level layout (points; follow `active`)
     static var levelWidth: CGFloat { active.width }
     static var groundTopY: CGFloat = 120        // y of the walkable surface
-    /// True on desert themes (dune sand + sand dressing; Level 7-9).
+    /// True on desert themes (dune sand + sand dressing; Level 7-10).
     static var dunes: Bool {
         let t = active.theme
-        return t == .dunesea || t == .oasis || t == .duskdesert
+        return t == .dunesea || t == .oasis || t == .duskdesert || t == .nightdesert
     }
     /// Walkable surface height at world x. Flat on every level, dunes
     /// included — straight fields everywhere.
@@ -446,8 +487,8 @@ enum Balance {
     /// Per-level via the layout table (matches each LevelDef dossier).
     static var towerHP: CGFloat { active.towerHP }
     static let towerRange: CGFloat = 750       // acquire targets within this distance
-    static let towerFireCooldown: Double = 1.1 // seconds between tower shots
-    static let towerDamage: CGFloat = 12
+    static let towerFireCooldown: Double = 1.1 // seconds between tower volleys
+    static let towerDamage: CGFloat = 12       // per bolt (3-bolt fan, like the HQ)
     static let towerBulletSpeed: CGFloat = 620
     static let towerBulletLife: Double = 2.2   // range ≈ speed × life, comfortably covers towerRange
     static let towerMuzzleHeight: CGFloat = 150 // muzzle above ground (near tower top)
@@ -473,6 +514,8 @@ enum Balance {
     static var skitterEvery: Int { active.skitterEvery }
     static var jetEvery: Int { active.jetEvery }
     static var mechEvery: Int { active.mechEvery }
+    static var mechPairSize: Int { active.mechPairSize }
+    static var mechPairDelay: Double { active.mechPairDelay }
     static let firstSummonDelay: Double = 5.0
     /// Raider (the classic marcher — Levels 1+). Base 40; Level 5+ scales
     /// via the layout's enemyHPScale (L5 = ×1.05, L6 = ×1.1025).

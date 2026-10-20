@@ -915,4 +915,161 @@ enum LevelDressing {
             placed += 1
         }
     }
+
+    // MARK: - Moonveil (Level 10, desert at night)
+
+    /// Moonlit desert dressing: dark glass shards, pale night-blooms with
+    /// breathing halos, black rocks with warm rims and drifting sand dust.
+    /// No fire on this stretch — the desert is lit by moonlight alone.
+    static func buildNightFlats(in world: SKNode) {
+        let gy = Balance.groundTopY
+        let width = Balance.levelWidth
+        // Moon wash over the turf band: faint and warm, so the sand still
+        // reads as the same desert as the previous levels.
+        let wash = SKSpriteNode(color: SKColor(red: 0.55, green: 0.45, blue: 0.38, alpha: 0.08),
+                                size: CGSize(width: width, height: 104))
+        wash.anchorPoint = CGPoint(x: 0, y: 1)
+        wash.position = CGPoint(x: 0, y: gy)
+        wash.zPosition = 2
+        world.addChild(wash)
+
+        var rng = DressingRNG(seed: 101010)
+
+        // Moon pools: long soft pale ellipses lying on the sand.
+        var placed = 0, guard_ = 0
+        while placed < 7, guard_ < 200 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 120...(width - 120))
+            guard isClear(x, margin: 150) else { continue }
+            let w = rng.cgFloat(in: 220...440)
+            let pool = SKShapeNode(ellipseOf: CGSize(width: w, height: rng.cgFloat(in: 20...34)))
+            pool.fillColor = SKColor(red: 0.95, green: 0.86, blue: 0.68, alpha: 0.05)
+            pool.strokeColor = .clear
+            pool.position = CGPoint(x: x, y: gy + 2)
+            pool.zPosition = 1
+            world.addChild(pool)
+            placed += 1
+        }
+
+        // Glass shards: thin pale crystals jutting out of the sand.
+        placed = 0; guard_ = 0
+        while placed < 16, guard_ < 300 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 70...(width - 70))
+            guard isClear(x, margin: 180) else { continue }
+            let cluster = SKNode()
+            cluster.position = CGPoint(x: x, y: gy + 2)
+            cluster.zPosition = 3
+            world.addChild(cluster)
+            let shards = rng.int(in: 2...4)
+            for s in 0..<shards {
+                let h = rng.cgFloat(in: 10...26)
+                let w = rng.cgFloat(in: 4...8)
+                let path = CGMutablePath()
+                path.move(to: CGPoint(x: -w / 2, y: 0))
+                path.addLine(to: CGPoint(x: w / 2, y: 0))
+                path.addLine(to: CGPoint(x: rng.cgFloat(in: -2...2), y: h))
+                path.closeSubpath()
+                let shard = SKShapeNode(path: path)
+                shard.fillColor = SKColor(red: 0.16, green: 0.13, blue: 0.15, alpha: 0.9)
+                shard.strokeColor = SKColor(red: 0.78, green: 0.66, blue: 0.50, alpha: 0.85)
+                shard.lineWidth = 1
+                shard.position = CGPoint(x: CGFloat(s) * 6 - CGFloat(shards) * 3, y: 0)
+                shard.zRotation = rng.cgFloat(in: -0.28...0.28)
+                cluster.addChild(shard)
+                let gleam = SKSpriteNode(color: SKColor(red: 1, green: 1, blue: 1, alpha: 0.9),
+                                         size: CGSize(width: 2, height: 2))
+                gleam.position = CGPoint(x: shard.position.x, y: h * 0.7)
+                cluster.addChild(gleam)
+                gleam.run(.repeatForever(.sequence([
+                    .fadeAlpha(to: 0.05, duration: rng.double(in: 1.2...2.4)),
+                    .fadeAlpha(to: 0.95, duration: rng.double(in: 1.2...2.4)),
+                ])))
+            }
+            placed += 1
+        }
+
+        // Night blooms: pale flowers with a cold breathing halo.
+        placed = 0; guard_ = 0
+        while placed < 12, guard_ < 300 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 60...(width - 60))
+            guard isClear(x) else { continue }
+            let bloom = SKNode()
+            bloom.position = CGPoint(x: x, y: gy + 2)
+            bloom.zPosition = 3
+            world.addChild(bloom)
+            let stems = rng.int(in: 2...3)
+            for s in 0..<stems {
+                let h = rng.cgFloat(in: 9...18)
+                let stem = SKSpriteNode(color: SKColor(red: 0.33, green: 0.36, blue: 0.25, alpha: 1),
+                                        size: CGSize(width: 2, height: h))
+                stem.anchorPoint = CGPoint(x: 0.5, y: 0)
+                stem.position = CGPoint(x: CGFloat(s) * 7 - CGFloat(stems) * 3, y: 0)
+                stem.zRotation = rng.cgFloat(in: -0.14...0.14)
+                bloom.addChild(stem)
+                let head = SKShapeNode(circleOfRadius: 4)
+                head.fillColor = SKColor(red: 0.98, green: 0.90, blue: 0.70, alpha: 1)
+                head.strokeColor = SKColor(red: 1.0, green: 0.97, blue: 0.86, alpha: 0.9)
+                head.lineWidth = 1
+                head.position = CGPoint(x: stem.position.x, y: h + 2)
+                bloom.addChild(head)
+                let halo = SKShapeNode(ellipseOf: CGSize(width: 34, height: 18))
+                halo.fillColor = SKColor(red: 1.0, green: 0.82, blue: 0.50, alpha: 0.12)
+                halo.strokeColor = .clear
+                halo.position = head.position
+                bloom.addChild(halo)
+                halo.run(.repeatForever(.sequence([
+                    .fadeAlpha(to: 0.35, duration: rng.double(in: 1.4...2.2)),
+                    .fadeAlpha(to: 1.0, duration: rng.double(in: 1.4...2.2)),
+                ])))
+            }
+            bloom.run(.repeatForever(.sequence([
+                .rotate(toAngle: 0.035, duration: 2.6), .rotate(toAngle: -0.035, duration: 2.6),
+            ])))
+            placed += 1
+        }
+
+        // Black rocks with cold moonlit rims.
+        placed = 0; guard_ = 0
+        while placed < 24, guard_ < 300 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 40...(width - 40))
+            guard isClear(x) else { continue }
+            let s = rng.cgFloat(in: 4...10)
+            let stone = SKSpriteNode(color: SKColor(red: 0.14, green: 0.11, blue: 0.10, alpha: 1),
+                                     size: CGSize(width: s, height: s * 0.7))
+            stone.position = CGPoint(x: x, y: Balance.groundY(at: x) + 2)
+            stone.zPosition = 2
+            world.addChild(stone)
+            let rim = SKSpriteNode(color: SKColor(red: 0.70, green: 0.60, blue: 0.48, alpha: 0.55),
+                                   size: CGSize(width: s, height: 1))
+            rim.position = CGPoint(x: 0, y: s * 0.35)
+            stone.addChild(rim)
+            placed += 1
+        }
+
+        // Drifting sand dust off the deck.
+        for i in 0..<20 {
+            let mote = SKSpriteNode(color: SKColor(red: 0.95, green: 0.88, blue: 0.72, alpha: 0.8),
+                                    size: CGSize(width: 3, height: 3))
+            let homeX = rng.cgFloat(in: 0...width)
+            mote.position = CGPoint(x: homeX, y: gy + rng.cgFloat(in: 4...60))
+            mote.zPosition = 3
+            world.addChild(mote)
+            let fly = SKAction.moveBy(x: rng.cgFloat(in: -28...28),
+                                      y: rng.cgFloat(in: 50...120),
+                                      duration: rng.double(in: 2.4...4.6))
+            let vanish = SKAction.sequence([
+                SKAction.wait(forDuration: 1.5),
+                SKAction.fadeOut(withDuration: 1.5),
+            ])
+            mote.run(.repeatForever(.sequence([
+                SKAction.wait(forDuration: Double(i) * 0.22),
+                SKAction.group([fly, vanish]),
+                SKAction.run { mote.position = CGPoint(x: homeX, y: gy + 4) },
+                SKAction.fadeIn(withDuration: 0.4),
+            ])))
+        }
+    }
 }

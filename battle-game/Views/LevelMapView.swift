@@ -2,8 +2,8 @@ import SwiftUI
 import Combine // Timer publisher for joystick pan integration
 
 /// Emra campaign map — the planet advanced humanity takes back across
-/// 15 regions. A three-page pixel world (verdant west → scorched midlands
-/// → frozen east + umbral core) with castles, blended biome transitions,
+/// 15 regions. A three-page pixel world (verdant west → dune seas →
+/// frozen east + umbral core) with castles, blended biome transitions,
 /// and a marching invasion route. Arrows page between regions; tap a lit
 /// node to open its briefing (LevelDetailView).
 struct LevelMapView: View {

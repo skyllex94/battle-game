@@ -324,6 +324,7 @@ final class GameScene: SKScene {
         if Balance.active.theme == .dunesea { LevelDressing.buildDuneSea(in: world) }
         if Balance.active.theme == .oasis { LevelDressing.buildOasisWaste(in: world) }
         if Balance.active.theme == .duskdesert { LevelDressing.buildDuskFlats(in: world) }
+        if Balance.active.theme == .nightdesert { LevelDressing.buildNightFlats(in: world) }
     }
 
     // MARK: - Layer 0: twilight ruins sky (static, factor 0.0)
@@ -800,10 +801,11 @@ final class GameScene: SKScene {
     }
 
     // MARK: - Tower combat: proximity targeting + firing toward enemies
-    /// Each alive tower fires a team-tinted bolt at its nearest enemy within
-    /// Balance.towerRange. Enemy tower targets the hero + player tower;
-    /// player tower targets the enemy tower (friendly fire off vs own hero).
-    /// Towers aim muzzle -> target center so shots arc flat toward each other.
+    /// Each alive tower fires a 3-bolt fan at its nearest enemy within
+    /// Balance.towerRange, matching the main HQ's spread. Enemy tower
+    /// targets the hero + player tower; player tower targets the enemy
+    /// tower (friendly fire off vs own hero). Towers aim muzzle -> target
+    /// center so shots arc flat toward each other.
     private func updateTowers(dt: TimeInterval) {
         for i in towers.indices {
             guard towers[i].alive else { continue }
@@ -871,19 +873,30 @@ final class GameScene: SKScene {
         tower.node.muzzlePosition()
     }
 
+    /// Three blasts from the tower muzzle, fanned around the target
+    /// direction exactly like the main HQ. Bolt team matches the firing
+    /// tower so hits land on the right side.
     private func fireTowerBolt(from tower: Tower, to target: CGPoint) {
         let muzzle = towerMuzzle(for: tower)
-        var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
-        let len = max(1, hypot(dir.dx, dir.dy))
-        dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
+        var baseDir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
+        let len = max(1, hypot(baseDir.dx, baseDir.dy))
+        baseDir = CGVector(dx: baseDir.dx / len, dy: baseDir.dy / len)
         SoundEngine.shared.towerFire(at: muzzle.x)
-        let bolt = ProjectileFactory.makeTowerBolt(team: tower.team)
-        bolt.position = muzzle
-        bolt.zRotation = atan2(dir.dy, dir.dx)
-        world.addChild(bolt)
-        projectiles.append(Projectile(node: bolt, dir: dir, life: Balance.towerBulletLife,
-                                      speed: Balance.towerBulletSpeed, damage: Balance.towerDamage,
-                                      team: tower.team))
+        let baseAngle = atan2(baseDir.dy, baseDir.dx)
+        let count = Balance.baseFanCount
+        for k in 0..<count {
+            // Symmetric fan: e.g. 3 bolts at -spread, 0, +spread.
+            let offset = (CGFloat(k) - CGFloat(count - 1) / 2) * Balance.baseFanSpread
+            let a = baseAngle + offset
+            let dir = CGVector(dx: cos(a), dy: sin(a))
+            let bolt = ProjectileFactory.makeTowerBolt(team: tower.team)
+            bolt.position = muzzle
+            bolt.zRotation = a
+            world.addChild(bolt)
+            projectiles.append(Projectile(node: bolt, dir: dir, life: Balance.towerBulletLife,
+                                          speed: Balance.towerBulletSpeed, damage: Balance.towerDamage,
+                                          team: tower.team))
+        }
         let flash = ProjectileFactory.makeMuzzleFlash()
         flash.position = muzzle
         world.addChild(flash)
@@ -957,6 +970,20 @@ final class GameScene: SKScene {
                     }
                     summonEnemy(from: bases[i], slot: slot, kind: kind)
                     slot += 1
+                    // Mech pairs: the partner follows the first walker out
+                    // of the gate after a short delay, never side-by-side.
+                    if kind == .mech, Balance.mechPairSize > 1 {
+                        let home = bases[i]
+                        for extra in 0..<(Balance.mechPairSize - 1) {
+                            let offset = slot + extra
+                            DispatchQueue.main.asyncAfter(deadline: .now()
+                                + Balance.mechPairDelay * Double(extra + 1)) { [weak self] in
+                                guard let self, self.enemies.count < Balance.maxEnemies else { return }
+                                self.summonEnemy(from: home, slot: offset, kind: .mech)
+                            }
+                        }
+                        slot += Balance.mechPairSize - 1
+                    }
                     // Jets fly in as a pair: the second follows the first
                     // out of the gate one beat later.
                     if kind == .jet {

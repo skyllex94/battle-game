@@ -18,7 +18,8 @@ struct LevelDef: Identifiable, Codable {
 
 struct CampaignData {
     /// The 15-region takeback of Emra, west → east: verdant woods give way
-    /// to dunes, then volcanic wastes, then frost, then the umbral core.
+    /// to white sands and dune seas, then a moonlit desert night, then
+    /// frost, then the umbral core.
     /// Castles punctuate each biome (ids 3 / 6 / 9 / 11 / 15).
     static let levels: [LevelDef] = [
         LevelDef(id: 1, name: "Verdant Landing", subtitle: "First push — learn the lane",
@@ -48,8 +49,8 @@ struct CampaignData {
         LevelDef(id: 9, name: "Duskfall Flats", subtitle: "Hold out through sundown",
                  briefing: "The sun is going down over the flats and the machines are coming with it — something heavy, walking, and shooting in bursts. Objective: survive the dusk and destroy the enemy HQ.",
                  mapArtName: "MapBG", enemyWaves: 9, towerHP: 440, baseHP: 1100),
-        LevelDef(id: 10, name: "Frostbite Approach", subtitle: "Into the white",
-                 briefing: "Snow blind, wind screaming, steel brittle as glass. Bulwark leads into the white. Objective: push the Approach and destroy the HQ.",
+        LevelDef(id: 10, name: "Moonveil Dunes", subtitle: "Cross the moonlit waste",
+                 briefing: "The desert turns to shadow under a cold moon — glass dust glitters on the wind and every dune has a shadow. Beyond it, the first frost waits. Objective: cross the Moonveil Dunes and destroy the enemy HQ.",
                  mapArtName: "MapBG", enemyWaves: 9, towerHP: 460, baseHP: 1150),
         LevelDef(id: 11, name: "Whiteout Redoubt", subtitle: "Siege the ice fortress",
                  briefing: "An ice fortress inside a storm that never ends. Siege it fast or freeze slow. Objective: crack Whiteout Redoubt.",

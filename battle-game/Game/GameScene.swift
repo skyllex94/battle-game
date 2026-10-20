@@ -390,8 +390,9 @@ final class GameScene: SKScene {
         let base = BaseNode(team: team)
         base.position = CGPoint(x: x, y: Balance.groundY(at: x))
         world.addChild(base)
-        bases.append(Base(node: base, team: team, hp: Balance.baseHP,
-                          maxHP: Balance.baseHP, cooldown: Balance.baseFireCooldown,
+        let hp = Balance.baseHealth(for: team, levelId: levelId)
+        bases.append(Base(node: base, team: team, hp: hp,
+                          maxHP: hp, cooldown: Balance.baseFireCooldown,
                           summonTimer: Balance.firstSummonDelay))
     }
 
@@ -408,8 +409,9 @@ final class GameScene: SKScene {
         // Stagger first shots round-robin so the line doesn't volley
         // on the same frame.
         let stagger = Double(towers.count) * Balance.towerFireCooldown / 4
-        towers.append(Tower(node: tower, team: team, hp: Balance.towerHP,
-                            maxHP: Balance.towerHP, cooldown: stagger))
+        let hp = Balance.towerHealth(for: team, levelId: levelId)
+        towers.append(Tower(node: tower, team: team, hp: hp,
+                            maxHP: hp, cooldown: stagger))
     }
 
     // MARK: - Playfield: hero
@@ -970,6 +972,12 @@ final class GameScene: SKScene {
                     }
                     summonEnemy(from: bases[i], slot: slot, kind: kind)
                     slot += 1
+                    // Rank-and-file raiders march in twos: double the basic
+                    // marcher pressure without changing elite cadence.
+                    if kind == .raider, enemies.count < Balance.maxEnemies {
+                        summonEnemy(from: bases[i], slot: slot, kind: .raider)
+                        slot += 1
+                    }
                     // Mech pairs: the partner follows the first walker out
                     // of the gate after a short delay, never side-by-side.
                     if kind == .mech, Balance.mechPairSize > 1 {
@@ -1488,13 +1496,17 @@ final class GameScene: SKScene {
                 a.animateMarch(dt: dt, advancing: false)
                 if a.fireCooldown <= 0 {
                     a.fireCooldown = a.kind.fireCooldown
-                    fireAllyBolt(from: a, to: aim)
-                    if a.kind == .truck {
-                        // 2-round burst: the second shell follows right behind.
-                        a.run(.sequence([.wait(forDuration: 0.12), .run { [weak self, weak a] in
-                            guard let self, let a, a.alive else { return }
-                            self.fireAllyBolt(from: a, to: aim)
-                        }]))
+                    if a.kind == .bombard {
+                        fireAllyBomb(from: a, to: aim)
+                    } else {
+                        fireAllyBolt(from: a, to: aim)
+                        if a.kind == .truck {
+                            // 2-round burst: the second shell follows right behind.
+                            a.run(.sequence([.wait(forDuration: 0.12), .run { [weak self, weak a] in
+                                guard let self, let a, a.alive else { return }
+                                self.fireAllyBolt(from: a, to: aim)
+                            }]))
+                        }
                     }
                 }
             }
@@ -1503,9 +1515,9 @@ final class GameScene: SKScene {
         allies.removeAll { !$0.alive || $0.marchedOff }
     }
 
-    /// Trucks kick up dust behind the rear wheel while rolling.
+    /// Wheeled vehicles kick up dust behind the rear wheel while rolling.
     private func truckDust(_ a: AllyNode, dt: TimeInterval) {
-        guard a.kind == .truck else { return }
+        guard a.kind == .truck || a.kind == .bombard else { return }
         a.dustTimer -= dt
         guard a.dustTimer <= 0 else { return }
         a.dustTimer = 0.22
@@ -1536,6 +1548,45 @@ final class GameScene: SKScene {
         world.addChild(flash)
     }
 
+    /// Lobbed mortar shell: solves a gravity arc that lands on the target,
+    /// then detonates with splash via Projectile.blast. One shell per shot.
+    private func fireAllyBomb(from a: AllyNode, to target: CGPoint) {
+        let muzzle = a.muzzle()
+        let dx = target.x - muzzle.x
+        let dy = target.y - muzzle.y
+        let g = Balance.bombardGravity
+        // Longer shots stay airborne longer; short shots still pop up into
+        // a readable arc instead of skimming the deck.
+        let flight = min(1.9, max(0.65, abs(dx) / 430))
+        let vx = dx / flight
+        let vy = (dy + 0.5 * g * flight * flight) / flight
+        let speed = max(1, hypot(vx, vy))
+        let dir = CGVector(dx: vx / speed, dy: vy / speed)
+
+        SoundEngine.shared.allyFire(at: muzzle.x)
+        let bomb = ProjectileFactory.makeMortarBomb()
+        bomb.position = muzzle
+        bomb.zRotation = atan2(dir.dy, dir.dx)
+        bomb.setScale(1.05)
+        world.addChild(bomb)
+
+        var shell = Projectile(node: bomb, dir: dir,
+                               life: TimeInterval(flight) + 1.0,
+                               speed: speed,
+                               damage: a.kind.damage,
+                               team: .player)
+        shell.gravity = g
+        shell.blast = Balance.bombardBlast
+        shell.fuse = TimeInterval(flight) + 0.15
+        shell.trail = .smoke
+        projectiles.append(shell)
+
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.setScale(1.15)
+        flash.position = muzzle
+        world.addChild(flash)
+    }
+
     /// Enemy-bolt vs player army. Returns true when it struck an ally.
     private func hitAlly(at pt: CGPoint, amount: CGFloat) -> Bool {
         for a in allies where a.alive {
@@ -1555,7 +1606,7 @@ final class GameScene: SKScene {
         a.hp = max(0, a.hp - amount)
         a.refreshHPBar()
         if !a.alive {
-            if a.kind == .truck {
+            if a.kind == .truck || a.kind == .bombard {
                 // Armor kill: full vehicle explosion (flash + fire + smoke
                 // + debris + sparks) instead of the trooper puff.
                 let boom = ProjectileFactory.makeTruckExplosion()

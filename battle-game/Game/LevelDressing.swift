@@ -1071,5 +1071,111 @@ enum LevelDressing {
                 SKAction.fadeIn(withDuration: 0.4),
             ])))
         }
+
+        // Sunforge extras (Level 11): low iron-slag heaps with ember seams
+        // and a few sparks rising off the works. Sparse by design — the
+        // field is still the same moonlit desert.
+        if Balance.forgeNight {
+            placed = 0; guard_ = 0
+            while placed < 6, guard_ < 240 {
+                guard_ += 1
+                let x = rng.cgFloat(in: 120...(width - 120))
+                guard isClear(x, margin: 170) else { continue }
+                let w = rng.cgFloat(in: 34...66)
+                let h = rng.cgFloat(in: 12...22)
+                let heap = SKShapeNode(ellipseOf: CGSize(width: w, height: h))
+                heap.fillColor = SKColor(red: 0.10, green: 0.08, blue: 0.09, alpha: 0.95)
+                heap.strokeColor = SKColor(red: 0.45, green: 0.22, blue: 0.12, alpha: 0.8)
+                heap.lineWidth = 1
+                heap.position = CGPoint(x: x, y: gy + 3)
+                heap.zPosition = 3
+                world.addChild(heap)
+                for _ in 0..<3 {
+                    let seam = SKSpriteNode(color: SKColor(red: 1.0, green: 0.48,
+                                                           blue: 0.14, alpha: 0.85),
+                                            size: CGSize(width: rng.cgFloat(in: 3...8),
+                                                         height: 1))
+                    seam.position = CGPoint(x: x + rng.cgFloat(in: -w * 0.35...w * 0.35),
+                                            y: gy + 3 + rng.cgFloat(in: 1...h * 0.45))
+                    seam.zPosition = 4
+                    world.addChild(seam)
+                    seam.run(.repeatForever(.sequence([
+                        .fadeAlpha(to: 0.3, duration: rng.double(in: 1.0...2.0)),
+                        .fadeAlpha(to: 0.95, duration: rng.double(in: 1.0...2.0)),
+                    ])))
+                }
+                placed += 1
+            }
+
+            for i in 0..<12 {
+                let homeX = rng.cgFloat(in: 80...(width - 80))
+                let spark = SKSpriteNode(color: SKColor(red: 1.0, green: 0.55,
+                                                        blue: 0.18, alpha: 0.9),
+                                         size: CGSize(width: 2, height: 2))
+                spark.position = CGPoint(x: homeX, y: gy + rng.cgFloat(in: 4...26))
+                spark.zPosition = 4
+                world.addChild(spark)
+                let rise = SKAction.moveBy(x: rng.cgFloat(in: -14...14),
+                                           y: rng.cgFloat(in: 46...110),
+                                           duration: rng.double(in: 2.0...3.6))
+                let vanish = SKAction.sequence([
+                    SKAction.wait(forDuration: 1.0),
+                    SKAction.fadeOut(withDuration: 1.2),
+                ])
+                spark.run(.repeatForever(.sequence([
+                    SKAction.wait(forDuration: Double(i) * 0.2),
+                    SKAction.group([rise, vanish]),
+                    SKAction.run { spark.position = CGPoint(x: homeX, y: gy + 4) },
+                    SKAction.fadeIn(withDuration: 0.35),
+                ])))
+            }
+        }
+
+        // Sirocco Canyon extras (Level 12): big fallen butte chunks and
+        // pale dry-wash gravel. The moonlit sand lane itself is unchanged.
+        if Balance.canyonNight {
+            placed = 0; guard_ = 0
+            while placed < 9, guard_ < 280 {
+                guard_ += 1
+                let x = rng.cgFloat(in: 90...(width - 90))
+                guard isClear(x, margin: 160) else { continue }
+                let w = rng.cgFloat(in: 18...40)
+                let h = rng.cgFloat(in: 14...30)
+                let path = CGMutablePath()
+                path.move(to: CGPoint(x: -w / 2, y: 0))
+                path.addLine(to: CGPoint(x: -w * 0.36, y: h * 0.7))
+                path.addLine(to: CGPoint(x: -w * 0.08, y: h))
+                path.addLine(to: CGPoint(x: w * 0.38, y: h * 0.82))
+                path.addLine(to: CGPoint(x: w / 2, y: 0))
+                path.closeSubpath()
+                let boulder = SKShapeNode(path: path)
+                boulder.fillColor = SKColor(red: 0.13, green: 0.10, blue: 0.11, alpha: 1)
+                boulder.strokeColor = SKColor(red: 0.62, green: 0.52, blue: 0.42, alpha: 0.75)
+                boulder.lineWidth = 1
+                boulder.position = CGPoint(x: x, y: gy + 2)
+                boulder.zPosition = 3
+                world.addChild(boulder)
+                let rim = SKSpriteNode(color: SKColor(red: 0.86, green: 0.73, blue: 0.56, alpha: 0.75),
+                                       size: CGSize(width: w * 0.45, height: 1))
+                rim.position = CGPoint(x: w * 0.10, y: h * 0.84)
+                boulder.addChild(rim)
+                placed += 1
+            }
+
+            // Dry-wash gravel: small pale pebble clusters in the lane.
+            for _ in 0..<11 {
+                let x = rng.cgFloat(in: 60...(width - 60))
+                for _ in 0..<rng.int(in: 3...5) {
+                    let peb = SKSpriteNode(color: SKColor(red: 0.72, green: 0.63, blue: 0.50,
+                                                          alpha: 0.8),
+                                           size: CGSize(width: rng.cgFloat(in: 2...4),
+                                                        height: rng.cgFloat(in: 2...3)))
+                    peb.position = CGPoint(x: x + rng.cgFloat(in: -16...16),
+                                           y: gy + 2 + rng.cgFloat(in: 0...3))
+                    peb.zPosition = 3
+                    world.addChild(peb)
+                }
+            }
+        }
     }
 }

@@ -28,6 +28,9 @@ enum Balance {
     /// darker, deep indigo sky, stars out, ember-lit mesas.
     /// Moonveil Dunes (Level 10): the desert after dark — deep navy sky,
     /// a huge cold moon, moonlit warm sand and glass-shard glitter.
+    /// Sunforge Redoubt (Level 11): the same night desert with a distant
+    /// foundry burning on the horizon. Sirocco Canyon (Level 12): that
+    /// night desert squeezed between moonlit canyon walls.
     enum BGTheme { case twilight, overgrown, bastion, dawn, sunscorch, sandhold, dunesea, oasis, duskdesert, nightdesert }
 
     // MARK: - Per-level battlefield layout
@@ -75,13 +78,19 @@ enum Balance {
         /// Level 10 sends a pair, spaced by `mechPairDelay`.
         var mechPairSize: Int = 1
         /// Seconds between each mech in a pair.
-        var mechPairDelay: Double = 1.0
+        var mechPairDelay: Double = 2.0
         // MARK: - Structure durability (matches the LevelDef dossier)
         var towerHP: CGFloat
         var baseHP: CGFloat
         /// Enemy marcher HP multiplier (1.0 = base stats; Level 5+ = 1.05,
         /// later levels stack further). Applies to raider/brute/reaver.
         var enemyHPScale: CGFloat
+        /// Night-desert variation: distant foundry glow, chimney smoke and
+        /// ember drift over the usual moonlit sand (Level 11).
+        var forgeNight: Bool = false
+        /// Night-desert variation: tall canyon buttes, layered rock walls
+        /// and tumbled boulders framing the moonlit lane (Level 12).
+        var canyonNight: Bool = false
     }
 
     /// Level 1: the original 5200pt Twilight lane, 2 towers per side.
@@ -387,6 +396,74 @@ enum Balance {
         enemyHPScale: 1.3401
     )
 
+    /// Level 11 Sunforge Redoubt: 11600pt — the widest lane yet — and the
+    /// first with a 4th tower per side. Still the moonlit desert, but a
+    /// distant foundry burns on the horizon: warm chimney smoke, ember
+    /// drift and iron-slag dressing over the same sand. Flow steps up from
+    /// Level 10 (slightly faster summons, cap 22); Mech pairs continue.
+    /// Enemy HP ×1.4071 (+5% over Level 10, compounding).
+    /// Structure HP matches the dossier.
+    private static let layout11 = LevelLayout(
+        width: 11600,
+        playerBaseX: 220,
+        playerTowerXs: [820, 1620, 2420, 3220],
+        enemyTowerXs: [8150, 8950, 9750, 10550],
+        enemyBaseX: 11380,
+        heroSpawnX: 420,
+        platforms: [],
+        theme: .nightdesert,
+        flags: true,
+        alienBirds: false,
+        lushFlora: false,
+        summonInterval: 4.3,
+        doubleChance: 0.46,
+        maxEnemies: 22,
+        bruteEvery: 6,
+        reaverEvery: 3,
+        skitterEvery: 2,
+        jetEvery: 5,
+        mechEvery: 4,
+        mechPairSize: 2,
+        towerHP: 400,
+        baseHP: 1000,
+        enemyHPScale: 1.4071,
+        forgeNight: true
+    )
+
+    /// Level 12 Sirocco Canyon: 12200pt night desert — the widest lane so
+    /// far — with the same 4-tower line per side. The open dunes narrow
+    /// into a moonlit canyon: tall buttes and layered rock walls replace
+    /// the low ridgelines, and tumbled boulders litter the sand. Summons
+    /// are a touch hotter than Level 11 (cap 24); Mech pairs continue.
+    /// Enemy HP ×1.4775 (+5% over Level 11, compounding).
+    /// Structure HP matches the dossier.
+    private static let layout12 = LevelLayout(
+        width: 12200,
+        playerBaseX: 220,
+        playerTowerXs: [820, 1620, 2420, 3220],
+        enemyTowerXs: [8750, 9550, 10350, 11150],
+        enemyBaseX: 11980,
+        heroSpawnX: 420,
+        platforms: [],
+        theme: .nightdesert,
+        flags: true,
+        alienBirds: false,
+        lushFlora: false,
+        summonInterval: 4.1,
+        doubleChance: 0.48,
+        maxEnemies: 24,
+        bruteEvery: 6,
+        reaverEvery: 3,
+        skitterEvery: 2,
+        jetEvery: 5,
+        mechEvery: 4,
+        mechPairSize: 2,
+        towerHP: 420,
+        baseHP: 1060,
+        enemyHPScale: 1.4775,
+        canyonNight: true
+    )
+
     /// Active battlefield. GameScene sets this from the level id before
     /// building (init + didMove). Defaults to Level 1 (menu previews etc.).
     static var active = layout1
@@ -397,6 +474,38 @@ enum Balance {
     /// whenever SwiftUI re-renders, and a stale pin would swap the whole
     /// battlefield mid-fight).
     static var battleOwnsLayout = false
+
+    /// Enemy structure durability at Level 1. Every campaign level after
+    /// that adds 10%, compounding (L2 ×1.10, L3 ×1.21 …).
+    static let startingTowerHP: CGFloat = 200
+    static let startingBaseHP: CGFloat = 500
+    static let enemyStructureHPPerLevel: CGFloat = 0.10
+
+    static func enemyStructureHPMultiplier(for levelId: Int) -> CGFloat {
+        let steps = CGFloat(max(0, levelId - 1))
+        return CGFloat(pow(Double(1 + enemyStructureHPPerLevel), Double(steps)))
+    }
+
+    /// Enemy tower HP for a level (10% growth per level from the start).
+    /// Used by the battle and the briefing/prep dossiers.
+    static func enemyTowerHealth(forLevel levelId: Int) -> CGFloat {
+        startingTowerHP * enemyStructureHPMultiplier(for: levelId)
+    }
+
+    /// Enemy main-base HP for a level (same 10% growth as the towers).
+    static func enemyBaseHealth(forLevel levelId: Int) -> CGFloat {
+        startingBaseHP * enemyStructureHPMultiplier(for: levelId)
+    }
+
+    /// Structure HP for a team. Enemy structures scale with the campaign
+    /// level; player structures keep the layout's durable values.
+    static func towerHealth(for team: Team, levelId: Int) -> CGFloat {
+        team == .enemy ? enemyTowerHealth(forLevel: levelId) : layout(for: levelId).towerHP
+    }
+
+    static func baseHealth(for team: Team, levelId: Int) -> CGFloat {
+        team == .enemy ? enemyBaseHealth(forLevel: levelId) : layout(for: levelId).baseHP
+    }
 
     static func layout(for levelId: Int) -> LevelLayout {
         switch levelId {
@@ -409,14 +518,18 @@ enum Balance {
         case 8: return layout8
         case 9: return layout9
         case 10: return layout10
+        case 11: return layout11
+        case 12: return layout12
         default: return layout1
         }
     }
 
     // MARK: - Level layout (points; follow `active`)
     static var levelWidth: CGFloat { active.width }
+    static var forgeNight: Bool { active.forgeNight }
+    static var canyonNight: Bool { active.canyonNight }
     static var groundTopY: CGFloat = 120        // y of the walkable surface
-    /// True on desert themes (dune sand + sand dressing; Level 7-10).
+    /// True on desert themes (dune sand + sand dressing; Levels 7-12).
     static var dunes: Bool {
         let t = active.theme
         return t == .dunesea || t == .oasis || t == .duskdesert || t == .nightdesert
@@ -522,6 +635,10 @@ enum Balance {
     static var enemyHP: CGFloat { 40 * active.enemyHPScale }
     static let enemySpeed: CGFloat = 120
     static let killReward: Int = 100           // Unity KillEnemy gold
+    /// Global cut to enemy-kill bounties. 0.6 keeps 60% of base reward
+    /// (i.e. about 40% less money from enemy units). Bounties then round
+    /// down to the nearest 10 (42 -> 40, 105 -> 100).
+    static let enemyRewardScale: CGFloat = 0.6
     // Ranged troopers: advance, stop at shooting range, fire bolts.
     static let enemySightRange: CGFloat = 550  // notice the hero this far away
     static let enemyShootRange: CGFloat = 380  // stop + shoot this close to target
@@ -649,6 +766,18 @@ enum Balance {
     static let truckFireCooldown: Double = 1.2
     static let truckRange: CGFloat = 420
     static let truckSightRange: CGFloat = 620
+    // Bombard: Level 11 mortar carrier. Slow, lightly armored chassis with
+    // a top-mounted launcher. Outranges every other ally and lobs one bomb
+    // per shot; the shell falls in a gravity arc and detonates in a splash.
+    static let bombardCost: Int = 450
+    static let bombardHP: CGFloat = 210
+    static let bombardSpeed: CGFloat = 62
+    static let bombardDamage: CGFloat = 64
+    static let bombardFireCooldown: Double = 3.4
+    static let bombardRange: CGFloat = 780
+    static let bombardSightRange: CGFloat = 940
+    static let bombardBlast: CGFloat = 92
+    static let bombardGravity: CGFloat = 980
 
     // MARK: - Parallax scroll factors (ported from your Unity Parallaxing.cs idea:
     // background moves slower than the camera; factor 1.0 = locked to world)

@@ -138,15 +138,19 @@ enum EnemyKind: Int, CaseIterable {
         }
     }
 
+    /// Bounty paid when this unit dies, after the global reward cut.
     var reward: Int {
+        let base: Int
         switch self {
-        case .raider: return Balance.killReward
-        case .brute: return Balance.bruteReward
-        case .reaver: return Balance.reaverReward
-        case .skitter: return Balance.skitterReward
-        case .jet: return Balance.jetReward
-        case .mech: return Balance.mechReward
+        case .raider: base = Balance.killReward
+        case .brute: base = Balance.bruteReward
+        case .reaver: base = Balance.reaverReward
+        case .skitter: base = Balance.skitterReward
+        case .jet: base = Balance.jetReward
+        case .mech: base = Balance.mechReward
         }
+        let scaled = Int((CGFloat(base) * Balance.enemyRewardScale).rounded(.down))
+        return (scaled / 10) * 10
     }
 
     /// Pixel-art kind used for library + briefing portraits.

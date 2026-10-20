@@ -120,6 +120,58 @@ final class TowerNode: SKNode {
     /// Hitbox size for projectile tests (matches the old ~124x195 box).
     var hitSize: CGSize { CGSize(width: 124, height: 195) }
 
+    /// Static pixel-art portrait of the in-battle tower (procedural base +
+    /// turret). Enemy towers face left, matching their home angle. Cached
+    /// because SwiftUI re-evaluates the intel card while the battle is paused.
+    static func previewImage(for team: Team) -> UIImage {
+        switch team {
+        case .player: return playerPreviewImage
+        case .enemy: return enemyPreviewImage
+        case .neutral: return neutralPreviewImage
+        }
+    }
+
+    private static let playerPreviewImage = makePreviewImage(for: .player)
+    private static let enemyPreviewImage = makePreviewImage(for: .enemy)
+    private static let neutralPreviewImage = makePreviewImage(for: .neutral)
+
+    private static func makePreviewImage(for team: Team) -> UIImage {
+        let palette = palette(for: team)
+        let baseImg = UIImage(cgImage: makeBaseTexture(palette: palette).cgImage())
+        let headImg = UIImage(cgImage: makeHeadTexture(palette: palette).cgImage())
+
+        let baseH: CGFloat = 190
+        let baseW = baseH * baseImg.size.width / baseImg.size.height
+        let headScale: CGFloat = 3.4
+        let headW = headImg.size.width * headScale
+        let headH = headImg.size.height * headScale
+        let pivotX = 7.0 / headImg.size.width * headW
+        let mountY: CGFloat = 150
+        let groundInset: CGFloat = 8
+        let width = max(baseW, headW) + 16
+        let height = baseH + groundInset + 12
+        let groundY = height - groundInset
+        let centerX = width / 2
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: CGSize(width: width, height: height),
+                                       format: format).image { ctx in
+            let cg = ctx.cgContext
+            cg.interpolationQuality = .none
+            baseImg.draw(in: CGRect(x: (width - baseW) / 2,
+                                    y: groundY - baseH,
+                                    width: baseW, height: baseH))
+            cg.saveGState()
+            cg.translateBy(x: centerX, y: groundY - mountY)
+            if team == .enemy { cg.rotate(by: .pi) }
+            headImg.draw(in: CGRect(x: -pivotX, y: -headH / 2,
+                                    width: headW, height: headH))
+            cg.restoreGState()
+        }
+    }
+
     // MARK: - Per-frame
 
     /// Ease the turret toward its target (or idle-scan), pulse the beacon,

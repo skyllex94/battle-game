@@ -93,6 +93,7 @@ enum TwilightRuinsBG {
         let oasis = theme == .oasis
         let duskdesert = theme == .duskdesert
         let nightdesert = theme == .nightdesert
+        let canyonNight = Balance.canyonNight
         // Golden desert day: bright sky, harsh sun, washed-out stars.
         // Duskfall: the sun is going down — deep indigo, stars coming out.
         // Moonveil: full night — navy sky, a huge cold moon, dense stars.
@@ -304,7 +305,13 @@ enum TwilightRuinsBG {
             for x in 0..<64 {
                 let edge = abs(CGFloat(x) - 32) / 32 // 0 center -> 1 edge
                 if nightdesert {
-                    cg.setFillColor(UIColor(red: 0.48, green: 0.60, blue: 0.92, alpha: 0.24 * (1 - edge)).cgColor)
+                    if canyonNight {
+                        cg.setFillColor(UIColor(red: 0.58, green: 0.44, blue: 0.62,
+                                                alpha: 0.20 * (1 - edge)).cgColor)
+                    } else {
+                        cg.setFillColor(UIColor(red: 0.48, green: 0.60, blue: 0.92,
+                                                alpha: 0.24 * (1 - edge)).cgColor)
+                    }
                 } else if duskdesert {
                     cg.setFillColor(UIColor(red: 1, green: 0.45, blue: 0.18, alpha: 0.40 * (1 - edge)).cgColor)
                 } else if oasis {
@@ -426,7 +433,11 @@ enum TwilightRuinsBG {
             } else if Balance.active.theme == .duskdesert {
                 drawDuskRange(cg, PW: PW, PH: PH)
             } else if Balance.active.theme == .nightdesert {
-                drawNightRange(cg, PW: PW, PH: PH)
+                if Balance.canyonNight {
+                    drawNightCanyonRange(cg, PW: PW, PH: PH)
+                } else {
+                    drawNightRange(cg, PW: PW, PH: PH, forge: Balance.forgeNight)
+                }
             } else {
             // Back range: soft wide peaks.
             let back: [(x: Int, peak: Int, half: Int)] = [
@@ -609,6 +620,22 @@ enum TwilightRuinsBG {
         veil.position = pano.position
         veil.zPosition = 2
         layer.addChild(veil)
+
+        // Sunforge breathing glow: a low warm bloom behind the foundry
+        // skyline. Subtle enough to keep the moonlit desert mood.
+        if theme0 == .nightdesert, Balance.forgeNight {
+            let forgeGlow = SKShapeNode(ellipseOf: CGSize(width: 230, height: 96))
+            forgeGlow.fillColor = SKColor(red: 1.0, green: 0.46, blue: 0.14, alpha: 0.12)
+            forgeGlow.strokeColor = .clear
+            forgeGlow.position = CGPoint(x: pano.position.x + panoW * (634.0 / 800.0),
+                                         y: -sceneSize.height * 0.18)
+            forgeGlow.zPosition = 3
+            layer.addChild(forgeGlow)
+            forgeGlow.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.55, duration: 2.6),
+                .fadeAlpha(to: 1.0, duration: 2.6),
+            ])))
+        }
 
         // Sandhold shadow flyers: dark glider silhouettes circling the far
         // range — slow wing beats, glide + bob loops, looping forever.
@@ -985,8 +1012,9 @@ enum TwilightRuinsBG {
 
     /// Moonveil far sheet: moonlit dune ridges receding under the moon,
     /// dark mesa blocks, a broken ruin arch with a dim amber window, and
-    /// dead scrub along the sand line.
-    private static func drawNightRange(_ cg: CGContext, PW: Int, PH: Int) {
+    /// dead scrub along the sand line. `forge` adds a distant foundry
+    /// skyline (Level 11): chimneys, smoke and ember-lit windows.
+    private static func drawNightRange(_ cg: CGContext, PW: Int, PH: Int, forge: Bool) {
         let backDune = UIColor(red: 0.30, green: 0.22, blue: 0.23, alpha: 1)
         let backRim = UIColor(red: 0.86, green: 0.73, blue: 0.55, alpha: 1)
         let mesa = UIColor(red: 0.17, green: 0.12, blue: 0.15, alpha: 1)
@@ -1039,6 +1067,52 @@ enum TwilightRuinsBG {
         // Moonlit right edges.
         fill(cg, rx + 14, ry, 2, 52, mesaRim.withAlpha(0.8))
         fill(cg, rx + 98, ry, 2, 38, mesaRim.withAlpha(0.7))
+        // Sunforge skyline (Level 11): a distant works burning through the
+        // night. Four stacks, a sawtooth hall and ember windows.
+        if forge {
+            let forgeBody = UIColor(red: 0.13, green: 0.10, blue: 0.12, alpha: 1)
+            let forgeDark = UIColor(red: 0.08, green: 0.06, blue: 0.08, alpha: 1)
+            let forgeRim = UIColor(red: 0.72, green: 0.42, blue: 0.24, alpha: 1)
+            let ember = UIColor(red: 1.0, green: 0.52, blue: 0.16, alpha: 1)
+            let smoke = UIColor(red: 0.24, green: 0.18, blue: 0.20, alpha: 1)
+
+            // Smoke first, so the haze sits behind the buildings.
+            for (cx, top) in [(556, 118), (596, 104), (642, 112), (688, 124)] {
+                let colH = 186 - top
+                for s in 0..<(top - 44) {
+                    let sy = top - s
+                    let drift = Int(Double(s) * 0.22)
+                    if hash(cx + s, sy, 88) < 68 {
+                        let a = 0.22 * (1 - CGFloat(s) / CGFloat(max(1, top - 44)))
+                        fill(cg, cx + 3 + drift, sy, 6, 1, smoke.withAlpha(a))
+                    }
+                }
+                fill(cg, cx, top, 11, colH, forgeDark)
+                fill(cg, cx, top, 2, colH, forgeRim.withAlpha(0.55))
+                fill(cg, cx, top, 11, 2, forgeRim.withAlpha(0.65))
+                fill(cg, cx + 3, top + colH - 4, 5, 3, ember.withAlpha(0.8))
+            }
+            // Main hall + sawtooth roof.
+            fill(cg, 536, 146, 194, 44, forgeBody)
+            fill(cg, 536, 146, 194, 2, forgeRim.withAlpha(0.45))
+            for k in stride(from: 542, to: 726, by: 20) {
+                fill(cg, k, 138, 16, 9, forgeBody)
+                fill(cg, k, 138, 16, 2, forgeRim.withAlpha(0.55))
+            }
+            // Hot furnace windows.
+            for wx in stride(from: 548, to: 720, by: 18) {
+                fill(cg, wx, 156, 6, 8, ember.withAlpha(0.75))
+                fill(cg, wx, 156, 6, 2,
+                     UIColor(red: 1.0, green: 0.82, blue: 0.42, alpha: 0.9))
+            }
+            // Warm bloom on the ground under the works.
+            for gx in 528..<740 {
+                let edge = 1 - abs(CGFloat(gx) - 634) / 106
+                if edge > 0 {
+                    fill(cg, gx, 182, 1, 8, ember.withAlpha(0.10 * edge))
+                }
+            }
+        }
         // Dead scrub along the sand line.
         for tx in stride(from: 22, to: PW - 18, by: 57) {
             let h = 22 + hash(tx, 2, 84) % 18
@@ -1051,6 +1125,84 @@ enum TwilightRuinsBG {
         for gx in stride(from: 34, to: PW - 20, by: 43) {
             let gy = PH - 10 - hash(gx, 3, 85) % 7
             fill(cg, gx, gy, 2, 4, glass.withAlpha(0.75))
+            fill(cg, gx, gy, 1, 1, UIColor(white: 1, alpha: 0.9))
+        }
+    }
+
+    /// Moonveil canyon far sheet (Level 12): the same warm night haze and
+    /// dune floor, but the horizon is walled in by layered buttes. A low
+    /// back wall closes the gaps, with taller blocks in front carrying
+    /// moonlit rims and horizontal strata. Dead scrub + glass at the base.
+    private static func drawNightCanyonRange(_ cg: CGContext, PW: Int, PH: Int) {
+        let backWall = UIColor(red: 0.23, green: 0.17, blue: 0.19, alpha: 1)
+        let wall = UIColor(red: 0.16, green: 0.12, blue: 0.14, alpha: 1)
+        let wallD = UIColor(red: 0.09, green: 0.07, blue: 0.09, alpha: 1)
+        let rim = UIColor(red: 0.84, green: 0.70, blue: 0.52, alpha: 1)
+        let rimDim = UIColor(red: 0.56, green: 0.45, blue: 0.37, alpha: 1)
+        let dead = UIColor(red: 0.06, green: 0.05, blue: 0.06, alpha: 1)
+        let glass = UIColor(red: 0.92, green: 0.83, blue: 0.66, alpha: 1)
+
+        // Warm night haze behind the walls.
+        for y in 100..<PH {
+            let t = CGFloat(y - 100) / CGFloat(PH - 100)
+            fill(cg, 0, y, PW, 1, UIColor(red: 0.09 + 0.10 * t,
+                                           green: 0.07 + 0.07 * t,
+                                           blue: 0.10 + 0.08 * t, alpha: 1))
+        }
+        // Continuous back wall with a softly broken crest.
+        for x in 0..<PW {
+            let top = 132 + Int(7.0 * sin(Double(x) * 0.018 + 0.8)
+                                + 4.0 * sin(Double(x) * 0.061 + 2.2))
+            fill(cg, x, top, 1, PH - top, backWall)
+            if hash(x, 2, 91) < 45 { fill(cg, x, top, 1, 1, rimDim.withAlpha(0.45)) }
+        }
+        // Distant buttes: taller flat-topped blocks behind the near wall.
+        let distant = [(16, 94, 58), (108, 82, 72), (236, 98, 64),
+                       (350, 86, 58), (470, 100, 78), (606, 84, 66),
+                       (716, 96, 72)]
+        for (x0, top, w) in distant {
+            fill(cg, x0, top, w, PH - top, wall)
+            fill(cg, x0, top, w, 2, rimDim.withAlpha(0.6))
+            fill(cg, x0 + w - 2, top, 2, PH - top, rimDim.withAlpha(0.28))
+            for sy in stride(from: top + 10, to: PH, by: 11) {
+                fill(cg, x0, sy, w, 1, wallD.withAlpha(0.5))
+            }
+        }
+        // Near canyon shoulders: taller, darker, strongly rim-lit.
+        let near = [(0, 68, 126), (152, 88, 104), (300, 74, 118),
+                    (458, 92, 108), (620, 70, 132), (760, 90, 88)]
+        for (x0, top, w) in near {
+            fill(cg, x0, top, w, PH - top, wallD)
+            fill(cg, x0, top, w, 2, rim.withAlpha(0.7))
+            fill(cg, x0 + w - 3, top, 3, PH - top, rim.withAlpha(0.5))
+            // Strata: a few pale sedimentary bands.
+            for sy in stride(from: top + 16, to: PH, by: 17) {
+                fill(cg, x0 + 4, sy, w - 8, 1, rimDim.withAlpha(0.22))
+            }
+            // Talus fans at the base.
+            let fanH = 10 + hash(x0, 1, 92) % 10
+            for fx in stride(from: x0, to: x0 + w, by: 3) {
+                let k = 1 - abs(CGFloat(fx - (x0 + w / 2))) / CGFloat(max(1, w / 2))
+                fill(cg, fx, PH - Int(CGFloat(fanH) * k) - 4,
+                     3, Int(CGFloat(fanH) * k) + 4, wall)
+            }
+        }
+        // Dry wash floor: pale gravel catching the moon.
+        for x in 0..<PW {
+            let top = 174 + Int(3.0 * sin(Double(x) * 0.033 + 1.2))
+            fill(cg, x, top, 1, PH - top, rimDim.withAlpha(0.22))
+        }
+        // Dead scrub.
+        for tx in stride(from: 18, to: PW - 14, by: 63) {
+            let h = 20 + hash(tx, 2, 93) % 20
+            fill(cg, tx, PH - 12 - h, 2, h, dead)
+            fill(cg, tx - 5, PH - 12 - h + 6, 6, 2, dead)
+            fill(cg, tx + 3, PH - 12 - h + 10, 5, 2, dead)
+        }
+        // Glass glints along the wash.
+        for gx in stride(from: 30, to: PW - 18, by: 47) {
+            let gy = PH - 12 - hash(gx, 3, 94) % 6
+            fill(cg, gx, gy, 2, 3, glass.withAlpha(0.7))
             fill(cg, gx, gy, 1, 1, UIColor(white: 1, alpha: 0.9))
         }
     }

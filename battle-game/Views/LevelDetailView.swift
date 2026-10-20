@@ -5,9 +5,9 @@ import UIKit // UIImage pixel portraits
 /// LevelDetail — mission briefing over a living pixel-art battlefield.
 /// No system chrome: custom pixel BACK button, all-pixel type and icons.
 /// Left: briefing + debuting hostiles + Continue. Right: field intel —
-/// mission stat tiles, the hostile roster for this level, threat level and
-/// any new unit that joins the army here. The actual loadout is picked on
-/// the deployment screen that Continue opens.
+/// mission stat tiles, the hostile roster for this level and any new unit
+/// that joins the army here. The actual loadout is picked on the deployment
+/// screen that Continue opens.
 struct LevelDetailView: View {
     let level: LevelDef
     /// Campaign path. BACK pops to the map — briefings are only ever
@@ -35,17 +35,6 @@ struct LevelDetailView: View {
     }
 
     private var stars: Int { CampaignData.stars(for: level.id) }
-
-    private var threat: (label: String, pips: Int) {
-        let pips = min(5, max(1, (level.id - 1) / 3 + 1))
-        switch pips {
-        case 1: return ("LOW", pips)
-        case 2: return ("GUARDED", pips)
-        case 3: return ("ELEVATED", pips)
-        case 4: return ("SEVERE", pips)
-        default: return ("CRITICAL", pips)
-        }
-    }
 
     var body: some View {
         GeometryReader { geo in
@@ -191,8 +180,6 @@ struct LevelDetailView: View {
 
             newHostileStrip(tight: tight)
 
-            compactIntel(tight: tight)
-
             hostileArmy(tight: tight)
 
             if let recruit {
@@ -280,41 +267,6 @@ struct LevelDetailView: View {
             .shadow(color: .red.opacity(0.45), radius: 10)
         }
         .buttonStyle(.plain)
-    }
-
-    // MARK: - Field intel (compact text)
-
-    private func compactIntel(tight: Bool) -> some View {
-        HStack(spacing: tight ? 8 : 11) {
-            intelItem("THREAT", threat.label, color: .red, tight: tight)
-            intelDivider
-            intelItem("WAVES", "\(level.enemyWaves)", color: .cyan, tight: tight)
-            intelDivider
-            intelItem("TOWER HP", "\(level.towerHP)", color: .green, tight: tight)
-            intelDivider
-            intelItem("HQ HP", "\(level.baseHP)", color: .red, tight: tight)
-            Spacer(minLength: 0)
-        }
-    }
-
-    private func intelItem(_ name: String, _ value: String,
-                           color: Color, tight: Bool) -> some View {
-        HStack(spacing: 4) {
-            Text(name)
-                .font(.system(size: 7, weight: .black, design: .monospaced))
-                .tracking(1)
-                .foregroundStyle(.white.opacity(0.5))
-            Text(value)
-                .font(.system(size: tight ? 10 : 12, weight: .black, design: .monospaced))
-                .foregroundStyle(color)
-        }
-        .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 1)
-    }
-
-    private var intelDivider: some View {
-        Rectangle()
-            .fill(.white.opacity(0.15))
-            .frame(width: 1, height: 12)
     }
 
     // MARK: - Hostile army

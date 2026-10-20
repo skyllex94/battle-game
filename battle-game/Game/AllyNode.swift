@@ -4,26 +4,31 @@ import SpriteKit
 /// .trooper = cheap + fast, .heavy = expensive tank that hits hard,
 /// .ranger = long-rifle skirmisher that outranges raiders but folds fast,
 /// .truck = fast gun-truck debuting in Level 6 — wheels, turret + gunner.
+/// .bombard = slow mortar carrier debuting in Level 11 — long-range lobbed
+/// bombs with splash damage.
 /// The Ranger is introduced in Level 2, the Heavy in Level 3,
-/// the Truck in Level 6.
+/// the Truck in Level 6, the Bombard in Level 11.
 enum ArmyKind: Int, CaseIterable, Identifiable {
     case trooper
     case heavy
     case ranger
     case truck
+    case bombard
 
     var id: Int { rawValue }
 
     /// Campaign level that fields this unit (trooper from the start,
     /// ranger from Level 2's Rootwall Thicket briefing onward,
     /// heavy from Level 3's Thornwood Bastion briefing onward,
-    /// truck from Level 6's Sandhold Citadel briefing onward).
+    /// truck from Level 6's Sandhold Citadel briefing onward,
+    /// bombard from Level 11's Sunforge Redoubt briefing onward).
     var unlockLevel: Int {
         switch self {
         case .trooper: return 1
         case .heavy: return 3
         case .ranger: return 2
         case .truck: return 6
+        case .bombard: return 11
         }
     }
 
@@ -39,6 +44,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .heavy: return "Heavy"
         case .ranger: return "Ranger"
         case .truck: return "Truck"
+        case .bombard: return "Bombard"
         }
     }
 
@@ -48,6 +54,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .heavy: return Balance.heavyCost
         case .ranger: return Balance.rangerCost
         case .truck: return Balance.truckCost
+        case .bombard: return Balance.bombardCost
         }
     }
 
@@ -58,6 +65,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .ranger: return 5
         case .heavy: return 8
         case .truck: return 10
+        case .bombard: return 13
         }
     }
 
@@ -67,6 +75,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .heavy: return Balance.heavyHP
         case .ranger: return Balance.rangerHP
         case .truck: return Balance.truckHP
+        case .bombard: return Balance.bombardHP
         }
     }
 
@@ -76,6 +85,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .heavy: return Balance.heavySpeed
         case .ranger: return Balance.rangerSpeed
         case .truck: return Balance.truckSpeed
+        case .bombard: return Balance.bombardSpeed
         }
     }
 
@@ -85,6 +95,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .heavy: return Balance.heavyDamage
         case .ranger: return Balance.rangerDamage
         case .truck: return Balance.truckDamage
+        case .bombard: return Balance.bombardDamage
         }
     }
 
@@ -94,6 +105,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .heavy: return Balance.heavyFireCooldown
         case .ranger: return Balance.rangerFireCooldown
         case .truck: return Balance.truckFireCooldown
+        case .bombard: return Balance.bombardFireCooldown
         }
     }
 
@@ -103,6 +115,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .heavy: return Balance.heavyRange
         case .ranger: return Balance.rangerRange
         case .truck: return Balance.truckRange
+        case .bombard: return Balance.bombardRange
         }
     }
 
@@ -112,6 +125,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .heavy: return Balance.heavySightRange
         case .ranger: return Balance.rangerSightRange
         case .truck: return Balance.truckSightRange
+        case .bombard: return Balance.bombardSightRange
         }
     }
 
@@ -122,6 +136,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .heavy: return "TANK"
         case .ranger: return "MARKSMAN"
         case .truck: return "SIEGE"
+        case .bombard: return "ARTILLERY"
         }
     }
 
@@ -132,6 +147,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .heavy: return "Walking bunker. Slow, pricey, unstoppable."
         case .ranger: return "Long rifle. Outranges raiders, folds fast."
         case .truck: return "Olive gun-truck. Big wheels, long cannon."
+        case .bombard: return "Mortar carrier. Slow, long lob, splash blast."
         }
     }
 
@@ -142,6 +158,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .heavy: return "shield.fill"
         case .ranger: return "scope"
         case .truck: return "truck.box.fill"
+        case .bombard: return "scope"
         }
     }
 
@@ -152,6 +169,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .heavy: return .heavy
         case .ranger: return .ranger
         case .truck: return .truck
+        case .bombard: return .bombard
         }
     }
 }
@@ -201,6 +219,7 @@ final class AllyNode: SKSpriteNode {
         case .heavy: size = CGSize(width: 52, height: 76)
         case .ranger: size = CGSize(width: 38, height: 60)
         case .truck: size = CGSize(width: 132, height: 88)
+        case .bombard: size = CGSize(width: 132, height: 88)
         }
         super.init(texture: nil, color: .clear, size: size)
         name = "ally"
@@ -230,6 +249,12 @@ final class AllyNode: SKSpriteNode {
     /// Steer the gun-arm toward a world-space direction (nil = level it).
     /// Called every frame by the scene alongside animateMarch.
     func aimAt(_ dir: CGVector?) {
+        // The Bombard's tube is fixed in a high lob angle; the shell's
+        // ballistic solution does the aiming, not the barrel.
+        if kind == .bombard {
+            desiredAim = 0.95
+            return
+        }
         guard let dir = dir, dir.dx != 0 || dir.dy != 0 else {
             desiredAim = nil
             return
@@ -251,6 +276,7 @@ final class AllyNode: SKSpriteNode {
             first.filteringMode = .nearest
             bodySprite.setScale(size.height / first.size().height)
         }
+        bodySprite.zPosition = 0
         body.addChild(bodySprite)
         addChild(body)
 
@@ -264,12 +290,14 @@ final class AllyNode: SKSpriteNode {
         armSprite.anchorPoint = CGPoint(x: CGFloat(UnitPixelArt.armGripX) / CGFloat(UnitPixelArt.armW),
                                         y: 0.5)
         armPivot.position = kind == .heavy ? CGPoint(x: 9, y: 7)
+            : kind == .bombard ? CGPoint(x: 0, y: 30)
             : kind == .truck ? CGPoint(x: 0, y: 29)
             : CGPoint(x: 6, y: 8)
         armPivot.addChild(armSprite)
         gunTip.position = CGPoint(x: CGFloat(UnitPixelArt.armTipX - UnitPixelArt.armGripX) * s,
                                   y: 0)
         armPivot.addChild(gunTip)
+        armPivot.zPosition = 5
         body.addChild(armPivot)
 
         // Heavy pip so the two cards read apart at a glance.
@@ -277,6 +305,7 @@ final class AllyNode: SKSpriteNode {
             let pip = SKShapeNode(rectOf: CGSize(width: 10, height: 10), cornerRadius: 2)
             pip.fillColor = suitBlue
             pip.strokeColor = .clear
+            pip.zPosition = 10
             pip.position = CGPoint(x: -size.width / 2 - 4, y: size.height / 2 - 6)
             addChild(pip)
         }
@@ -295,7 +324,7 @@ final class AllyNode: SKSpriteNode {
         } else if frames.count == 4 {
             bodySprite.texture = frames[0]
         }
-        let wheeled = kind == .truck
+        let wheeled = kind == .truck || kind == .bombard
         yBob = advancing ? sin(marchPhase) * (wheeled ? 0.8 : 2.5) : 0
         body.zRotation = advancing ? sin(marchPhase) * (wheeled ? 0.008 : 0.03) : 0
         let target = desiredAim ?? 0
@@ -319,7 +348,8 @@ final class AllyNode: SKSpriteNode {
         // Pro chunky pixel bar, same language as TowerNode/BaseNode:
         // dark padded BG + thin light border + left-anchored fill that
         // drains from the right side only. Wide rides get a wider bar.
-        let barW: CGFloat = kind == .heavy ? 52 : kind == .truck ? 64 : 44
+        let barW: CGFloat = kind == .heavy ? 52
+            : (kind == .truck || kind == .bombard) ? 64 : 44
         let barH: CGFloat = 7
         // Soft + sunk: more transparent than the structure bars, and pinned
         // deep behind so the hero always covers it when passing by units.

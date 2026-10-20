@@ -201,6 +201,43 @@ enum ProjectileFactory {
         return root
     }
 
+    /// Bombard shell: heavy dark bomb with tail fins, a sand hazard band
+    /// and a hot primer. The scene rotates it along the gravity arc.
+    static func makeMortarBomb() -> SKNode {
+        let root = SKNode()
+        root.zPosition = 15
+        let body = SKShapeNode(ellipseOf: CGSize(width: 18, height: 12))
+        body.fillColor = SKColor(red: 0.16, green: 0.16, blue: 0.17, alpha: 1)
+        body.strokeColor = SKColor(red: 0.62, green: 0.58, blue: 0.45, alpha: 0.9)
+        body.lineWidth = 1.5
+        root.addChild(body)
+        let nose = SKShapeNode(circleOfRadius: 4)
+        nose.fillColor = SKColor(red: 0.30, green: 0.29, blue: 0.25, alpha: 1)
+        nose.strokeColor = .clear
+        nose.position = CGPoint(x: 7, y: 0)
+        root.addChild(nose)
+        let band = SKSpriteNode(color: SKColor(red: 1.0, green: 0.55, blue: 0.16, alpha: 0.95),
+                                size: CGSize(width: 3, height: 12))
+        root.addChild(band)
+        for dy in [-5, 5] {
+            let fin = SKShapeNode(rectOf: CGSize(width: 6, height: 4), cornerRadius: 1)
+            fin.fillColor = SKColor(red: 0.34, green: 0.32, blue: 0.24, alpha: 1)
+            fin.strokeColor = .clear
+            fin.position = CGPoint(x: -8, y: CGFloat(dy))
+            root.addChild(fin)
+        }
+        let primer = SKShapeNode(circleOfRadius: 2.5)
+        primer.fillColor = SKColor(red: 1, green: 0.4, blue: 0.1, alpha: 1)
+        primer.strokeColor = .clear
+        primer.position = CGPoint(x: -9, y: 0)
+        root.addChild(primer)
+        primer.run(.repeatForever(.sequence([
+            .fadeAlpha(to: 0.3, duration: 0.2),
+            .fadeAlpha(to: 1.0, duration: 0.2),
+        ])))
+        return root
+    }
+
     /// Lobbed grenade: dark bomblet + gold band + pulsing primer dot.
     private static func makeGrenade() -> SKNode {
         let root = SKNode()

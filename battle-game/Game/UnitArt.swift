@@ -9,7 +9,7 @@ import UIKit
 /// advancing for a scuttling march cycle.
 enum UnitPixelArt {
 
-    enum Kind { case trooper, heavy, ranger, truck, enemy, brute, reaver, skitter, jet, mech }
+    enum Kind { case trooper, heavy, ranger, truck, bombard, enemy, brute, reaver, skitter, jet, mech }
 
     /// Walk frames for a kind: full 4-step stride
     /// (contact -> support -> toe-off -> swing). Generated once, shared.
@@ -20,6 +20,7 @@ enum UnitPixelArt {
         case .heavy: return (0...3).map { heavy(pose: $0) }
         case .ranger: return (0...3).map { ranger(pose: $0) }
         case .truck: return (0...3).map { truck(pose: $0) }
+        case .bombard: return (0...3).map { bombard(pose: $0) }
         case .enemy: return (0...3).map { enemy(pose: $0) }
         case .brute: return (0...3).map { brute(pose: $0) }
         case .reaver: return (0...3).map { reaver(pose: $0) }
@@ -88,6 +89,29 @@ enum UnitPixelArt {
             portraitCache[kind] = portrait
             return portrait
         }
+        // Bombard portrait: whole mortar carrier with the launcher tube
+        // raised high for the Level 11 debut card.
+        if kind == .bombard {
+            _ = frames(for: kind)
+            _ = armTexture(for: kind)
+            guard let body = imageCache["body-bombard-0"],
+                  let arm = imageCache["arm-bombard-v1"] else { return UIImage() }
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            format.opaque = false
+            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
+                                                   format: format).image { ctx in
+                let cg = ctx.cgContext
+                body.draw(in: CGRect(x: 0, y: 0, width: 36, height: 24))
+                cg.saveGState()
+                cg.translateBy(x: 18, y: 11)
+                cg.rotate(by: -0.85)
+                arm.draw(in: CGRect(x: -5, y: -6, width: 24, height: 12))
+                cg.restoreGState()
+            }
+            portraitCache[kind] = portrait
+            return portrait
+        }
         // Mech portrait: the walker is taller + wider than the 24x32
         // trooper crop, so show the whole machine (scaled to fit) with
         // its gatling arm raised over the shoulder.
@@ -142,6 +166,9 @@ enum UnitPixelArt {
         case .truck:
             bodyKey = "body-truck-0"; armKey = "arm-truck-v2"
             shoulder = CGPoint(x: 16, y: 14)
+        case .bombard:
+            bodyKey = "body-bombard-0"; armKey = "arm-bombard-v1"
+            shoulder = CGPoint(x: 16, y: 12)
         case .enemy:
             bodyKey = "body-enemy-0"; armKey = "arm-enemy"
             shoulder = CGPoint(x: 16, y: 14)
@@ -461,6 +488,160 @@ enum UnitPixelArt {
         }
     }
 
+    // MARK: - Player Bombard (Level 11 mortar carrier)
+
+    /// Same wide chassis language as the Vuran gun-truck, rebuilt as a
+    /// mortar carrier: olive hull, four wheels, roof turntable and a rear
+    /// ammo rack. The launcher tube itself lives in bombardArm() and is
+    /// pitched upward by AllyNode.
+    private static func bombard(pose: Int) -> SKTexture {
+        canvas(w: 48, h: 32, key: "body-bombard-\(pose)") { cg in
+            let body = UIColor(red: 0.38, green: 0.39, blue: 0.29, alpha: 1)
+            let topLit = UIColor(red: 0.62, green: 0.62, blue: 0.45, alpha: 1)
+            let trim = UIColor(red: 0.78, green: 0.66, blue: 0.40, alpha: 1)
+            let shade = UIColor(red: 0.25, green: 0.26, blue: 0.18, alpha: 1)
+            let camoD = UIColor(red: 0.21, green: 0.22, blue: 0.15, alpha: 1)
+            let glass = UIColor(red: 0.09, green: 0.09, blue: 0.10, alpha: 1)
+            let under = UIColor(red: 0.06, green: 0.06, blue: 0.07, alpha: 1)
+            let tire = UIColor(red: 0.13, green: 0.15, blue: 0.18, alpha: 1)
+            let rim = UIColor(red: 0.40, green: 0.44, blue: 0.50, alpha: 1)
+            let rimLit = UIColor(red: 0.62, green: 0.66, blue: 0.72, alpha: 1)
+            let hub = UIColor(red: 0.80, green: 0.72, blue: 0.44, alpha: 1)
+            let hubD = UIColor(red: 0.55, green: 0.48, blue: 0.26, alpha: 1)
+            let lamp = UIColor(red: 1.0, green: 0.93, blue: 0.70, alpha: 1)
+            let foot = UIColor(red: 0.38, green: 0.30, blue: 0.20, alpha: 1)
+            let warn = UIColor(red: 1.0, green: 0.55, blue: 0.16, alpha: 1)
+            let O = outline
+            let y = [0, 0, 1, 0][pose]
+
+            // --- Hull: outline, body, bright top strip, sand lower trim.
+            fill(cg, x: 1, y: 9 + y, w: 37, h: 12, O)
+            fill(cg, x: 2, y: 10 + y, w: 35, h: 10, body)
+            fill(cg, x: 2, y: 10 + y, w: 35, h: 2, topLit)
+            fill(cg, x: 2, y: 19 + y, w: 35, h: 1, trim)
+            fill(cg, x: 5, y: 16 + y, w: 3, h: 1, camoD)
+            fill(cg, x: 11, y: 17 + y, w: 4, h: 1, camoD)
+            fill(cg, x: 19, y: 16 + y, w: 3, h: 1, camoD)
+            fill(cg, x: 27, y: 17 + y, w: 4, h: 1, camoD)
+
+            // --- Slit windows along the hull.
+            for wx in [5, 12, 19] {
+                fill(cg, x: wx, y: 12 + y, w: 5, h: 3, shade)
+                fill(cg, x: wx, y: 12 + y, w: 5, h: 1, O)
+                fill(cg, x: wx + 1, y: 13 + y, w: 3, h: 1, glass)
+            }
+
+            // --- Staircase sun-bleach sweep toward the nose.
+            fill(cg, x: 24, y: 10 + y, w: 2, h: 1, trim)
+            fill(cg, x: 26, y: 11 + y, w: 2, h: 1, trim)
+            fill(cg, x: 28, y: 12 + y, w: 2, h: 1, trim)
+            fill(cg, x: 30, y: 13 + y, w: 2, h: 1, trim)
+            fill(cg, x: 32, y: 14 + y, w: 2, h: 1, trim)
+            fill(cg, x: 34, y: 15 + y, w: 2, h: 1, trim)
+
+            // --- Front cab, angled windshield, nose + headlight.
+            fill(cg, x: 38, y: 11 + y, w: 4, h: 9, O)
+            fill(cg, x: 39, y: 12 + y, w: 2, h: 7, body)
+            fill(cg, x: 39, y: 12 + y, w: 2, h: 1, topLit)
+            fill(cg, x: 40, y: 13 + y, w: 3, h: 2, glass)
+            fill(cg, x: 41, y: 15 + y, w: 2, h: 2, glass)
+            fill(cg, x: 42, y: 14 + y, w: 5, h: 7, O)
+            fill(cg, x: 43, y: 15 + y, w: 3, h: 5, body)
+            fill(cg, x: 43, y: 15 + y, w: 3, h: 1, topLit)
+            fill(cg, x: 45, y: 16 + y, w: 2, h: 2, O)
+            fill(cg, x: 46, y: 17 + y, w: 1, h: 1, lamp)
+            fill(cg, x: 40, y: 20 + y, w: 8, h: 2, O)
+            fill(cg, x: 41, y: 20 + y, w: 6, h: 1, under)
+
+            // --- Rear ammo rack: two upright mortar shells.
+            fill(cg, x: 3, y: 5 + y, w: 7, h: 5, O)
+            fill(cg, x: 4, y: 6 + y, w: 5, h: 3, shade)
+            for sx in [5, 7] {
+                fill(cg, x: sx, y: 4 + y, w: 1, h: 4, warn)
+                fill(cg, x: sx, y: 4 + y, w: 1, h: 1, .white.withAlphaComponent(0.6))
+            }
+
+            // --- Roof turntable for the mortar tube.
+            fill(cg, x: 12, y: 5 + y, w: 13, h: 4, O)
+            fill(cg, x: 13, y: 6 + y, w: 11, h: 2, shade)
+            fill(cg, x: 15, y: 4 + y, w: 7, h: 2, O)
+            fill(cg, x: 16, y: 4 + y, w: 5, h: 1, rimLit)
+            fill(cg, x: 17, y: 6 + y, w: 3, h: 1, warn)
+
+            // --- Rear hazard chevrons + tail lamp.
+            fill(cg, x: 1, y: 17 + y, w: 2, h: 2, O)
+            fill(cg, x: 1, y: 17 + y, w: 1, h: 1, lamp)
+            for hx in [3, 6, 9] {
+                fill(cg, x: hx, y: 20 + y, w: 2, h: 1, warn)
+            }
+            fill(cg, x: 0, y: 20 + y, w: 48, h: 2, O)
+
+            // --- FOUR wheels: tire / rim / gold hub + roll spokes.
+            for wx in [7, 15, 24, 32] {
+                fill(cg, x: wx - 4, y: 22 + y, w: 9, h: 9, O)
+                fill(cg, x: wx - 3, y: 23 + y, w: 7, h: 7, tire)
+                fill(cg, x: wx - 3, y: 23 + y, w: 3, h: 1, rimLit)
+                fill(cg, x: wx - 2, y: 24 + y, w: 5, h: 5, rim)
+                switch pose {
+                case 0:
+                    fill(cg, x: wx, y: 24 + y, w: 1, h: 5, tire)
+                    fill(cg, x: wx - 2, y: 26 + y, w: 5, h: 1, tire)
+                case 1:
+                    fill(cg, x: wx + 1, y: 24 + y, w: 1, h: 3, tire)
+                    fill(cg, x: wx - 1, y: 26 + y, w: 1, h: 3, tire)
+                    fill(cg, x: wx - 2, y: 26 + y, w: 2, h: 1, tire)
+                    fill(cg, x: wx + 1, y: 28 + y, w: 2, h: 1, tire)
+                case 2:
+                    fill(cg, x: wx - 2, y: 25 + y, w: 1, h: 3, tire)
+                    fill(cg, x: wx + 2, y: 25 + y, w: 1, h: 3, tire)
+                    fill(cg, x: wx - 2, y: 26 + y, w: 2, h: 1, tire)
+                    fill(cg, x: wx + 1, y: 28 + y, w: 2, h: 1, tire)
+                default:
+                    fill(cg, x: wx - 1, y: 24 + y, w: 1, h: 3, tire)
+                    fill(cg, x: wx + 1, y: 26 + y, w: 1, h: 3, tire)
+                    fill(cg, x: wx - 2, y: 28 + y, w: 2, h: 1, tire)
+                    fill(cg, x: wx + 1, y: 26 + y, w: 2, h: 1, tire)
+                }
+                fill(cg, x: wx - 1, y: 26 + y, w: 3, h: 3, hub)
+                fill(cg, x: wx - 1, y: 26 + y, w: 3, h: 1, rimLit)
+                fill(cg, x: wx, y: 27 + y, w: 1, h: 1, hubD)
+                fill(cg, x: wx - 3, y: 31 + y, w: 7, h: 1, foot)
+                fill(cg, x: wx - 2, y: 31 + y, w: 5, h: 1, hubD)
+            }
+        }
+    }
+
+    /// Bombard mortar tube: thick olive launcher with a sand hazard band,
+    /// dark bore and a reinforced collar. The shoulder pivot is raised by
+    /// AllyNode so the tube points up for a lobbed shot.
+    private static func bombardArm() -> SKTexture {
+        canvas(w: armW, h: armH, key: "arm-bombard-v1") { cg in
+            let olive = UIColor(red: 0.34, green: 0.34, blue: 0.24, alpha: 1)
+            let oliveHi = UIColor(red: 0.58, green: 0.56, blue: 0.38, alpha: 1)
+            let oliveD = UIColor(red: 0.20, green: 0.20, blue: 0.14, alpha: 1)
+            let band = UIColor(red: 1.0, green: 0.55, blue: 0.16, alpha: 1)
+            let O = outline
+            // Reinforced mount collar around the grip (x=5).
+            fill(cg, x: 2, y: 3, w: 7, h: 7, O)
+            fill(cg, x: 3, y: 4, w: 5, h: 5, olive)
+            fill(cg, x: 3, y: 4, w: 5, h: 1, oliveHi)
+            fill(cg, x: 5, y: 5, w: 1, h: 3, oliveD)
+            // Thick mortar tube pointing +x.
+            fill(cg, x: 8, y: 3, w: 14, h: 6, O)
+            fill(cg, x: 9, y: 4, w: 12, h: 4, olive)
+            fill(cg, x: 9, y: 4, w: 12, h: 1, oliveHi)
+            fill(cg, x: 9, y: 7, w: 12, h: 1, oliveD)
+            // Hazard band + muzzle brake ring.
+            fill(cg, x: 16, y: 4, w: 2, h: 4, band)
+            fill(cg, x: 20, y: 3, w: 2, h: 6, O)
+            fill(cg, x: 21, y: 4, w: 1, h: 4, oliveD)
+            fill(cg, x: 21, y: 5, w: 1, h: 2, .black)
+            // Top sight rib.
+            fill(cg, x: 12, y: 2, w: 3, h: 1, O)
+            fill(cg, x: 13, y: 2, w: 1, h: 1, oliveHi)
+        }
+    }
+
     // MARK: - Enemy raider (red alien)
 
     private static func enemy(pose: Int) -> SKTexture {
@@ -719,6 +900,7 @@ enum UnitPixelArt {
         case .heavy: return heavyArm()
         case .ranger: return rangerArm()
         case .truck: return truckArm()
+        case .bombard: return bombardArm()
         case .enemy: return enemyArm()
         case .brute: return bruteArm()
         case .reaver: return reaverArm()

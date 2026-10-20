@@ -134,8 +134,8 @@ struct BattlePrepView: View {
 
             HStack(spacing: 6) {
                 missionStat("WAVES", "\(level.enemyWaves)")
-                missionStat("TOWER", "\(level.towerHP)")
-                missionStat("HQ", "\(level.baseHP)")
+                missionStat("TOWER", "\(Int(Balance.enemyTowerHealth(forLevel: level.id).rounded()))")
+                missionStat("HQ", "\(Int(Balance.enemyBaseHealth(forLevel: level.id).rounded()))")
             }
 
             if let debut = newEnemies.first {

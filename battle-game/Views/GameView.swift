@@ -71,6 +71,9 @@ struct GameView: View {
     /// New-unit intel card: levels that debut a unit pause 1s after entry
     /// and brief the player (stats + portrait) until dismissed.
     @State private var showUnitIntro = false
+    /// Level 11 fortress-line intel: introduces the fourth tower that now
+    /// anchors each base. Freezes the field until the player dismisses it.
+    @State private var showTowerIntro = false
     /// Level 5 grant sequence: 1 = free gun slot, 2 = Scatter gun.
     /// Shown one modal after another on battle entry; each CLAIM grants.
     @State private var grantStep: Int?
@@ -491,6 +494,26 @@ struct GameView: View {
                 .shadow(color: .yellow.opacity(0.2), radius: 18)
             }
 
+            // Level 11 fortress-line intel: announces the fourth tower that
+            // now anchors each base. Close/tap outside resumes the sim.
+            if showTowerIntro {
+                Color.black.opacity(0.68)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { closeTowerIntro() }
+
+                // Fits as-is on normal screens; on very short viewports the
+                // fallback scrolls so the whole card stays reachable.
+                ViewThatFits(in: .vertical) {
+                    towerIntroCard
+                    ScrollView(.vertical, showsIndicators: false) {
+                        towerIntroCard
+                    }
+                    .frame(maxWidth: 330)
+                }
+                .padding(.vertical, 12)
+            }
+
             // Milestone hero unlock (Level 8 = Vanguard): portrait + stats, then
             // CLAIM persists the unlock, auto-equips, and resumes.
             if let fresh = heroUnlock {
@@ -700,11 +723,23 @@ struct GameView: View {
             weapon = scene.heroWeapon
             revivedThisRun = false
             // New-unit briefing: let the battle breathe 1s, then freeze and brief.
-            if debutUnit != nil {
+            // Level 11 sequences this AFTER the fortress-line card instead.
+            if debutUnit != nil, level.id != 11 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                     guard debutUnit != nil, !showUnitIntro,
                           !minimap.won, !minimap.lost else { return }
                     showUnitIntro = true
+                    showMenu = false
+                    scene.isPaused = true
+                }
+            }
+            // Level 11 fortress-line briefing: let the field settle, then
+            // freeze it and announce the fourth tower at each base.
+            if level.id == 11 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    guard !showTowerIntro, !showUnitIntro, grantStep == nil,
+                          heroUnlock == nil, !minimap.won, !minimap.lost else { return }
+                    showTowerIntro = true
                     showMenu = false
                     scene.isPaused = true
                 }
@@ -836,6 +871,101 @@ struct GameView: View {
         hudPop = false
     }
 
+    /// Level 11 card: the enemy's red tower rendered in the same procedural
+    /// pixel art as the battlefield, with the new four-tower line called out.
+    private var towerIntroCard: some View {
+        VStack(spacing: 9) {
+            HStack(spacing: 8) {
+                Rectangle()
+                    .fill(.orange.opacity(0.45))
+                    .frame(width: 22, height: 1)
+                Text("NEW FORTIFICATION")
+                    .font(.system(size: 10, weight: .black, design: .monospaced))
+                    .tracking(2)
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 10).padding(.vertical, 3)
+                    .background(.orange)
+                Rectangle()
+                    .fill(.orange.opacity(0.45))
+                    .frame(width: 22, height: 1)
+            }
+
+            ZStack {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(LinearGradient(colors: [.red.opacity(0.20),
+                                                 .black.opacity(0.78)],
+                                         startPoint: .top, endPoint: .bottom))
+                    .frame(width: 172, height: 132)
+                Rectangle()
+                    .fill(.red.opacity(0.24))
+                    .frame(width: 172, height: 1)
+                    .offset(y: 46)
+                Image(uiImage: TowerNode.previewImage(for: .enemy))
+                    .interpolation(.none)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 84, height: 118)
+                    .shadow(color: .red.opacity(0.55), radius: 14)
+            }
+            .frame(width: 172, height: 132)
+            .clipShape(PixelPanelShape(cut: 8))
+            .overlay(PixelPanelShape(cut: 8).stroke(.red.opacity(0.8), lineWidth: 2))
+            .overlay(alignment: .topTrailing) {
+                Text("×4")
+                    .font(.system(size: 12, weight: .black, design: .monospaced))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 7).padding(.vertical, 2)
+                    .background(.red)
+                    .padding(6)
+            }
+            .overlay(alignment: .bottomLeading) {
+                HStack(spacing: 3) {
+                    ForEach(0..<4, id: \.self) { _ in
+                        Rectangle()
+                            .fill(.red)
+                            .frame(width: 5, height: 5)
+                    }
+                }
+                .padding(7)
+            }
+
+            Text("FORTRESS LINE")
+                .font(.system(size: 19, weight: .black, design: .monospaced))
+                .tracking(2)
+                .foregroundStyle(.white)
+            Text("BOTH BASES: 4 TOWERS")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .tracking(1.5)
+                .foregroundStyle(.red)
+            Text("A fourth gun emplacement now anchors each base. The red tower below is the enemy's new fortification — another three-bolt volley between you and their HQ.")
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.75))
+                .lineLimit(3)
+                .minimumScaleFactor(0.85)
+                .frame(maxWidth: 280)
+            HStack(spacing: 10) {
+                UnitStatChip(label: "TOWERS", value: "4 / SIDE")
+                UnitStatChip(label: "TOWER HP", value: "\(Int(Balance.enemyTowerHealth(forLevel: level.id)))")
+                UnitStatChip(label: "RANGE", value: "\(Int(Balance.towerRange))")
+            }
+            PixelMenuButton(title: "Fortify", style: .primary) {
+                SoundEngine.shared.uiTap()
+                closeTowerIntro()
+            }
+            Text("TAP OUTSIDE TO RESUME")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .tracking(2)
+                .foregroundStyle(.white.opacity(0.4))
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 16)
+        .background(.black.opacity(0.92))
+        .clipShape(PixelPanelShape(cut: 10))
+        .overlay(PixelPanelShape(cut: 10).stroke(.red.opacity(0.65), lineWidth: 3))
+        .shadow(color: .red.opacity(0.25), radius: 20)
+    }
+
     /// Unit debuting on this level, if any (Ranger on Level 2, Heavy on
     /// Level 3). Nil keeps entry instant — no modal, no pause.
     private var debutUnit: ArmyKind? {
@@ -882,6 +1012,22 @@ struct GameView: View {
     private func closeUnitIntro() {
         showUnitIntro = false
         scene.isPaused = false
+    }
+
+    /// Dismiss the Level 11 fortress-line intel, then hand off to the
+    /// Bombard's NEW UNIT card (both debut on this level).
+    private func closeTowerIntro() {
+        showTowerIntro = false
+        if level.id == 11, debutUnit != nil, !minimap.won, !minimap.lost {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                guard !showUnitIntro, !showTowerIntro,
+                      !minimap.won, !minimap.lost else { return }
+                showUnitIntro = true
+                scene.isPaused = true
+            }
+        } else {
+            scene.isPaused = false
+        }
     }
 
     /// Level 5 grant CLAIM: step 1 grants the free slot (if still missing)

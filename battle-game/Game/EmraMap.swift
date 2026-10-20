@@ -1,14 +1,15 @@
 import SwiftUI
 
-/// Hand-painted pixel continent for the campaign map. The world is a
-/// 480x90 cell strip (three screens wide) rendered once per pan change.
+/// Hand-painted pixel continent for the campaign map. The world is an
+/// 1120x90 cell strip (seven screens wide) rendered once per pan change.
 /// Biomes follow the campaign's terrain: verdant woods (levels 1-6),
-/// dune seas (7-10), frost (11-13), and the umbral core (14-15).
-/// Everything is deterministic so the map is stable across launches.
+/// dune seas (7-12), mountain passes (13-20), the frozen expanse (21-27)
+/// and the dark core (28-35). Everything is deterministic so the map is
+/// stable across launches.
 enum EmraMap {
     static let pageCols = 160
     static let rows = 90
-    static let pages = 3
+    static let pages = 7
     static var cols: Int { pageCols * pages }
 
     private static let slotX: [Double] = [0.14, 0.32, 0.50, 0.68, 0.86]
@@ -24,23 +25,32 @@ enum EmraMap {
     static func zone(_ page: Int) -> String {
         ["THE VERDANT WEST",
          "THE FOREST EDGE & DUNE SEA",
-         "THE FROZEN EAST + UMBRAL CORE"][min(2, max(0, page))]
+         "THE DUNE SEA & STONE PEAKS",
+         "THE MOUNTAIN PASSES",
+         "THE FROZEN EXPANSE",
+         "THE WHITEOUT & BLACK GATE",
+         "THE UMBRAL CORE"][min(pages - 1, max(0, page))]
     }
 
     static func icon(_ id: Int) -> String {
         switch id {
-        case 1, 2: return "leaf.fill"
-        case 3: return "shield.fill"
-        case 4, 5: return "sun.max.fill"
-        case 6: return "shield.fill"
+        case 1, 2, 4, 5: return "leaf.fill"
+        case 3, 6: return "shield.fill"
         case 7: return "wind"
         case 8: return "drop.fill"
         case 9: return "sunset.fill"
-        case 10: return "moon.stars.fill"
+        case 10: return "sun.max.fill"
         case 11: return "shield.fill"
-        case 12: return "snowflake"
-        case 13: return "bolt.fill"
-        case 14: return "moon.fill"
+        case 12: return "wind"
+        case 13, 14, 16, 18, 19: return "mountain.2.fill"
+        case 15, 17, 20: return "shield.fill"
+        case 21, 23, 24, 25, 27: return "snowflake"
+        case 22, 26: return "shield.fill"
+        case 28, 30, 33: return "moon.fill"
+        case 29: return "wind"
+        case 31: return "flame.fill"
+        case 32: return "bolt.fill"
+        case 34: return "shield.fill"
         default: return "crown.fill"
         }
     }
@@ -88,6 +98,12 @@ enum EmraMap {
         v -= 4.5 * gauss(x, 214, 18)
         v += 3.2 * gauss(x, 348, 20)
         v -= 2.2 * gauss(x, 438, 12)
+        v += 5.0 * gauss(x, 540, 30)
+        v -= 5.0 * gauss(x, 630, 22)
+        v += 4.0 * gauss(x, 720, 28)
+        v -= 4.5 * gauss(x, 820, 24)
+        v += 5.0 * gauss(x, 940, 32)
+        v -= 4.0 * gauss(x, 1040, 24)
         if gx < 18 { v += Double(18 - gx) * 1.6 }
         if gx > cols - 18 { v += Double(gx - (cols - 18)) * 1.6 }
         v += Double(h(gx, 3, 61) % 5 - 2) * 0.8
@@ -104,6 +120,12 @@ enum EmraMap {
         v += 5.0 * gauss(x, 60, 14)
         v -= 3.0 * gauss(x, 280, 22)
         v += 3.5 * gauss(x, 372, 18)
+        v -= 5.0 * gauss(x, 520, 28)
+        v += 4.0 * gauss(x, 620, 24)
+        v -= 4.0 * gauss(x, 740, 26)
+        v += 5.0 * gauss(x, 860, 30)
+        v -= 4.0 * gauss(x, 980, 26)
+        v += 4.0 * gauss(x, 1080, 22)
         if gx < 18 { v -= Double(18 - gx) * 1.6 }
         if gx > cols - 18 { v -= Double(gx - (cols - 18)) * 1.6 }
         v += Double(h(gx, 9, 62) % 5 - 2) * 0.7
@@ -115,18 +137,23 @@ enum EmraMap {
                         + 3.0 * sin(Double(gy) * 0.27 + 1.1)).rounded())
         let x = gx + warp
         let n = h(gx, gy, 55)
-        // Levels: 1-6 woods (x 22/51/80/109/138/182), then the desert
-        // (211/241), dusk flats (269) and moonveil night (298), frost
-        // (342/371/400), and umbral (429/458). Transitions sit between.
+        // Levels: 1-6 woods (x 22/51/80/109/138/182), 7-12 desert
+        // (211/241/269/298/342/371), 13-20 mountains (400/429/458/502/531/
+        // 560/589/618), 21-27 ice (662/691/720/749/778/822/851), and
+        // 28-35 the dark core (880/909/938/982/1011/1040/1069/1098).
         if x < 190 { return 0 }
         if x < 202 { return n < (x - 190) * 8 ? 1 : 0 }
         if x < 248 { return 1 }
         if x < 258 { return n < (x - 248) * 10 ? 2 : 1 }
-        if x < 308 { return 2 }
-        if x < 320 { return n < (x - 308) * 8 ? 3 : 2 }
-        if x < 408 { return 3 }
-        if x < 424 { return n < (x - 408) * 6 ? 4 : 3 }
-        return 4
+        if x < 284 { return 2 }
+        if x < 296 { return n < (x - 284) * 8 ? 1 : 2 }
+        if x < 380 { return 1 }
+        if x < 392 { return n < (x - 380) * 8 ? 3 : 1 }
+        if x < 628 { return 3 }
+        if x < 642 { return n < (x - 628) * 7 ? 4 : 3 }
+        if x < 860 { return 4 }
+        if x < 874 { return n < (x - 860) * 7 ? 5 : 4 }
+        return 5
     }
 
     private static func terrain(_ gx: Int, _ gy: Int, _ biome: Int) -> Color {
@@ -167,33 +194,37 @@ enum EmraMap {
             if n > 88 { return lit }
             return mid
         case 1:
-            // L4 white atoll -> L5 bleached noon -> L6 burnt Sandhold ->
-            // L7 golden dune sea -> L8 greener oasis waste.
+            // L7 golden dunes -> L8 oasis waste -> L10 glasswind salt flats
+            // -> L11 burnt foundry -> L12 red canyon.
             let jitter = h(gx, gy, 133) % 9 - 4
             let xx = gx + jitter
             let dark: Color
             let base: Color
             let lit: Color
-            if xx < 124 {
-                dark = Color(red: 0.72, green: 0.71, blue: 0.63)
-                base = Color(red: 0.87, green: 0.86, blue: 0.77)
-                lit = Color(red: 0.97, green: 0.97, blue: 0.91)
-            } else if xx < 158 {
-                dark = Color(red: 0.76, green: 0.67, blue: 0.46)
-                base = Color(red: 0.91, green: 0.82, blue: 0.60)
-                lit = Color(red: 0.99, green: 0.94, blue: 0.76)
-            } else if xx < 198 {
-                dark = Color(red: 0.58, green: 0.39, blue: 0.24)
-                base = Color(red: 0.76, green: 0.55, blue: 0.34)
-                lit = Color(red: 0.90, green: 0.70, blue: 0.45)
-            } else if xx < 230 {
+            if xx < 228 {
                 dark = Color(red: 0.69, green: 0.55, blue: 0.32)
                 base = Color(red: 0.85, green: 0.70, blue: 0.43)
                 lit = Color(red: 0.96, green: 0.84, blue: 0.57)
-            } else {
+            } else if xx < 252 {
                 dark = Color(red: 0.57, green: 0.52, blue: 0.32)
                 base = Color(red: 0.74, green: 0.68, blue: 0.43)
                 lit = Color(red: 0.88, green: 0.82, blue: 0.55)
+            } else if xx < 296 {
+                dark = Color(red: 0.48, green: 0.28, blue: 0.18)
+                base = Color(red: 0.68, green: 0.43, blue: 0.26)
+                lit = Color(red: 0.84, green: 0.58, blue: 0.34)
+            } else if xx < 324 {
+                dark = Color(red: 0.76, green: 0.75, blue: 0.68)
+                base = Color(red: 0.90, green: 0.89, blue: 0.82)
+                lit = Color(red: 0.98, green: 0.98, blue: 0.94)
+            } else if xx < 356 {
+                dark = Color(red: 0.58, green: 0.39, blue: 0.24)
+                base = Color(red: 0.76, green: 0.55, blue: 0.34)
+                lit = Color(red: 0.90, green: 0.70, blue: 0.45)
+            } else {
+                dark = Color(red: 0.48, green: 0.24, blue: 0.16)
+                base = Color(red: 0.66, green: 0.36, blue: 0.22)
+                lit = Color(red: 0.82, green: 0.50, blue: 0.28)
             }
             let broad = h(gx / 9, gy / 4, 133)
             if broad > 76 { return lit }
@@ -202,20 +233,22 @@ enum EmraMap {
             return base
         case 2:
             // L9 Duskfall Flats: dark sand under a burning sunset.
-            // L10 Moonveil Dunes: moonlit warm sand, still desert.
-            if gx >= 286 {
-                let moon = h(gx / 6, gy / 4, 135)
-                if moon > 82 { return Color(red: 0.44, green: 0.35, blue: 0.34) }
-                if n < 20 { return Color(red: 0.13, green: 0.10, blue: 0.13) }
-                if n > 90 { return Color(red: 0.48, green: 0.38, blue: 0.34) }
-                return Color(red: 0.24, green: 0.18, blue: 0.20)
-            }
             let broad = h(gx / 7, gy / 4, 132)
             if broad > 80 { return Color(red: 0.72, green: 0.40, blue: 0.22) }
             if n < 20 { return Color(red: 0.20, green: 0.12, blue: 0.11) }
             if n > 90 { return Color(red: 0.56, green: 0.34, blue: 0.20) }
             return Color(red: 0.34, green: 0.21, blue: 0.16)
         case 3:
+            // L13-20 mountain passes: broad rock slabs with scree grain.
+            let slab = h(gx / 5, gy / 4, 131)
+            let grain = h(gx / 2, gy / 2, 136)
+            if slab > 82 { return Color(red: 0.54, green: 0.52, blue: 0.49) }
+            if slab < 14 { return Color(red: 0.27, green: 0.26, blue: 0.25) }
+            if grain > 88 { return Color(red: 0.46, green: 0.45, blue: 0.43) }
+            if grain < 12 { return Color(red: 0.34, green: 0.33, blue: 0.32) }
+            return Color(red: 0.40, green: 0.39, blue: 0.37)
+        case 4:
+            // L21-27 ice: existing frost palette.
             let broad = h(gx / 8, gy / 5, 131)
             if broad > 74 {
                 return n < 30
@@ -226,9 +259,12 @@ enum EmraMap {
             if n > 90 { return Color(red: 0.94, green: 0.97, blue: 1.00) }
             return Color(red: 0.83, green: 0.89, blue: 0.95)
         default:
-            if n < 18 { return Color(red: 0.08, green: 0.06, blue: 0.14) }
-            if n > 90 { return Color(red: 0.28, green: 0.19, blue: 0.40) }
-            return Color(red: 0.16, green: 0.12, blue: 0.24)
+            // L28-35 the dark core: black rock with ember seams.
+            let broad = h(gx / 6, gy / 4, 135)
+            if broad > 82 { return Color(red: 0.40, green: 0.12, blue: 0.06) }
+            if n < 22 { return Color(red: 0.05, green: 0.04, blue: 0.05) }
+            if n > 90 { return Color(red: 0.30, green: 0.26, blue: 0.24) }
+            return Color(red: 0.14, green: 0.10, blue: 0.10)
         }
     }
 
@@ -237,8 +273,9 @@ enum EmraMap {
         case 0: return Color(red: 0.78, green: 0.70, blue: 0.45)
         case 1: return Color(red: 0.94, green: 0.90, blue: 0.74)
         case 2: return Color(red: 0.62, green: 0.40, blue: 0.25)
-        case 3: return Color(red: 0.78, green: 0.88, blue: 0.95)
-        default: return Color(red: 0.24, green: 0.17, blue: 0.34)
+        case 3: return Color(red: 0.50, green: 0.48, blue: 0.44)
+        case 4: return Color(red: 0.78, green: 0.88, blue: 0.95)
+        default: return Color(red: 0.18, green: 0.13, blue: 0.12)
         }
     }
 
@@ -247,7 +284,7 @@ enum EmraMap {
     }
 
     private static func nearNode(_ x: Int, _ y: Int, _ mx: Int = 9, _ my: Int = 5) -> Bool {
-        for id in 1...15 {
+        for id in 1...CampaignData.levels.count {
             let n = nodeCell(id)
             if abs(n.x - x) <= mx && abs(n.y - y) <= my { return true }
         }
@@ -301,8 +338,27 @@ enum EmraMap {
             px(x - 1, y - 2, 3, 1, c.dark)
         }
 
+        func pineLeaf(_ x: Int) -> (dark: Color, mid: Color, lit: Color) {
+            if x >= 874 {
+                return (Color(red: 0.07, green: 0.05, blue: 0.05),
+                        Color(red: 0.14, green: 0.09, blue: 0.07),
+                        Color(red: 0.26, green: 0.12, blue: 0.07))
+            }
+            if x >= 642 {
+                return (Color(red: 0.12, green: 0.29, blue: 0.30),
+                        Color(red: 0.24, green: 0.48, blue: 0.48),
+                        Color(red: 0.52, green: 0.76, blue: 0.74))
+            }
+            if x >= 392 {
+                return (Color(red: 0.08, green: 0.22, blue: 0.15),
+                        Color(red: 0.18, green: 0.38, blue: 0.23),
+                        Color(red: 0.34, green: 0.56, blue: 0.32))
+            }
+            return forestLeaf(x)
+        }
+
         func pine(_ x: Int, _ y: Int) {
-            let c = forestLeaf(x)
+            let c = pineLeaf(x)
             px(x, y - 1, 1, 2, Color(red: 0.30, green: 0.22, blue: 0.16))
             for r in 0..<7 {
                 let half = max(1, (r + 2) / 2)
@@ -344,8 +400,18 @@ enum EmraMap {
         }
 
         func dune(_ x: Int, _ y: Int, _ w: Int) {
-            let light = Color(red: 0.96, green: 0.87, blue: 0.66)
-            let shade = Color(red: 0.70, green: 0.57, blue: 0.36)
+            let light: Color
+            let shade: Color
+            if x >= 330 {
+                light = Color(red: 0.78, green: 0.52, blue: 0.32)
+                shade = Color(red: 0.48, green: 0.30, blue: 0.20)
+            } else if x >= 286 {
+                light = Color(red: 0.96, green: 0.93, blue: 0.82)
+                shade = Color(red: 0.70, green: 0.66, blue: 0.55)
+            } else {
+                light = Color(red: 0.96, green: 0.87, blue: 0.66)
+                shade = Color(red: 0.70, green: 0.57, blue: 0.36)
+            }
             for ox in -w...w {
                 let t = abs(Double(ox) / Double(max(1, w)))
                 let yy = y - Int((1 - t) * 3.0)
@@ -398,6 +464,58 @@ enum EmraMap {
             px(x - w / 2, baseY - hgt, w - 3, 1, Color(red: 0.90, green: 0.74, blue: 0.48))
             px(x - w / 2, baseY - hgt + 2, w - 4, 1, Color(red: 0.60, green: 0.46, blue: 0.29), 0.6)
             px(x - w / 2, baseY - hgt + 4, w - 5, 1, Color(red: 0.60, green: 0.46, blue: 0.29), 0.4)
+        }
+
+        func blackPeak(_ x: Int, _ baseY: Int, _ s: Int) {
+            let dark = Color(red: 0.06, green: 0.05, blue: 0.06)
+            let lit = Color(red: 0.30, green: 0.15, blue: 0.10)
+            let ember = Color(red: 0.92, green: 0.30, blue: 0.07)
+            px(x - s, baseY, s * 2, 1, Color(red: 0.85, green: 0.22, blue: 0.04), 0.10)
+            for r in 0..<s {
+                let half = r + 1
+                px(x - half, baseY - s + r, half * 2, 1, dark)
+                if h(x + r, baseY, 80) < 38 { px(x - half, baseY - s + r, max(1, half / 2), 1, lit, 0.7) }
+            }
+            px(x - 1, baseY - s - 2, 3, 2, dark)
+            px(x, baseY - s - 2, 1, 1, ember, 0.85)
+            px(x - 1, baseY - s + 2, 2, 1, ember, 0.35)
+        }
+
+        func lavaCrack(_ pts: [(Int, Int)]) {
+            let hot = Color(red: 1.0, green: 0.32, blue: 0.06)
+            let core = Color(red: 1.0, green: 0.74, blue: 0.22)
+            for i in 0..<(pts.count - 1) {
+                let a = pts[i], b = pts[i + 1]
+                let steps = max(1, max(abs(b.0 - a.0), abs(b.1 - a.1)))
+                for s in 0...steps {
+                    let x = a.0 + (b.0 - a.0) * s / steps
+                    let y = a.1 + (b.1 - a.1) * s / steps
+                    px(x - 1, y - 1, 4, 3, Color(red: 1.0, green: 0.20, blue: 0.03), 0.10)
+                    px(x - 1, y, 3, 1, Color(red: 0.10, green: 0.06, blue: 0.06), 0.75)
+                    px(x, y, 1, 1, hot)
+                    if h(x, y, 81) < 34 { px(x, y, 1, 1, core) }
+                }
+            }
+        }
+
+        func blackGate(_ x: Int, _ y: Int) {
+            let dark = Color(red: 0.07, green: 0.05, blue: 0.06)
+            let iron = Color(red: 0.19, green: 0.13, blue: 0.13)
+            let glow = Color(red: 1.0, green: 0.30, blue: 0.06)
+            px(x - 15, y - 19, 7, 19, dark)
+            px(x + 9, y - 19, 7, 19, dark)
+            px(x - 15, y - 19, 2, 19, iron)
+            px(x + 14, y - 19, 2, 19, iron)
+            px(x - 9, y - 16, 19, 3, dark)
+            px(x - 8, y - 14, 17, 1, iron, 0.7)
+            px(x - 8, y - 10, 17, 3, Color(red: 0.04, green: 0.03, blue: 0.03))
+            px(x - 6, y - 9, 13, 1, glow, 0.55)
+            px(x - 4, y - 8, 9, 1, Color(red: 1.0, green: 0.55, blue: 0.12), 0.45)
+            for tx in [x - 13, x + 11] {
+                px(tx, y - 22, 2, 3, glow, 0.75)
+            }
+            px(x - 11, y - 21, 3, 1, Color(red: 0.10, green: 0.05, blue: 0.05))
+            px(x + 9, y - 21, 3, 1, Color(red: 0.10, green: 0.05, blue: 0.05))
         }
 
         func mountain(_ x: Int, _ baseY: Int, _ s: Int, _ snowy: Bool) {
@@ -511,8 +629,8 @@ enum EmraMap {
             let stone: Color
             let shadow: Color
             if !allied {
-                stone = Color(red: 0.20, green: 0.15, blue: 0.25)
-                shadow = Color(red: 0.12, green: 0.09, blue: 0.16)
+                stone = Color(red: 0.16, green: 0.10, blue: 0.10)
+                shadow = Color(red: 0.08, green: 0.05, blue: 0.05)
             } else if biome <= 0 {
                 stone = Color(red: 0.47, green: 0.35, blue: 0.25)
                 shadow = Color(red: 0.30, green: 0.22, blue: 0.16)
@@ -523,11 +641,14 @@ enum EmraMap {
                 stone = Color(red: 0.50, green: 0.35, blue: 0.24)
                 shadow = Color(red: 0.30, green: 0.20, blue: 0.15)
             } else if biome == 3 {
+                stone = Color(red: 0.52, green: 0.51, blue: 0.48)
+                shadow = Color(red: 0.32, green: 0.31, blue: 0.29)
+            } else if biome == 4 {
                 stone = Color(red: 0.64, green: 0.76, blue: 0.87)
                 shadow = Color(red: 0.41, green: 0.53, blue: 0.66)
             } else {
-                stone = Color(red: 0.30, green: 0.20, blue: 0.38)
-                shadow = Color(red: 0.17, green: 0.11, blue: 0.23)
+                stone = Color(red: 0.24, green: 0.17, blue: 0.16)
+                shadow = Color(red: 0.11, green: 0.08, blue: 0.08)
             }
             let trim = allied ? Color(red: 0.30, green: 0.62, blue: 1.0)
                               : Color(red: 1.0, green: 0.28, blue: 0.14)
@@ -742,8 +863,8 @@ enum EmraMap {
         px(352, 33, 20, 1, Color(red: 0.55, green: 0.75, blue: 0.86), 0.45)
         px(354, 45, 18, 1, Color(red: 0.55, green: 0.75, blue: 0.86), 0.35)
 
-        chasm(356, landTop(356) + 2, landBot(356) - 2)
-        iceBridge(356, 40)
+        chasm(734, landTop(734) + 2, landBot(734) - 2)
+        iceBridge(734, 40)
 
         var frng = RNG(20240601)
         for _ in 0..<340 {
@@ -763,16 +884,16 @@ enum EmraMap {
             if !nearNode(x, y) && biomeAt(x, y) == 0 { pine(x, y) }
         }
 
-        for _ in 0..<26 {
-            let x = frng.int(202, 246)
+        for _ in 0..<64 {
+            let x = frng.int(202, 378)
             let y = frng.int(0, rows - 1)
             let top = landTop(x), bot = landBot(x)
             guard y > top + 4, y < bot - 3, !nearNode(x, y) else { continue }
             if biomeAt(x, y) == 1 { dune(x, y, frng.int(7, 15)) }
         }
 
-        for _ in 0..<28 {
-            let x = frng.int(202, 246)
+        for _ in 0..<56 {
+            let x = frng.int(202, 378)
             let y = frng.int(0, rows - 1)
             let top = landTop(x), bot = landBot(x)
             guard y > top + 3, y < bot - 2, !nearNode(x, y, 5, 3) else { continue }
@@ -783,7 +904,9 @@ enum EmraMap {
         }
 
         let wadi: [(Int, Int)] = [(202, 38), (210, 41), (218, 44), (226, 46),
-                                  (234, 50), (241, 52)]
+                                  (234, 50), (241, 52), (252, 49), (266, 53),
+                                  (280, 50), (296, 54), (312, 50), (330, 54),
+                                  (348, 51), (362, 55), (376, 53)]
         for i in 0..<(wadi.count - 1) {
             let a = wadi[i], b = wadi[i + 1]
             let steps = max(1, max(abs(b.0 - a.0), abs(b.1 - a.1)))
@@ -795,16 +918,16 @@ enum EmraMap {
             }
         }
 
-        for _ in 0..<18 {
-            let x = frng.int(204, 244)
+        for _ in 0..<44 {
+            let x = frng.int(204, 374)
             let y = frng.int(0, rows - 1)
             let top = landTop(x), bot = landBot(x)
             guard y > top + 5, y < bot - 2, !nearNode(x, y) else { continue }
             if biomeAt(x, y) == 1 { cactus(x, y) }
         }
 
-        for _ in 0..<8 {
-            let x = frng.int(206, 242)
+        for _ in 0..<16 {
+            let x = frng.int(206, 370)
             let y = frng.int(0, rows - 1)
             let top = landTop(x), bot = landBot(x)
             guard y > top + 4, y < bot - 4, !nearNode(x, y) else { continue }
@@ -812,9 +935,9 @@ enum EmraMap {
         }
 
         mesa(218, 58, 19, 8)
-        oasis(232, 56)
+        oasis(250, 56)
         pyramid(208, 57)
-        pyramid(220, 60)
+        pyramid(316, 58)
 
         let reef: [(Int, Int)] = [(232, 64), (236, 66), (240, 65), (244, 67)]
         for (x, y) in reef {
@@ -861,21 +984,48 @@ enum EmraMap {
         ruinArch(266, 59)
         bones(278, 47)
 
-        // L10 Moonveil Dunes: warm glints and a moonlit ruin arch.
-        for _ in 0..<7 {
-            let x = ashRNG.int(286, 306)
+        // L10 Glasswind Flats: salt crust, pale glints and a ruined waymark.
+        for _ in 0..<14 {
+            let x = ashRNG.int(288, 324)
             let y = ashRNG.int(0, rows - 1)
             let top = landTop(x), bot = landBot(x)
             guard y > top + 4, y < bot - 2, !nearNode(x, y, 6, 4) else { continue }
-            if biomeAt(x, y) == 2 {
-                px(x, y, 2, 1, Color(red: 0.94, green: 0.84, blue: 0.66), 0.7)
+            if biomeAt(x, y) == 1 {
+                px(x, y, 2, 1, Color(red: 0.96, green: 0.95, blue: 0.88), 0.7)
             }
         }
         ruinArch(304, 56)
-        bones(288, 58)
+        bones(292, 58)
 
-        for _ in 0..<20 {
-            let x = ashRNG.int(316, 406)
+        // L11 Cinder Foundry: slag heaps, broken walls and dead trees.
+        for _ in 0..<18 {
+            let x = ashRNG.int(328, 356)
+            let y = ashRNG.int(0, rows - 1)
+            let top = landTop(x), bot = landBot(x)
+            guard y > top + 3, y < bot - 2, !nearNode(x, y) else { continue }
+            if biomeAt(x, y) == 1 { px(x, y, 2, 1, Color(red: 0.34, green: 0.23, blue: 0.18), 0.8) }
+        }
+        ruinArch(334, 56)
+        ruinArch(350, 60)
+        bones(340, 50)
+        deadTree(330, 52)
+        deadTree(354, 48)
+
+        // L12 Red Canyon: layered mesas and dry cuts.
+        mesa(370, 58, 22, 10)
+        ruinArch(360, 60)
+        bones(366, 48)
+        for _ in 0..<10 {
+            let x = ashRNG.int(358, 378)
+            let y = ashRNG.int(0, rows - 1)
+            let top = landTop(x), bot = landBot(x)
+            guard y > top + 3, y < bot - 2, !nearNode(x, y) else { continue }
+            if biomeAt(x, y) == 1 { px(x, y, 2, 1, Color(red: 0.44, green: 0.22, blue: 0.15), 0.8) }
+        }
+
+        // L13-20 mountain passes: scree, thin pine valleys and broken roads.
+        for _ in 0..<44 {
+            let x = ashRNG.int(392, 628)
             let y = ashRNG.int(0, rows - 1)
             let top = landTop(x), bot = landBot(x)
             guard y > top + 3, y < bot - 2, !nearNode(x, y) else { continue }
@@ -884,24 +1034,34 @@ enum EmraMap {
             }
         }
 
-        for x in [324, 331, 338, 372, 380, 389, 397] {
+        for x in [400, 414, 428, 444, 458, 472, 486, 502, 516, 530,
+                  544, 558, 572, 586, 600, 614] {
             let top = landTop(x) + 4
             let bot = landBot(x) - 8
             guard top < bot else { continue }
             let y = top + h(x, 2, 71) % max(1, bot - top)
-            if !nearNode(x, y) { pine(x, y) }
+            if !nearNode(x, y) && biomeAt(x, y) == 3 { pine(x, y) }
         }
 
-        let iceLake: [(Int, Int)] = [(370, 47), (376, 46), (382, 47), (386, 49), (381, 51), (374, 51), (369, 49)]
+        let alpine: [(Int, Int)] = [(516, 54), (520, 53), (524, 54), (526, 56), (522, 57), (518, 56)]
+        for p in alpine {
+            px(p.0 - 1, p.1 - 1, 4, 3, Color(red: 0.36, green: 0.52, blue: 0.56), 0.85)
+            px(p.0 - 1, p.1 - 1, 3, 1, Color(red: 0.62, green: 0.82, blue: 0.86), 0.85)
+        }
+        ruinArch(470, 54)
+        bones(540, 58)
+
+        // L21-27 frozen expanse: ice lakes, crevasses and frozen spires.
+        let iceLake: [(Int, Int)] = [(694, 47), (700, 46), (706, 47), (710, 49), (705, 51), (698, 51), (692, 49)]
         for p in iceLake {
             px(p.0 - 2, p.1 - 1, 5, 3, Color(red: 0.42, green: 0.62, blue: 0.74), 0.85)
             px(p.0 - 1, p.1 - 1, 3, 1, Color(red: 0.74, green: 0.90, blue: 0.98), 0.9)
         }
-        px(374, 48, 10, 1, Color(red: 0.90, green: 0.98, blue: 1.0), 0.75)
-        px(377, 49, 1, 2, Color(red: 0.55, green: 0.74, blue: 0.86), 0.7)
+        px(698, 48, 10, 1, Color(red: 0.90, green: 0.98, blue: 1.0), 0.75)
+        px(701, 49, 1, 2, Color(red: 0.55, green: 0.74, blue: 0.86), 0.7)
 
-        for i in 0..<12 {
-            let x = 320 + h(i, 40, 110) * 84 / 100
+        for i in 0..<24 {
+            let x = 646 + h(i, 40, 110) * 208 / 100
             let top = landTop(x), bot = landBot(x)
             guard bot - top > 12 else { continue }
             let y = top + 4 + h(i, 41, 111) % max(1, bot - top - 8)
@@ -910,54 +1070,97 @@ enum EmraMap {
             }
         }
 
-        let crevasse: [(Int, Int)] = [(328, 35), (331, 38), (330, 41), (334, 44),
-                                      (332, 47), (336, 50), (335, 53)]
+        let crevasse: [(Int, Int)] = [(690, 35), (693, 38), (692, 41), (696, 44),
+                                      (694, 47), (698, 50), (697, 53)]
         for (x, y) in crevasse {
             px(x, y, 1, 1, Color(red: 0.38, green: 0.56, blue: 0.73), 0.85)
             px(x - 1, y, 1, 1, Color(white: 1), 0.35)
         }
 
-        for (x, y) in [(325, 40), (341, 49), (350, 36), (365, 55), (390, 40)] {
+        for (x, y) in [(660, 40), (684, 49), (716, 36), (740, 55), (764, 41),
+                       (788, 52), (812, 38), (836, 50), (852, 42)] {
             px(x, y - 1, 1, 3, Color(red: 0.60, green: 0.82, blue: 0.93), 0.7)
             px(x - 1, y, 3, 1, Color(red: 0.86, green: 0.96, blue: 1.0), 0.7)
             px(x, y, 1, 1, Color(white: 1), 0.9)
         }
 
-        for i in 0..<8 {
-            let x = 318 + h(i, 50, 112) * 86 / 100
+        for i in 0..<16 {
+            let x = 646 + h(i, 50, 112) * 208 / 100
             let top = landTop(x), bot = landBot(x)
             guard bot - top > 14 else { continue }
             let y = top + 6 + h(i, 51, 113) % max(1, bot - top - 12)
             px(x, y, 7, 1, Color(white: 1), 0.22)
         }
 
-        for _ in 0..<6 {
-            let x = ashRNG.int(414, 472)
+        for x in [650, 666, 682, 706, 730, 754, 778, 802, 826, 844] {
+            let top = landTop(x) + 4
+            let bot = landBot(x) - 8
+            guard top < bot else { continue }
+            let y = top + h(x, 6, 73) % max(1, bot - top)
+            if !nearNode(x, y) && biomeAt(x, y) == 4 { pine(x, y) }
+        }
+
+        for (x, y) in [(742, 48), (780, 58), (820, 46)] {
+            px(x - 2, y, 4, 1, Color(red: 0.66, green: 0.78, blue: 0.84), 0.55)
+            px(x, y - 1, 1, 2, Color(red: 0.86, green: 0.96, blue: 1.0), 0.8)
+        }
+
+        spire(756, 46, 12, Color(red: 0.28, green: 0.44, blue: 0.62),
+              Color(red: 0.82, green: 0.95, blue: 1.0))
+        spire(812, 50, 9, Color(red: 0.32, green: 0.48, blue: 0.66),
+              Color(red: 0.86, green: 0.97, blue: 1.0))
+        bones(780, 48)
+
+        // L28-35 the dark core: black peaks, ember seams and the Black Gate.
+        for (x, y, s) in [(884, 48, 8), (900, 50, 10), (918, 46, 9),
+                          (936, 52, 11), (954, 47, 8), (972, 51, 12),
+                          (990, 46, 9), (1008, 52, 10), (1026, 47, 11),
+                          (1044, 51, 8), (1084, 52, 12), (1104, 48, 8)] {
+            blackPeak(x, y, s)
+        }
+
+        for _ in 0..<14 {
+            let x = ashRNG.int(878, 1060)
             let y = ashRNG.int(0, rows - 1)
             let top = landTop(x), bot = landBot(x)
             guard y > top + 4, y < bot - 2, !nearNode(x, y) else { continue }
-            if biomeAt(x, y) == 4 { corruption(x, y) }
+            if biomeAt(x, y) == 5 { corruption(x, y) }
         }
 
-        spire(397, 46, 12, Color(red: 0.28, green: 0.38, blue: 0.54),
-              Color(red: 0.76, green: 0.90, blue: 1.0))
-        spire(414, 52, 8, Color(red: 0.40, green: 0.24, blue: 0.72),
-              Color(red: 0.68, green: 0.44, blue: 1.0))
-        spire(440, 38, 9, Color(red: 0.35, green: 0.20, blue: 0.60),
-              Color(red: 0.62, green: 0.38, blue: 0.96))
-        lightning(384, 20)
-        lightning(404, 18)
+        lavaCrack([(878, 60), (896, 56), (914, 59), (932, 54), (950, 60),
+                   (968, 55), (986, 61), (1004, 56), (1022, 62), (1040, 57),
+                   (1058, 62), (1078, 58), (1098, 62)])
+        lavaCrack([(904, 44), (922, 49), (940, 45), (958, 50), (976, 46),
+                   (994, 51), (1012, 47), (1030, 52), (1048, 48), (1066, 53)])
 
-        for (x, y, s) in [(432, 62, 6), (447, 36, 5), (466, 60, 7)] {
-            px(x - s / 2, y - s / 3, s, s / 2, Color(red: 0.22, green: 0.15, blue: 0.34), 0.8)
-            px(x - s / 2, y + s / 3, s, 1, Color(red: 0.62, green: 0.36, blue: 1.0), 0.35)
+        spire(922, 46, 13, Color(red: 0.16, green: 0.10, blue: 0.10),
+              Color(red: 1.0, green: 0.30, blue: 0.06))
+        spire(980, 50, 10, Color(red: 0.18, green: 0.11, blue: 0.10),
+              Color(red: 0.96, green: 0.26, blue: 0.05))
+        spire(1038, 47, 12, Color(red: 0.14, green: 0.09, blue: 0.09),
+              Color(red: 1.0, green: 0.34, blue: 0.08))
+
+        blackGate(1069, 56)
+
+        for _ in 0..<60 {
+            let x = ashRNG.int(874, 1110)
+            let y = ashRNG.int(0, rows - 1)
+            let top = landTop(x), bot = landBot(x)
+            guard y > top + 2, y < bot - 1, !nearNode(x, y, 4, 3) else { continue }
+            if biomeAt(x, y) == 5 { px(x, y, 1, 1, Color(red: 0.44, green: 0.40, blue: 0.38), 0.45) }
         }
 
         let ridges: [(Int, Int, Int, Bool)] = [
             (190, 42, 7, false), (200, 41, 9, false), (211, 43, 7, false),
-            (322, 40, 6, true),
-            (333, 44, 8, true), (343, 43, 10, true), (353, 45, 7, true),
-            (390, 34, 6, false), (401, 35, 7, false),
+            (392, 42, 7, false), (406, 40, 9, false), (420, 43, 7, false),
+            (438, 41, 8, true), (452, 44, 6, false), (466, 39, 9, true),
+            (482, 43, 7, false), (500, 40, 10, true), (518, 43, 7, false),
+            (536, 41, 8, true), (552, 44, 6, false), (568, 40, 9, true),
+            (586, 43, 7, false), (604, 41, 8, false), (622, 44, 7, false),
+            (650, 42, 7, true), (670, 44, 9, true), (690, 41, 10, true),
+            (714, 44, 8, true), (736, 42, 9, true), (760, 44, 6, true),
+            (784, 42, 9, true), (808, 44, 7, true), (830, 41, 10, true),
+            (852, 44, 8, true),
         ]
         for (x, y, s, snowy) in ridges {
             let top = landTop(x), bot = landBot(x)
@@ -965,14 +1168,21 @@ enum EmraMap {
             mountain(x, y, s, snowy)
         }
 
+        lightning(566, 16)
+        lightning(604, 14)
+
         camp(33, 59)
         ruinArch(60, 44)
         ruinArch(110, 44)
         castle(80, 52, true, false)
         castle(182, 52, true, false)
-        castle(268, 52, true, false)
-        castle(342, 52, true, false)
-        castle(458, 49, false, true)
+        castle(310, 52, true, false)
+        castle(590, 50, true, false)
+        castle(618, 48, false, true)
+        castle(880, 52, true, false)
+        castle(938, 50, false, false)
+        castle(1011, 50, false, false)
+        castle(1098, 50, false, true)
 
         let path = routePoints()
         for p in path {
@@ -1019,9 +1229,16 @@ enum EmraMap {
         islet(380, 12, 4, 2)
         islet(402, 82, 3, 3)
         islet(464, 14, 3, 2)
+        islet(600, 80, 3, 3)
+        islet(690, 10, 3, 2)
+        islet(760, 82, 4, 2)
+        islet(880, 12, 3, 3)
+        islet(980, 80, 4, 3)
+        islet(1040, 10, 3, 3)
+        islet(1100, 82, 3, 3)
         ship(72, 76, true)
-        ship(432, 10, false)
-        compass(452, 79)
+        ship(1080, 10, false)
+        compass(1060, 79)
         serpent(246, 82)
 
         for i in 0..<42 {
@@ -1040,26 +1257,36 @@ enum EmraMap {
             px(x, y, 1, 1, Color(red: 0.95, green: 0.55, blue: 0.22),
                0.35 + Double(h(i, 16, 95)) / 100 * 0.35)
         }
+        for i in 0..<22 {
+            let x = 392 + h(i, 26, 102) * 236 / 100
+            let top = landTop(x), bot = landBot(x)
+            guard bot - top > 10 else { continue }
+            let y = top + 3 + h(i, 27, 103) * max(1, bot - top - 6) / 100
+            px(x, y, 1, 1, Color(red: 0.78, green: 0.80, blue: 0.82),
+               0.30 + Double(h(i, 28, 104)) / 100 * 0.35)
+        }
         for i in 0..<34 {
-            let x = 298 + h(i, 20, 96) * 108 / 100
+            let x = 646 + h(i, 20, 96) * 210 / 100
             let top = landTop(x), bot = landBot(x)
             guard bot - top > 10 else { continue }
             let y = top + 2 + h(i, 21, 97) * max(1, bot - top - 4) / 100
             px(x, y, 1, 1, Color(white: 1), 0.45 + Double(h(i, 22, 98)) / 100 * 0.45)
         }
-        for i in 0..<24 {
-            let x = 424 + h(i, 30, 99) * 50 / 100
+        for i in 0..<28 {
+            let x = 878 + h(i, 30, 99) * 230 / 100
             let top = landTop(x), bot = landBot(x)
             guard bot - top > 10 else { continue }
             let y = top + 3 + h(i, 31, 100) * max(1, bot - top - 6) / 100
-            px(x, y, 1, 1, Color(red: 0.72, green: 0.42, blue: 1.0),
+            px(x, y, 1, 1, Color(red: 1.0, green: 0.42, blue: 0.14),
                0.35 + Double(h(i, 32, 101)) / 100 * 0.45)
         }
 
-        let clouds: [(Int, Int, Int)] = [(30, 12, 26), (168, 24, 30), (300, 11, 22), (386, 70, 28), (120, 76, 20)]
+        let clouds: [(Int, Int, Int)] = [(30, 12, 26), (168, 24, 30), (300, 11, 22),
+                                          (450, 70, 26), (600, 10, 30), (740, 68, 28),
+                                          (900, 12, 24), (1040, 72, 30)]
         for (i, c) in clouds.enumerated() {
             let span = cols + 40
-            let speed = [6, 4, 8, 5, 9][i]
+            let speed = [6, 4, 8, 5, 9, 7, 5, 8][i]
             let x = ((c.0 + Int(t * Double(speed))) % span) - 20
             cloud(x, c.1, c.2, 0.72)
         }
@@ -1067,7 +1294,7 @@ enum EmraMap {
 
     private static func routePoints() -> [(x: Double, y: Double, level: Int)] {
         var points: [(x: Double, y: Double, level: Int)] = []
-        for k in 1..<15 {
+        for k in 1..<CampaignData.levels.count {
             let a = nodeCell(k)
             let b = nodeCell(k + 1)
             let ax = Double(a.x), ay = Double(a.y)

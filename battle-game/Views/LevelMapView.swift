@@ -1,39 +1,34 @@
 import SwiftUI
-import Combine // Timer publisher for joystick pan integration
 
 /// Emra campaign map — the planet advanced humanity takes back across
-/// 15 regions. A three-page pixel world (verdant west → dune seas →
-/// frozen east + umbral core) with castles, blended biome transitions,
-/// and a marching invasion route. Arrows page between regions; tap a lit
-/// node to open its briefing (LevelDetailView).
+/// 35 regions. A seven-page pixel world (verdant west → dune seas →
+/// mountain passes → frozen east → dark core) with castles, blended biome
+/// transitions, and a marching invasion route. Arrows page between regions;
+/// tap a lit node to open its briefing (LevelDetailView).
 struct LevelMapView: View {
     @Environment(\.dismiss) private var dismiss
     /// Campaign path (map pushes briefings by id).
     @Binding var path: NavigationPath
-    /// Free pan across the 3-page world, in full-bleed points (0 = west edge).
+    /// Free pan across the 7-page world, in full-bleed points (0 = west edge).
     @State private var panX: CGFloat = 0
     /// Full-bleed screen size (under notch/home bar), measured by the map layer.
     @State private var fullW: CGFloat = 800
     @State private var fullH: CGFloat = 400
-    /// Joystick knob deflection (x only); drives pan velocity while held.
-    @State private var knob = CGSize.zero
     @State private var refresh = false // flips on appear: re-reads stars/unlocks
-    /// 30fps pan integration: halves Canvas repaints vs 60fps, same scroll speed.
-    private let panTimer = Timer.publish(every: 1 / 30, on: .main, in: .common).autoconnect()
 
     /// Nearest page to the current pan (drives zone chip + dots).
     private var currentPage: Int {
-        min(2, max(0, Int((panX / fullW).rounded())))
+        min(EmraMap.pages - 1, max(0, Int((panX / fullW).rounded())))
     }
 
     private func clampPan(_ x: CGFloat) -> CGFloat {
-        min(max(0, x), fullW * 2)
+        min(max(0, x), fullW * CGFloat(EmraMap.pages - 1))
     }
 
     private func goPage(_ p: Int) {
         SoundEngine.shared.uiTap()
         withAnimation(.easeInOut(duration: 0.45)) {
-            panX = clampPan(CGFloat(min(2, max(0, p))) * fullW)
+            panX = clampPan(CGFloat(min(EmraMap.pages - 1, max(0, p))) * fullW)
         }
     }
 
@@ -50,17 +45,19 @@ struct LevelMapView: View {
                         // when pan state changes (active scroll / page jump).
                         Canvas { ctx, _ in
                             EmraMap.draw(ctx: &ctx,
-                                         size: CGSize(width: fullW * 3, height: fullH),
+                                         size: CGSize(width: fullW * CGFloat(EmraMap.pages),
+                                                      height: fullH),
                                          t: 4.2)
                         }
-                        .frame(width: fullW * 3, height: fullH)
+                        .frame(width: fullW * CGFloat(EmraMap.pages), height: fullH)
                         ForEach(CampaignData.levels) { level in
                             EmraNodeView(level: level, path: $path)
                                 .position(x: EmraMap.worldX(level.id) * fullW,
                                           y: EmraMap.nodeY(level.id) * fullH)
                         }
                     }
-                    .frame(width: fullW * 3, height: fullH, alignment: .leading)
+                    .frame(width: fullW * CGFloat(EmraMap.pages), height: fullH,
+                           alignment: .leading)
                     .offset(x: -panX)
                     Spacer(minLength: 0)
                 }
@@ -69,7 +66,9 @@ struct LevelMapView: View {
                     fullW = full.size.width
                     fullH = full.size.height
                     // Open on the page holding the current objective.
-                    panX = clampPan(CGFloat(min(2, max(0, (CampaignData.unlockedLevel - 1) / 5))) * fullW)
+                    let page = min(EmraMap.pages - 1,
+                                   max(0, (CampaignData.unlockedLevel - 1) / 5))
+                    panX = clampPan(CGFloat(page) * fullW)
                 }
                 .onChange(of: full.size) { newSize in
                     fullW = newSize.width
@@ -104,7 +103,7 @@ struct LevelMapView: View {
                             EmraArrow(dir: -1) { goPage(currentPage - 1) }
                         }
                         Spacer()
-                        if currentPage < 2 {
+                        if currentPage < EmraMap.pages - 1 {
                             EmraArrow(dir: 1) { goPage(currentPage + 1) }
                         }
                     }
@@ -137,27 +136,6 @@ struct LevelMapView: View {
                         EmraIntelStrip()
                             .padding(.horizontal, 12)
                             .padding(.bottom, 10)
-                            .padding(.leading, 132)
-                    }
-
-                    // Map joystick, bottom-left: hold + lean to scroll.
-                    VStack {
-                        Spacer()
-                        HStack {
-                            MapJoystick(knob: $knob)
-                                .padding(.leading, 14)
-                                .padding(.bottom, 86)
-                            Spacer()
-                        }
-                    }
-                    .allowsHitTesting(true)
-                }
-                .onReceive(panTimer) { _ in
-                    // Knob deflection = pan velocity (up to ~350 pt/s).
-                    if knob.width != 0 {
-                        withAnimation(.linear(duration: 1 / 30)) {
-                            panX = clampPan(panX + knob.width * 0.36)
-                        }
                     }
                 }
             }
@@ -165,60 +143,6 @@ struct LevelMapView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { refresh.toggle() }
-    }
-}
-
-/// Small map joystick: lean the knob left/right to scroll the world.
-/// Springs back to center on release.
-private struct MapJoystick: View {
-    @Binding var knob: CGSize
-    private let maxR: CGFloat = 30
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 26)
-                .fill(.black.opacity(0.5))
-                .frame(width: 104, height: 104)
-                .overlay(RoundedRectangle(cornerRadius: 26).stroke(.cyan.opacity(0.5), lineWidth: 2))
-            // Direction ticks.
-            HStack(spacing: 0) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 12, weight: .black))
-                    .foregroundStyle(.cyan.opacity(0.6))
-                    .frame(width: 104, alignment: .leading)
-                    .padding(.leading, 6)
-                Spacer(minLength: 0)
-            }
-            .frame(width: 104)
-            HStack(spacing: 0) {
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .black))
-                    .foregroundStyle(.cyan.opacity(0.6))
-                    .frame(width: 104, alignment: .trailing)
-                    .padding(.trailing, 6)
-            }
-            .frame(width: 104)
-            RoundedRectangle(cornerRadius: 14)
-                .fill(.cyan.opacity(0.85))
-                .frame(width: 44, height: 44)
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(0.7), lineWidth: 2))
-                .shadow(color: .cyan.opacity(0.5), radius: 8)
-                .offset(x: knob.width, y: 0)
-                .gesture(
-                    DragGesture(minimumDistance: 2)
-                        .onChanged { v in
-                            let w = v.translation.width
-                            knob = CGSize(width: min(max(-maxR, w), maxR), height: 0)
-                        }
-                        .onEnded { _ in
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) {
-                                knob = .zero
-                            }
-                        }
-                )
-        }
-        .frame(width: 104, height: 104)
     }
 }
 
@@ -387,7 +311,7 @@ private struct EmraZoneChip: View {
                 .tracking(2)
                 .foregroundStyle(.white)
             HStack(spacing: 6) {
-                ForEach(0..<3, id: \.self) { i in
+                ForEach(0..<EmraMap.pages, id: \.self) { i in
                     Button { jump(i) } label: {
                         Circle()
                             .fill(i == page ? .yellow : .white.opacity(0.35))

@@ -2094,8 +2094,36 @@ enum TwilightRuinsBG {
         return rng.cgFloat(in: margin...(width - margin))
     }
 
-    /// Jagged alpine crag silhouette (240x80), warm sunlit crest and thin
-    /// snow on the highest teeth. Used for Level 14's close ridge line.
+    private static let alpineRidgeW = 1600
+    private static let alpineRidgeH = 120
+    private static let alpineRockBands: [UIColor] = [
+        UIColor(red: 0.58, green: 0.52, blue: 0.48, alpha: 1),
+        UIColor(red: 0.48, green: 0.43, blue: 0.41, alpha: 1),
+        UIColor(red: 0.39, green: 0.35, blue: 0.35, alpha: 1),
+        UIColor(red: 0.31, green: 0.28, blue: 0.29, alpha: 1),
+        UIColor(red: 0.24, green: 0.22, blue: 0.24, alpha: 1),
+        UIColor(red: 0.18, green: 0.17, blue: 0.20, alpha: 1),
+    ]
+    private static let alpineBandEdges = [0, 4, 10, 20, 34, 52, 120]
+    private static let alpinePeakSets: [[(Double, Double, Double)]] = [
+        [(0.04, 10, 0.03), (0.10, 22, 0.08), (0.16, 14, 0.03),
+         (0.25, 32, 0.10), (0.33, 12, 0.025), (0.42, 18, 0.07),
+         (0.50, 15, 0.03), (0.58, 36, 0.11), (0.66, 12, 0.025),
+         (0.76, 24, 0.09), (0.84, 16, 0.03), (0.90, 30, 0.08)],
+        [(0.07, 28, 0.06), (0.13, 16, 0.03), (0.18, 36, 0.07),
+         (0.26, 12, 0.025), (0.33, 22, 0.05), (0.40, 16, 0.03),
+         (0.47, 36, 0.08), (0.56, 14, 0.025), (0.63, 26, 0.06),
+         (0.71, 18, 0.03), (0.80, 34, 0.07), (0.87, 12, 0.025),
+         (0.94, 20, 0.05)],
+        [(0.05, 12, 0.03), (0.12, 20, 0.09), (0.21, 16, 0.03),
+         (0.30, 28, 0.08), (0.39, 12, 0.025), (0.50, 16, 0.10),
+         (0.59, 18, 0.03), (0.68, 26, 0.09), (0.77, 14, 0.025),
+         (0.86, 18, 0.07)],
+    ]
+
+    /// Wide pixel-art alpine crag panorama: banded rock faces, hard pixel
+    /// facets, warm crest rims and snow caps. Drawn at a low resolution and
+    /// stretched with nearest filtering so it matches the rest of the art.
     static func alpineRidgeTexture(variant: Int) -> SKTexture {
         let v = ((variant % 3) + 3) % 3
         while alpineRidgeCache.count <= v {
@@ -2105,40 +2133,187 @@ enum TwilightRuinsBG {
     }
 
     private static func renderAlpineRidge(variant: Int) -> SKTexture {
-        let tex = render(w: 240, h: 80) { cg in
-            cg.clear(CGRect(x: 0, y: 0, width: 240, height: 80))
-            let rock = UIColor(red: 0.36, green: 0.33, blue: 0.33, alpha: 1)
-            let rockLit = UIColor(red: 0.54, green: 0.48, blue: 0.45, alpha: 1)
-            let rockDark = UIColor(red: 0.22, green: 0.20, blue: 0.21, alpha: 1)
-            let rim = UIColor(red: 1.0, green: 0.78, blue: 0.50, alpha: 0.9)
-            let snow = UIColor(red: 0.90, green: 0.92, blue: 0.91, alpha: 0.85)
-            let phase = [0.0, 1.9, 3.7][variant]
-            for x in 0..<240 {
-                let jitter = Double(hash(x, 1, 300 + variant)) / 100.0
-                let wave = 13.0 * sin(Double(x) * 0.052 + phase)
-                    + 8.0 * sin(Double(x) * 0.14 + phase * 1.6)
-                    + jitter * 8.0
-                let top = min(70, max(6, 34 + Int(wave)))
-                for yy in top..<80 {
-                    let depth = yy - top
-                    var c = rock
-                    if depth > 22 || hash(x, yy, 310 + variant) < 12 {
-                        c = rockDark
-                    } else if hash(x, yy, 320 + variant) < 20 {
-                        c = rockLit
+        let tex = render(w: alpineRidgeW, h: alpineRidgeH) { cg in
+            cg.clear(CGRect(x: 0, y: 0,
+                            width: alpineRidgeW, height: alpineRidgeH))
+            let top = alpineRidgeTop(variant: variant)
+            drawAlpineRidge(cg, top: top, variant: variant)
+        }
+        tex.filteringMode = .nearest
+        return tex
+    }
+
+    private static func alpineRidgeTop(variant: Int) -> [Int] {
+        let W = alpineRidgeW
+        let H = alpineRidgeH
+        let phase = [0.0, 1.9, 3.7][variant]
+        let peaks = alpinePeakSets[variant]
+        var top = [Int](repeating: H, count: W)
+        for x in 0..<W {
+            let t = Double(x) / Double(W)
+            let waveA = 7.5 * sin(t * .pi * 2 * 1.15 + phase)
+            let waveB = 4.0 * sin(t * .pi * 2 * 2.70 + phase * 1.7)
+            let serrationA = 2.2 * sin(t * .pi * 2 * 29.0 + phase * 1.4)
+            let serrationB = 1.1 * sin(t * .pi * 2 * 57.0 + phase * 2.6)
+            let teeth = 2.4 * abs(sin(t * .pi * 2 * 13.0 + phase * 0.7))
+            var y = 58.0 + waveA + waveB - teeth + serrationA + serrationB
+            for peak in peaks {
+                let d = abs(t - peak.0)
+                if d < peak.2 {
+                    y -= peak.1 * (1 - d / peak.2)
+                }
+            }
+            let grain = Double(hash(x, 17, 380 + variant) - 50) / 100 * 1.4
+            top[x] = min(H - 6, max(7, Int((y + grain).rounded())))
+        }
+        return top
+    }
+
+    private static func pixelLine(_ cg: CGContext, x0: Int, y0: Int,
+                                  x1: Int, y1: Int, color: UIColor) {
+        var x = x0, y = y0
+        let dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1
+        let dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1
+        var err = dx + dy
+        while true {
+            fill(cg, x, y, 1, 1, color)
+            if x == x1 && y == y1 { break }
+            let e2 = 2 * err
+            if e2 >= dy { err += dy; x += sx }
+            if e2 <= dx { err += dx; y += sy }
+        }
+    }
+
+    private static func drawAlpineRidge(_ cg: CGContext, top: [Int], variant: Int) {
+        let W = alpineRidgeW
+        let H = alpineRidgeH
+        cg.setShouldAntialias(false)
+        let bands = alpineRockBands
+        let edges = alpineBandEdges
+
+        for x in 0..<W {
+            let crest = top[x]
+            var y = crest
+            for i in 0..<bands.count {
+                let end = min(H, crest + edges[i + 1])
+                if end > y {
+                    fill(cg, x, y, 1, end - y, bands[i])
+                    y = end
+                }
+                if y >= H { break }
+            }
+            if hash(x, 30, 400 + variant) < 20 {
+                let y0 = crest + 3 + hash(x, 31, 401 + variant) % 13
+                let h = 3 + hash(x, 32, 402 + variant) % 9
+                if y0 + h < H { fill(cg, x, y0, 1, h, bands[0]) }
+            }
+            if hash(x, 33, 403 + variant) < 10 {
+                let y0 = crest + 6 + hash(x, 34, 404 + variant) % 18
+                let h = 4 + hash(x, 35, 405 + variant) % 12
+                if y0 + h < H { fill(cg, x, y0, 1, h, bands[4]) }
+            }
+        }
+
+        let body = CGMutablePath()
+        body.move(to: CGPoint(x: 0, y: CGFloat(top[0])))
+        for x in 1..<W {
+            body.addLine(to: CGPoint(x: CGFloat(x), y: CGFloat(top[x])))
+        }
+        body.addLine(to: CGPoint(x: CGFloat(W), y: CGFloat(H)))
+        body.addLine(to: CGPoint(x: 0, y: CGFloat(H)))
+        body.closeSubpath()
+
+        var rng = SeededRNG(seed: UInt64(1210 + variant * 131))
+        let lit = UIColor(red: 0.62, green: 0.56, blue: 0.51, alpha: 0.55)
+        let dark = UIColor(red: 0.16, green: 0.15, blue: 0.18, alpha: 0.55)
+
+        cg.saveGState()
+        cg.addPath(body)
+        cg.clip()
+        for i in 0..<72 {
+            let x = rng.int(in: 0...(W - 1))
+            let y0 = top[x] + rng.int(in: 3...44)
+            guard y0 < H - 1 else { continue }
+            let len = rng.int(in: 3...13)
+            let y1 = min(H - 1, y0 + len)
+            let x1 = max(0, min(W - 1, x + rng.int(in: -4...4)))
+            pixelLine(cg, x0: x, y0: y0, x1: x1, y1: y1,
+                      color: i % 3 == 0 ? lit : dark)
+        }
+
+        for _ in 0..<14 {
+            let x = rng.int(in: 0...(W - 1))
+            let y0 = top[x] + rng.int(in: 4...30)
+            guard y0 < H - 1 else { continue }
+            let w = rng.int(in: 6...28)
+            let h = min(H - 1 - y0, rng.int(in: 3...10))
+            guard h > 0 else { continue }
+            let edgeY = max(y0, y0 + rng.int(in: -2...2))
+            let facet = CGMutablePath()
+            facet.move(to: CGPoint(x: CGFloat(x), y: CGFloat(y0)))
+            facet.addLine(to: CGPoint(x: CGFloat(min(W - 1, x + w)),
+                                      y: CGFloat(edgeY)))
+            facet.addLine(to: CGPoint(x: CGFloat(x + w / 2),
+                                      y: CGFloat(y0 + h)))
+            facet.closeSubpath()
+            cg.setFillColor(lit.cgColor)
+            cg.addPath(facet)
+            cg.fillPath()
+        }
+        cg.restoreGState()
+
+        let snowLine = [46, 40, 32][variant]
+        let snow = UIColor(red: 0.94, green: 0.94, blue: 0.92, alpha: 1)
+        let snowShade = UIColor(red: 0.72, green: 0.75, blue: 0.78, alpha: 1)
+        for x in 0..<W where top[x] < snowLine {
+            let depth = 1 + hash(x, 21, 390 + variant) % 3
+            fill(cg, x, top[x], 1, depth, snow)
+            if depth > 1 && top[x] + depth < H {
+                fill(cg, x, top[x] + depth, 1, 1, snowShade)
+            }
+        }
+
+        let rim = UIColor(red: 1.0, green: 0.78, blue: 0.50, alpha: 1)
+        for x in 0..<W {
+            fill(cg, x, top[x], 1, 1, rim)
+        }
+    }
+
+    private static var alpineMist: SKTexture?
+
+    /// Small dithered mist sprite. It is stretched with nearest filtering,
+    /// so the haze breaks into visible pixel clumps like the other layers.
+    private static func alpineMistTexture() -> SKTexture {
+        if let alpineMist { return alpineMist }
+        let W = 192, H = 8
+        let bayer: [[Int]] = [
+            [0, 8, 2, 10],
+            [12, 4, 14, 6],
+            [3, 11, 1, 9],
+            [15, 7, 13, 5],
+        ]
+        let levels: [CGFloat] = [0, 0.22, 0.44, 0.66]
+        let tex = render(w: W, h: H) { cg in
+            cg.clear(CGRect(x: 0, y: 0, width: W, height: H))
+            cg.setShouldAntialias(false)
+            for y in 0..<H {
+                let ny = CGFloat(y) / CGFloat(H - 1) * 2 - 1
+                for x in 0..<W {
+                    let nx = CGFloat(x) / CGFloat(W - 1) * 2 - 1
+                    let d = sqrt(nx * nx + ny * ny)
+                    let a = max(0, 1 - d) * 0.85
+                    let threshold = CGFloat(bayer[y % 4][x % 4]) / 16
+                    let value = a * 3.4 + (threshold - 0.5)
+                    let level = max(0, min(3, Int(value.rounded())))
+                    if level > 0 {
+                        fill(cg, x, y, 1, 1,
+                             UIColor(white: 1, alpha: levels[level]))
                     }
-                    fill(cg, x, yy, 1, 1, c)
-                }
-                fill(cg, x, top, 1, 1, rim)
-                if top < 28, hash(x, 2, 330 + variant) < 65 {
-                    fill(cg, x, top, 1, 2, snow)
-                }
-                if hash(x, 3, 340 + variant) < 12 {
-                    fill(cg, x, top + 4, 1, 7, rockDark.withAlpha(0.8))
                 }
             }
         }
         tex.filteringMode = .nearest
+        alpineMist = tex
         return tex
     }
 
@@ -2154,29 +2329,55 @@ enum TwilightRuinsBG {
             (12, UIColor(red: 0.62, green: 0.51, blue: 0.45, alpha: 1), 0.42),
             (-12, UIColor(red: 0.24, green: 0.24, blue: 0.26, alpha: 1), 0.52),
         ]
+        let baseX = -sceneSize.width * 0.6
+        let ridgeFactors: [CGFloat] = [Balance.parallaxMid - 0.04,
+                                       Balance.parallaxMid,
+                                       Balance.parallaxMid + 0.04]
         for (ri, g) in grades.enumerated() {
+            let root = MidParallaxNode()
+            root.baseX = baseX
+            root.cameraFactor = ridgeFactors[ri]
+            root.position = CGPoint(x: baseX, y: baseY + g.lift)
+            root.zPosition = CGFloat(ri)
             let ridge = SKSpriteNode(texture: alpineRidgeTexture(variant: ri))
             ridge.anchorPoint = CGPoint(x: 0, y: 0.5)
             ridge.size = CGSize(width: panoW, height: panoH)
-            ridge.position = CGPoint(x: -sceneSize.width * 0.6, y: baseY + g.lift)
-            ridge.zPosition = CGFloat(ri)
+            ridge.position = .zero
             ridge.color = g.tint
             ridge.colorBlendFactor = g.blend
-            layer.addChild(ridge)
+            root.addChild(ridge)
+            layer.addChild(root)
         }
+        let mistRoot = MidParallaxNode()
+        mistRoot.baseX = 0
+        mistRoot.cameraFactor = Balance.parallaxMid + 0.06
+        mistRoot.zPosition = 3
+        layer.addChild(mistRoot)
         var rng = SeededRNG(seed: 141120)
-        for _ in 0..<6 {
-            let band = SKSpriteNode(color: SKColor(red: 1.0, green: 0.86, blue: 0.68,
-                                                   alpha: 0.09),
-                                    size: CGSize(width: panoW * rng.cgFloat(in: 0.16...0.30),
-                                                 height: rng.cgFloat(in: 10...18)))
+        let mist = alpineMistTexture()
+        for _ in 0..<9 {
+            let band = SKSpriteNode(texture: mist)
+            band.size = CGSize(width: panoW * rng.cgFloat(in: 0.12...0.22),
+                               height: rng.cgFloat(in: 18...28))
             band.position = CGPoint(x: rng.cgFloat(in: 0...panoW * 0.7),
-                                    y: baseY + rng.cgFloat(in: 12...52))
-            band.zPosition = 3
-            layer.addChild(band)
+                                    y: baseY + rng.cgFloat(in: 14...66))
+            band.zPosition = 0
+            band.color = SKColor(red: 1.0, green: 0.86, blue: 0.68, alpha: 1)
+            band.colorBlendFactor = 1
+            band.alpha = rng.cgFloat(in: 0.11...0.19)
+            mistRoot.addChild(band)
             let drift = SKAction.moveBy(x: rng.cgFloat(in: 70...150), y: 0,
                                         duration: rng.double(in: 9...14))
             band.run(.repeatForever(.sequence([drift, drift.reversed()])))
+        }
+    }
+
+    static func updateMidParallax(in layer: SKNode, camX: CGFloat) {
+        guard Balance.alpinePass else { return }
+        for child in layer.children {
+            guard let p = child as? MidParallaxNode else { continue }
+            p.position.x = p.baseX
+                + camX * (Balance.parallaxMid - p.cameraFactor)
         }
     }
 
@@ -3117,6 +3318,11 @@ private extension UIColor {
     func withAlpha(_ a: CGFloat) -> UIColor {
         withAlphaComponent(a)
     }
+}
+
+private final class MidParallaxNode: SKNode {
+    var baseX: CGFloat = 0
+    var cameraFactor: CGFloat = 0
 }
 
 private struct SeededRNG {

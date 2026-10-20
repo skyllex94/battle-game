@@ -81,6 +81,7 @@ struct GameView: View {
     /// Milestone hero unlocked by this level's briefing (shown once, then
     /// claimed + auto-equipped). Nil when nothing new or already owned.
     @State private var heroUnlock: HeroDef?
+    @State private var showDiagnostics = false
     @State private var minimap = MinimapSnapshot(levelWidth: Balance.levelWidth, heroX: Balance.heroSpawnX,
                                                  cameraX: 0, viewWidth: 1334,
                                                  playerBaseX: Balance.playerBaseX,
@@ -154,17 +155,46 @@ struct GameView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 8)
-                HStack {
-                    Spacer(minLength: 0)
-                    PerformanceOverlay(scene: scene)
-                        .allowsHitTesting(false)
-                }
-                .padding(.horizontal, 14)
-                .padding(.trailing, 36)
                 Spacer()
                     .allowsHitTesting(false)
             }
             .ignoresSafeArea(edges: .top)
+
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                if showDiagnostics {
+                    PerformanceOverlay(scene: scene) {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.92)) {
+                            showDiagnostics = false
+                        }
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else {
+                    Button {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.92)) {
+                            showDiagnostics = true
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "waveform.path.ecg")
+                            Text("DIAG")
+                            Image(systemName: "chevron.up")
+                        }
+                        .font(.system(size: 9, weight: .black, design: .monospaced))
+                        .tracking(1)
+                        .foregroundStyle(.white.opacity(0.55))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(.black.opacity(0.55))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.opacity)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, 4)
+            .animation(.spring(response: 0.28, dampingFraction: 0.92), value: showDiagnostics)
 
             // Pause menu overlay (sim is frozen while this is up).
             // Tap outside the card to resume automatically.

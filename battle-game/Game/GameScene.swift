@@ -512,6 +512,7 @@ final class GameScene: SKScene {
         skyLayer.position = CGPoint(x: camX, y: size.height / 2)
         farLayer.position.x = camX * (1 - Balance.parallaxFar)
         midLayer.position.x = camX * (1 - Balance.parallaxMid)
+        TwilightRuinsBG.updateMidParallax(in: midLayer, camX: camX)
         foregroundLayer.position.x = -camX * (Balance.parallaxForeground - 1)
     }
 

@@ -24,9 +24,10 @@ struct LevelDetailView: View {
         EnemyKind.allCases.filter { $0.unlockLevel == level.id }
     }
 
-    /// Every hostile type that can march on this level.
+    /// Every hostile type this level actually summons (not just every unit
+    /// unlocked by this point in the campaign).
     private var activeEnemies: [EnemyKind] {
-        EnemyKind.allCases.filter { $0.unlockLevel <= level.id }
+        Balance.layout(for: level.id).enemyKinds
     }
 
     /// Army unit that joins the roster on this level, if any.

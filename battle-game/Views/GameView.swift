@@ -35,8 +35,6 @@ struct GameView: View {
     }
 
     @State private var scene: GameScene
-    @State private var moveX: CGFloat = 0
-    @State private var jumpHeld = false
     @State private var showMenu = false
     @State private var showWin = false
     @State private var winStars = 0
@@ -91,80 +89,82 @@ struct GameView: View {
                                                  enemyBaseX: Balance.enemyBaseX,
                                                  heroHP: Balance.heroHP, heroMaxHP: Balance.heroHP,
                                                  money: Balance.startingGold)
+    /// Polls the scene for HUD/minimap state at ~7Hz.
     private let debugTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack {
-            SpriteView(scene: scene, options: [.ignoresSiblingOrder])
+            SpriteView(scene: scene, preferredFramesPerSecond: 60, options: [.ignoresSiblingOrder])
                 .ignoresSafeArea()
 
             // Bottom controls sit BELOW the HUD so HUD buttons always win
             // hit-testing (this layer previously covered them and ate taps).
             // Joystick (bottom-left) runs the hero; push up to jump.
             HStack(alignment: .bottom) {
-                JoystickView(moveX: $moveX, jumpHeld: $jumpHeld)
+                JoystickView(onMove: { scene.heroInputX = $0 },
+                            onJump: { scene.heroJumpHeld = $0 })
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 Spacer(minLength: 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
-            // Top command strip, glued to the screen edge like the army tabs
-            // are glued to the bottom. Compact minimap wins on narrow
+            // Top command strip with the army tabs tucked directly beneath
+            // it. Keeping the tabs off the bottom edge avoids the iPhone
+            // home-gesture zone entirely. Compact minimap wins on narrow
             // screens via ViewThatFits.
             VStack(spacing: 0) {
                 ViewThatFits(in: .horizontal) {
                     commandBar(minimapWidth: 230)
                     commandBar(minimapWidth: 160)
                 }
+                VStack(spacing: 4) {
+                    HStack(spacing: 8) {
+                        // Locked units aren't shown at all (Heavy arrives L2+).
+                        ForEach(ArmyKind.allCases.filter { ArmyKind.isUnlocked($0, levelId: level.id) }) { kind in
+                            ArmyCardButton(kind: kind, money: minimap.money,
+                                           cooldownFrac: cooldownFraction(for: kind),
+                                           armyFull: minimap.allyCount >= minimap.allyCap) {
+                                if !scene.summonAlly(kind: kind) {
+                                    deployRefusal = scene.summonRefusal(for: kind)
+                                    // Auto-clear the toast so it never sticks.
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+                                        deployRefusal = nil
+                                    }
+                                } else {
+                                    deployRefusal = nil
+                                }
+                            }
+                        }
+                        Spacer()
+                    }
+                    // Refusal toast: explains WHY a deploy didn't happen
+                    // (army full / not enough gold / still recharging).
+                    if let refusal = deployRefusal {
+                        Text(refusal)
+                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                            .tracking(2)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10).padding(.vertical, 4)
+                            .background(.red.opacity(0.9))
+                            .clipShape(PixelPanelShape(cut: 5))
+                            .overlay(PixelPanelShape(cut: 5).stroke(.white.opacity(0.6), lineWidth: 1.5))
+                            .shadow(color: .black.opacity(0.5), radius: 6)
+                            .transition(.opacity)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 8)
+                HStack {
+                    Spacer(minLength: 0)
+                    PerformanceOverlay(scene: scene)
+                        .allowsHitTesting(false)
+                }
+                .padding(.horizontal, 14)
+                .padding(.trailing, 36)
                 Spacer()
                     .allowsHitTesting(false)
             }
             .ignoresSafeArea(edges: .top)
-
-            // Bottom army tabs: floating islands dropped 20pt into the
-            // safe area — sits right above the screen edge. Note: this
-            // re-enters the iPhone home-gesture zone, so bottom-edge swipes
-            // may hit Home again.
-            VStack(spacing: 0) {
-                Spacer()
-                HStack(spacing: 8) {
-                    // Locked units aren't shown at all (Heavy arrives L2+).
-                    ForEach(ArmyKind.allCases.filter { ArmyKind.isUnlocked($0, levelId: level.id) }) { kind in
-                        ArmyCardButton(kind: kind, money: minimap.money,
-                                       cooldownFrac: cooldownFraction(for: kind),
-                                       armyFull: minimap.allyCount >= minimap.allyCap) {
-                            if !scene.summonAlly(kind: kind) {
-                                deployRefusal = scene.summonRefusal(for: kind)
-                                // Auto-clear the toast so it never sticks.
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-                                    deployRefusal = nil
-                                }
-                            } else {
-                                deployRefusal = nil
-                            }
-                        }
-                    }
-                    Spacer()
-                }
-                .padding(.leading, 4)
-                .padding(.bottom, 0)
-                .offset(y: 20)
-                // Refusal toast: explains WHY a deploy didn't happen
-                // (army full / not enough gold / still recharging).
-                if let refusal = deployRefusal {
-                    Text(refusal)
-                        .font(.system(size: 11, weight: .black, design: .monospaced))
-                        .tracking(2)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10).padding(.vertical, 4)
-                        .background(.red.opacity(0.9))
-                        .clipShape(PixelPanelShape(cut: 5))
-                        .overlay(PixelPanelShape(cut: 5).stroke(.white.opacity(0.6), lineWidth: 1.5))
-                        .shadow(color: .black.opacity(0.5), radius: 6)
-                        .padding(.bottom, 6)
-                        .transition(.opacity)
-                }
-            }
 
             // Pause menu overlay (sim is frozen while this is up).
             // Tap outside the card to resume automatically.
@@ -195,8 +195,8 @@ struct GameView: View {
                     PixelMenuButton(title: "Restart Level", style: .ghost) {
                         SoundEngine.shared.uiTap()
                         scene.resetLevel()
-                        scene.heroInputX = moveX
-                        scene.heroJumpHeld = jumpHeld
+                        scene.heroInputX = 0
+                        scene.heroJumpHeld = false
                         weapon = scene.heroWeapon
                         showMenu = false
                         showDefeat = false
@@ -278,8 +278,8 @@ struct GameView: View {
                         SoundEngine.shared.uiTap()
                         resetWinState()
                         scene.resetLevel()
-                        scene.heroInputX = moveX
-                        scene.heroJumpHeld = jumpHeld
+                        scene.heroInputX = 0
+                        scene.heroJumpHeld = false
                         weapon = scene.heroWeapon
                         showWin = false
                         winDetectedAt = nil
@@ -379,8 +379,8 @@ struct GameView: View {
                         PixelMenuButton(title: "Retry", style: .primary, width: 140) {
                             SoundEngine.shared.uiTap()
                             scene.resetLevel()
-                            scene.heroInputX = moveX
-                            scene.heroJumpHeld = jumpHeld
+                            scene.heroInputX = 0
+                            scene.heroJumpHeld = false
                             weapon = scene.heroWeapon
                             showDefeat = false
                             revivedThisRun = false
@@ -665,10 +665,9 @@ struct GameView: View {
                 }
         }
         .toolbar(.hidden, for: .navigationBar)
-        .onChange(of: moveX) { scene.heroInputX = $0 }
-        .onChange(of: jumpHeld) { scene.heroJumpHeld = $0 }
         .onReceive(debugTimer) { _ in
-            minimap = scene.minimap
+            let snapshot = scene.minimap
+            if snapshot != minimap { minimap = snapshot }
             // Auto-switches in the scene change the active gun behind our
             // back — mirror it so the HUD portrait stays honest.
             if weapon != scene.heroWeapon { weapon = scene.heroWeapon }
@@ -718,8 +717,8 @@ struct GameView: View {
             }
         }
         .onAppear {
-            scene.heroInputX = moveX
-            scene.heroJumpHeld = jumpHeld
+            scene.heroInputX = 0
+            scene.heroJumpHeld = false
             weapon = scene.heroWeapon
             revivedThisRun = false
             // New-unit briefing: let the battle breathe 1s, then freeze and brief.
@@ -949,10 +948,6 @@ struct GameView: View {
                 UnitStatChip(label: "TOWER HP", value: "\(Int(Balance.enemyTowerHealth(forLevel: level.id)))")
                 UnitStatChip(label: "RANGE", value: "\(Int(Balance.towerRange))")
             }
-            PixelMenuButton(title: "Fortify", style: .primary) {
-                SoundEngine.shared.uiTap()
-                closeTowerIntro()
-            }
             Text("TAP OUTSIDE TO RESUME")
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                 .tracking(2)
@@ -1075,8 +1070,8 @@ struct GameView: View {
     private func doRevive() {
         revivedThisRun = true
         scene.reviveHero()
-        scene.heroInputX = moveX
-        scene.heroJumpHeld = jumpHeld
+        scene.heroInputX = 0
+        scene.heroJumpHeld = false
         weapon = scene.heroWeapon
         showDefeat = false
         scene.isPaused = false
@@ -1256,7 +1251,7 @@ private struct PixelTopBarShape: Shape {
 
 /// Pixel panel: all four corners chamfered — the dialog/card shape.
 /// Hard stepped edges read as retro pixel UI (no smooth rounds).
-private struct PixelPanelShape: Shape {
+struct PixelPanelShape: Shape {
     var cut: CGFloat = 10
     func path(in rect: CGRect) -> Path {
         var p = Path()

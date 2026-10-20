@@ -62,7 +62,7 @@ struct CampaignData {
                  briefing: "The dunes end at a wall of black rock. Stonewatch Pass is the only way through, and it is watched. Objective: take the pass and destroy the enemy HQ.",
                  mapArtName: "MapBG", enemyWaves: 10, towerHP: 440, baseHP: 1120),
         LevelDef(id: 14, name: "Granite Reach", subtitle: "March the high plateau",
-                 briefing: "Above the pass the world turns to granite and thin air. The enemy holds the high ground; take it anyway. Objective: cross Granite Reach and destroy the enemy HQ.",
+                 briefing: "Above the pass the world turns to bare granite and thin air. Pines cling to the crags and the road runs across a high rock shelf. The enemy holds the high ground; take it anyway. Objective: cross Granite Reach and destroy the enemy HQ.",
                  mapArtName: "MapBG", enemyWaves: 10, towerHP: 460, baseHP: 1180),
         LevelDef(id: 15, name: "Titan's Gate", subtitle: "Break the mountain gate",
                  briefing: "A gate carved for giants bars the eastern road — old stone, new guns. Objective: break Titan's Gate and destroy the enemy HQ.",

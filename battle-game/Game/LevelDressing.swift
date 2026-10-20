@@ -1178,4 +1178,219 @@ enum LevelDressing {
             }
         }
     }
+
+    /// Granite Reach dressing: angular granite shelves, scree clusters,
+    /// alpine scrub and trail cairns along a bare sunrise plateau. No sand
+    /// or desert props — the whole field is mountain rock.
+    static func buildAlpinePass(in world: SKNode) {
+        let gy = Balance.groundTopY
+        let width = Balance.levelWidth
+
+        // Low sunrise wash on the shelf.
+        let wash = SKSpriteNode(color: SKColor(red: 1.0, green: 0.80, blue: 0.55, alpha: 0.07),
+                                size: CGSize(width: width, height: 104))
+        wash.anchorPoint = CGPoint(x: 0, y: 1)
+        wash.position = CGPoint(x: 0, y: gy)
+        wash.zPosition = 2
+        world.addChild(wash)
+
+        bakeAlpinePassRocks(in: world, width: width, gy: gy)
+        bakeAlpineScrub(in: world, width: width, gy: gy)
+        bakeAlpineCairns(in: world, width: width, gy: gy)
+
+        // Warm sunrise motes drifting over the shelf.
+        var rng = DressingRNG(seed: 141415)
+        for i in 0..<14 {
+            let homeX = rng.cgFloat(in: 60...(width - 60))
+            let mote = SKSpriteNode(color: SKColor(red: 1.0, green: 0.82, blue: 0.56, alpha: 0.85),
+                                    size: CGSize(width: 2, height: 2))
+            mote.position = CGPoint(x: homeX, y: gy + rng.cgFloat(in: 4...44))
+            mote.zPosition = 4
+            world.addChild(mote)
+            let up = SKAction.moveBy(x: rng.cgFloat(in: -20...20),
+                                     y: rng.cgFloat(in: 44...96),
+                                     duration: rng.double(in: 2.6...4.4))
+            let fade = SKAction.sequence([
+                SKAction.wait(forDuration: 1.4),
+                SKAction.fadeOut(withDuration: 1.4),
+            ])
+            mote.run(.repeatForever(.sequence([
+                SKAction.wait(forDuration: Double(i) * 0.20),
+                SKAction.group([up, fade]),
+                SKAction.run { mote.position = CGPoint(x: homeX, y: gy + 4) },
+                SKAction.fadeIn(withDuration: 0.35),
+            ])))
+        }
+    }
+
+    /// Outcrops + scree are static: bake them into 1,024pt strips.
+    private static func bakeAlpinePassRocks(in world: SKNode,
+                                            width: CGFloat, gy: CGFloat) {
+        let chunkW: CGFloat = 1024
+        var x0: CGFloat = 0
+        var chunk = 0
+        while x0 < width {
+            let span = min(chunkW, width - x0)
+            var rng = DressingRNG(seed: UInt64(141414 + chunk * 431))
+            let root = SKNode()
+
+            let outcrops = max(0, Int((15 * span / width).rounded()))
+            var placed = 0
+            var guard_ = 0
+            while placed < outcrops, guard_ < outcrops * 40 + 40 {
+                guard_ += 1
+                let x = rng.cgFloat(in: 80...max(80, span - 80))
+                guard isClear(x0 + x, margin: 165) else { continue }
+                let w = rng.cgFloat(in: 24...68)
+                let h = rng.cgFloat(in: 8...24)
+                let path = CGMutablePath()
+                path.move(to: CGPoint(x: -w / 2, y: 0))
+                path.addLine(to: CGPoint(x: -w * 0.34, y: h * 0.58))
+                path.addLine(to: CGPoint(x: -w * 0.05, y: h))
+                path.addLine(to: CGPoint(x: w * 0.30, y: h * 0.72))
+                path.addLine(to: CGPoint(x: w / 2, y: 0))
+                path.closeSubpath()
+                let rock = SKShapeNode(path: path)
+                rock.fillColor = SKColor(red: 0.20, green: 0.19, blue: 0.20, alpha: 1)
+                rock.strokeColor = SKColor(red: 0.96, green: 0.72, blue: 0.44, alpha: 0.55)
+                rock.lineWidth = 1
+                rock.position = CGPoint(x: x, y: gy + 2)
+                rock.zPosition = 3
+                root.addChild(rock)
+                let rim = SKSpriteNode(color: SKColor(red: 0.96, green: 0.80, blue: 0.58, alpha: 0.65),
+                                       size: CGSize(width: w * 0.42, height: 1))
+                rim.position = CGPoint(x: w * 0.04, y: h * 0.86)
+                rim.zPosition = 1
+                rock.addChild(rim)
+                placed += 1
+            }
+
+            let clusters = max(0, Int((18 * span / width).rounded()))
+            for _ in 0..<clusters {
+                let x = rng.cgFloat(in: 55...max(55, span - 55))
+                for _ in 0..<rng.int(in: 3...6) {
+                    let s = rng.cgFloat(in: 2...5)
+                    let chip = SKSpriteNode(color: rng.int(in: 0...2) == 0
+                        ? SKColor(red: 0.60, green: 0.57, blue: 0.52, alpha: 0.9)
+                        : SKColor(red: 0.27, green: 0.26, blue: 0.27, alpha: 0.95),
+                        size: CGSize(width: s, height: s * 0.7))
+                    chip.position = CGPoint(x: x + rng.cgFloat(in: -22...22),
+                                            y: gy + 2 + rng.cgFloat(in: 0...4))
+                    chip.zPosition = 3
+                    root.addChild(chip)
+                }
+            }
+
+            if let baked = SceneryBake.baked(key: "alpine.pass.rock.\(Int(width)).\(chunk)",
+                                             build: { root }) {
+                SceneryBake.add(baked, to: world,
+                                origin: CGPoint(x: x0, y: 0), zPosition: 3)
+            }
+            x0 += span
+            chunk += 1
+        }
+    }
+
+    /// Scrub tufts remain individual sprites so they can keep their sway.
+    private static func bakeAlpineScrub(in world: SKNode,
+                                        width: CGFloat, gy: CGFloat) {
+        var bakes: [SceneryBake.Baked] = []
+        for v in 0..<8 {
+            if let baked = SceneryBake.baked(key: "alpine.pass.scrub.\(v)", build: {
+                alpineScrub(variant: v)
+            }) {
+                bakes.append(baked)
+            }
+        }
+        guard !bakes.isEmpty else { return }
+
+        var rng = DressingRNG(seed: 141416)
+        var placed = 0
+        var guard_ = 0
+        while placed < 24, guard_ < 300 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 50...(width - 50))
+            guard isClear(x) else { continue }
+            let baked = bakes[rng.int(in: 0...(bakes.count - 1))]
+            let tuft = SceneryBake.addAtRoot(baked, to: world,
+                                            at: CGPoint(x: x, y: gy + 2), zPosition: 3)
+            tuft.run(.repeatForever(.sequence([
+                .rotate(toAngle: 0.025, duration: rng.double(in: 1.8...3.0)),
+                .rotate(toAngle: -0.025, duration: rng.double(in: 1.8...3.0)),
+            ])))
+            placed += 1
+        }
+    }
+
+    private static func alpineScrub(variant: Int) -> SKNode {
+        var rng = DressingRNG(seed: UInt64(141_500 + variant * 97))
+        let tuft = SKNode()
+        for b in 0..<rng.int(in: 3...5) {
+            let h = rng.cgFloat(in: 8...18)
+            let blade = SKSpriteNode(color: SKColor(red: 0.24, green: 0.31, blue: 0.20, alpha: 1),
+                                     size: CGSize(width: 2, height: h))
+            blade.anchorPoint = CGPoint(x: 0.5, y: 0)
+            blade.position = CGPoint(x: CGFloat(b) * 4 - 6, y: 0)
+            blade.zRotation = rng.cgFloat(in: -0.20...0.20)
+            blade.zPosition = 1
+            tuft.addChild(blade)
+            let rim = SKSpriteNode(color: SKColor(red: 0.94, green: 0.74, blue: 0.46, alpha: 0.55),
+                                   size: CGSize(width: 1, height: h * 0.72))
+            rim.anchorPoint = CGPoint(x: 0.5, y: 0)
+            rim.position = CGPoint(x: blade.position.x + 1, y: 0)
+            rim.zRotation = blade.zRotation
+            rim.zPosition = 2
+            tuft.addChild(rim)
+        }
+        return tuft
+    }
+
+    /// Cairns are static: bake a small set of stacked-stone variants.
+    private static func bakeAlpineCairns(in world: SKNode,
+                                         width: CGFloat, gy: CGFloat) {
+        var bakes: [SceneryBake.Baked] = []
+        for v in 0..<5 {
+            if let baked = SceneryBake.baked(key: "alpine.pass.cairn.\(v)", build: {
+                alpineCairn(variant: v)
+            }) {
+                bakes.append(baked)
+            }
+        }
+        guard !bakes.isEmpty else { return }
+
+        var rng = DressingRNG(seed: 141417)
+        var placed = 0
+        var guard_ = 0
+        while placed < 5, guard_ < 180 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 140...(width - 140))
+            guard isClear(x, margin: 150) else { continue }
+            let baked = bakes[rng.int(in: 0...(bakes.count - 1))]
+            SceneryBake.addAtRoot(baked, to: world,
+                                  at: CGPoint(x: x, y: gy + 2), zPosition: 3)
+            placed += 1
+        }
+    }
+
+    private static func alpineCairn(variant: Int) -> SKNode {
+        var rng = DressingRNG(seed: UInt64(141_600 + variant * 71))
+        let cairn = SKNode()
+        var yy: CGFloat = 0
+        let stones = rng.int(in: 3...5)
+        for s in 0..<stones {
+            let w = rng.cgFloat(in: 14...20) - CGFloat(s) * 2.2
+            let h = rng.cgFloat(in: 4...6)
+            let stone = SKShapeNode(rectOf: CGSize(width: w, height: h), cornerRadius: 1)
+            stone.fillColor = s % 2 == 0
+                ? SKColor(red: 0.34, green: 0.32, blue: 0.31, alpha: 1)
+                : SKColor(red: 0.26, green: 0.25, blue: 0.26, alpha: 1)
+            stone.strokeColor = SKColor(red: 0.92, green: 0.72, blue: 0.46, alpha: 0.5)
+            stone.lineWidth = 1
+            stone.position = CGPoint(x: rng.cgFloat(in: -2...2), y: yy + h / 2)
+            stone.zPosition = CGFloat(s)
+            cairn.addChild(stone)
+            yy += h - 1
+        }
+        return cairn
+    }
 }

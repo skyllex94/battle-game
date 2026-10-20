@@ -10,6 +10,8 @@ import SpriteKit
 /// .jet is the jetpack droid debuting in Level 7 — hovers low over the
 /// lane on twin thrusters raining bolts, and jukes up/down around every
 /// 5th incoming shot.
+/// .heli is the Heli Gunship debuting in Level 13 — a futuristic attack
+/// helicopter that cruises above the jets and fires 3-round bursts.
 enum EnemyKind: Int, CaseIterable {
     case raider
     case brute
@@ -17,13 +19,25 @@ enum EnemyKind: Int, CaseIterable {
     case skitter
     case jet
     case mech
+    case heli
 
     /// True for claw/axe fighters (swing + direct damage); false for shooters.
     var isMelee: Bool { self == .reaver || self == .skitter }
-    /// True for the flying gun-robot (hover cruise + dodge jukes).
-    var isFlying: Bool { self == .jet }
+    /// True for airborne units (hover cruise; jets also dodge-juke).
+    var isFlying: Bool { self == .jet || self == .heli }
     /// True for the heavy mech walker (huge, slow, burst-firing).
     var isMech: Bool { self == .mech }
+    /// True for the high-altitude attack helicopter.
+    var isHelicopter: Bool { self == .heli }
+
+    /// Cruise altitude above the walkable deck (0 for grounded kinds).
+    var flightHeight: CGFloat {
+        switch self {
+        case .jet: return Balance.jetHoverHeight
+        case .heli: return Balance.heliHoverHeight
+        default: return 0
+        }
+    }
 
     /// Display name (briefings + intel cards).
     var displayName: String {
@@ -34,6 +48,7 @@ enum EnemyKind: Int, CaseIterable {
         case .skitter: return "Skitter"
         case .jet: return "Jetpack Droid"
         case .mech: return "Mech Walker"
+        case .heli: return "Heli Gunship"
         }
     }
 
@@ -47,6 +62,7 @@ enum EnemyKind: Int, CaseIterable {
         case .skitter: return 6
         case .jet: return 7
         case .mech: return 9
+        case .heli: return 13
         }
     }
 
@@ -59,6 +75,7 @@ enum EnemyKind: Int, CaseIterable {
         case .skitter: return "Claw zergling. Fast, fragile, swarms."
         case .jet: return "Flying droid. Hovers and jukes around your fire."
         case .mech: return "Walking gun platform. Heavy armor, burst fire."
+        case .heli: return "Attack helicopter. High hover, 3-round gun bursts."
         }
     }
 
@@ -70,6 +87,7 @@ enum EnemyKind: Int, CaseIterable {
         case .skitter: return Balance.skitterHP
         case .jet: return Balance.jetHP
         case .mech: return Balance.mechHP
+        case .heli: return Balance.heliHP
         }
     }
 
@@ -81,6 +99,7 @@ enum EnemyKind: Int, CaseIterable {
         case .skitter: return Balance.skitterSpeed
         case .jet: return Balance.jetSpeed
         case .mech: return Balance.mechSpeed
+        case .heli: return Balance.heliSpeed
         }
     }
 
@@ -92,6 +111,7 @@ enum EnemyKind: Int, CaseIterable {
         case .skitter: return Balance.skitterSightRange
         case .jet: return Balance.jetSightRange
         case .mech: return Balance.mechSightRange
+        case .heli: return Balance.heliSightRange
         }
     }
 
@@ -104,6 +124,7 @@ enum EnemyKind: Int, CaseIterable {
         case .skitter: return Balance.skitterMeleeRange
         case .jet: return Balance.jetShootRange
         case .mech: return Balance.mechShootRange
+        case .heli: return Balance.heliShootRange
         }
     }
 
@@ -115,6 +136,7 @@ enum EnemyKind: Int, CaseIterable {
         case .skitter: return Balance.skitterSwingCooldown
         case .jet: return Balance.jetFireCooldown
         case .mech: return Balance.mechFireCooldown
+        case .heli: return Balance.heliFireCooldown
         }
     }
 
@@ -126,6 +148,7 @@ enum EnemyKind: Int, CaseIterable {
         case .skitter: return 0
         case .jet: return Balance.jetBoltDamage
         case .mech: return Balance.mechBoltDamage
+        case .heli: return Balance.heliBoltDamage
         }
     }
 
@@ -134,7 +157,7 @@ enum EnemyKind: Int, CaseIterable {
         switch self {
         case .reaver: return Balance.reaverMeleeDamage
         case .skitter: return Balance.skitterMeleeDamage
-        case .raider, .brute, .jet, .mech: return 0
+        case .raider, .brute, .jet, .mech, .heli: return 0
         }
     }
 
@@ -148,6 +171,7 @@ enum EnemyKind: Int, CaseIterable {
         case .skitter: base = Balance.skitterReward
         case .jet: base = Balance.jetReward
         case .mech: base = Balance.mechReward
+        case .heli: base = Balance.heliReward
         }
         let scaled = Int((CGFloat(base) * Balance.enemyRewardScale).rounded(.down))
         return (scaled / 10) * 10
@@ -162,6 +186,7 @@ enum EnemyKind: Int, CaseIterable {
         case .skitter: return .skitter
         case .jet: return .jet
         case .mech: return .mech
+        case .heli: return .heli
         }
     }
 
@@ -174,6 +199,7 @@ enum EnemyKind: Int, CaseIterable {
         case .skitter: return "SWARM"
         case .jet: return "FLYER"
         case .mech: return "HEAVY"
+        case .heli: return "GUNSHIP"
         }
     }
 
@@ -221,6 +247,8 @@ final class EnemyNode: SKSpriteNode {
     var jukeTarget: CGFloat = 0   // dodge peak the offset chases, then clears
     /// Thruster-exhaust timer (jets puff exhaust while flying).
     var jetExhaustTimer: TimeInterval = 0
+    /// Rotor-wash sound timer (heli): retriggers the looping blade slap.
+    var rotorSoundTimer: TimeInterval = 0
     /// Machine-gun burst ramp (mech): volley size cycles 1 -> 2 -> 3.
     var mechBurstStep: Int = 0
     /// Footfall dust timer (mech): heavy steps kick up sand.
@@ -266,6 +294,7 @@ final class EnemyNode: SKSpriteNode {
             case .skitter: return .skitter
             case .jet: return .jet
             case .mech: return .mech
+            case .heli: return .heli
             }
         }())
         let size: CGSize
@@ -276,6 +305,7 @@ final class EnemyNode: SKSpriteNode {
         case .skitter: size = CGSize(width: 36, height: 48)
         case .jet: size = CGSize(width: 84, height: 60)
         case .mech: size = CGSize(width: 112, height: 104)
+        case .heli: size = CGSize(width: 120, height: 64)
         }
         super.init(texture: nil, color: .clear, size: size)
         name = "enemy"
@@ -348,6 +378,7 @@ final class EnemyNode: SKSpriteNode {
             case .skitter: return .skitter
             case .jet: return .jet
             case .mech: return .mech
+            case .heli: return .heli
             }
         }())
         armTex.filteringMode = .nearest
@@ -364,6 +395,7 @@ final class EnemyNode: SKSpriteNode {
             case .raider: return CGPoint(x: 6, y: 8)
             case .jet: return CGPoint(x: 13, y: 0)
             case .mech: return CGPoint(x: 41, y: 19)
+            case .heli: return CGPoint(x: 21, y: -20)
             }
         }()
         armPivot.addChild(spikeSprite)
@@ -461,7 +493,9 @@ final class EnemyNode: SKSpriteNode {
     /// and eases the spike-arm toward its target (levels out when idle).
     /// Called by the scene.
     func animateMarch(dt: TimeInterval, advancing: Bool) {
-        if kind == .mech {
+        if kind == .heli {
+            animateHeli(dt: dt, advancing: advancing)
+        } else if kind == .mech {
             animateMech(dt: dt, advancing: advancing)
         } else {
             if advancing {
@@ -479,6 +513,20 @@ final class EnemyNode: SKSpriteNode {
         let target = desiredAim ?? 0
         aimAngle += (target - aimAngle) * min(1, 12 * dt)
         armPivot.zRotation = aimAngle + swingOffset
+    }
+
+    /// Helicopter hover: the rotor keeps turning whether the gunship is
+    /// advancing or holding station, so the 4 blade-blur frames cycle at
+    /// all times. Forward flight noses down; stopping to shoot levels the
+    /// fuselage like a real gunship.
+    private func animateHeli(dt: TimeInterval, advancing: Bool) {
+        marchPhase += dt * 20
+        if frames.count == 4 {
+            bodySprite.texture = frames[Int(marchPhase) % 4]
+        }
+        yBob = 0
+        let targetTilt: CGFloat = advancing ? -0.09 : 0
+        body.zRotation += (targetTilt - body.zRotation) * min(1, 8 * CGFloat(dt))
     }
 
     /// Mech gait: the two legs run a 4-phase cycle half a cycle apart

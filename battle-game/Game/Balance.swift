@@ -31,7 +31,11 @@ enum Balance {
     /// Sunforge Redoubt (Level 11): the same night desert with a distant
     /// foundry burning on the horizon. Sirocco Canyon (Level 12): that
     /// night desert squeezed between moonlit canyon walls.
-    enum BGTheme { case twilight, overgrown, bastion, dawn, sunscorch, sandhold, dunesea, oasis, duskdesert, nightdesert }
+    /// Stonewatch Pass (Level 13): desert sunrise — the sun lifting over a
+    /// hazy mountain range, warm morning light on the sand.
+    /// Granite Reach (Level 14): the same sunrise over the same peaks, but
+    /// the lane itself is bare alpine rock — no sand, no dunes.
+    enum BGTheme { case twilight, overgrown, bastion, dawn, sunscorch, sandhold, dunesea, oasis, duskdesert, nightdesert, sunrise }
 
     // MARK: - Per-level battlefield layout
     struct LevelLayout {
@@ -74,6 +78,10 @@ enum Balance {
         /// (0 = never — the mech debuts late; Brutes and Reavers win
         /// ties against it).
         var mechEvery: Int
+        /// Every Nth summon flies in a high-altitude Heli Gunship instead
+        /// (0 = never — the gunship debuts in Level 13; earlier elites
+        /// win ties against it).
+        var heliEvery: Int = 0
         /// How many mechs leave the gate in one mech summon (1 = single).
         /// Level 10 sends a pair, spaced by `mechPairDelay`.
         var mechPairSize: Int = 1
@@ -91,6 +99,27 @@ enum Balance {
         /// Night-desert variation: tall canyon buttes, layered rock walls
         /// and tumbled boulders framing the moonlit lane (Level 12).
         var canyonNight: Bool = false
+        /// Sunrise-over-mountains variation: keep Level 13's sky and far
+        /// peaks, but swap the desert field for bare granite, jagged mid
+        /// ridges, alpine pines and rock outcrops (Level 14).
+        var alpinePass: Bool = false
+        /// Summon numbers (1-based) that get an EXTRA Brute on top of the
+        /// normal gate batch. Empty = no bonus Brutes.
+        var extraBruteSummons: [Int] = []
+
+        /// The enemy kinds this level can actually summon, in roster order.
+        /// Briefings use this instead of campaign unlock levels, so a level
+        /// that disables a unit (e.g. Level 13 has no Reavers) doesn't list it.
+        var enemyKinds: [EnemyKind] {
+            var kinds: [EnemyKind] = [.raider]
+            if bruteEvery > 0 || !extraBruteSummons.isEmpty { kinds.append(.brute) }
+            if reaverEvery > 0 { kinds.append(.reaver) }
+            if skitterEvery > 0 { kinds.append(.skitter) }
+            if jetEvery > 0 { kinds.append(.jet) }
+            if mechEvery > 0 { kinds.append(.mech) }
+            if heliEvery > 0 { kinds.append(.heli) }
+            return kinds
+        }
     }
 
     /// Level 1: the original 5200pt Twilight lane, 2 towers per side.
@@ -461,7 +490,73 @@ enum Balance {
         towerHP: 420,
         baseHP: 1060,
         enemyHPScale: 1.4775,
-        canyonNight: true
+        canyonNight: true,
+        extraBruteSummons: [7, 13]
+    )
+
+    /// Level 13 Stonewatch Pass: 12600pt desert sunrise lane, 4 towers per
+    /// side. The dunes run east into a distant mountain wall; the sun is
+    /// just lifting over the range, washing the sand in warm morning light.
+    /// Unit roster leans on Brutes and Heli Gunships: no Reavers, a hot
+    /// Brute cadence, and Gunship flights every 5th summon.
+    private static let layout13 = LevelLayout(
+        width: 12600,
+        playerBaseX: 220,
+        playerTowerXs: [840, 1640, 2440, 3240],
+        enemyTowerXs: [8950, 9750, 10550, 11350],
+        enemyBaseX: 12380,
+        heroSpawnX: 420,
+        platforms: [],
+        theme: .sunrise,
+        flags: true,
+        alienBirds: false,
+        lushFlora: false,
+        summonInterval: 4.1,
+        doubleChance: 0.48,
+        maxEnemies: 24,
+        bruteEvery: 3,
+        reaverEvery: 0,
+        skitterEvery: 2,
+        jetEvery: 7,
+        mechEvery: 8,
+        heliEvery: 5,
+        mechPairSize: 2,
+        towerHP: 440,
+        baseHP: 1080,
+        enemyHPScale: 1.4775
+    )
+
+    /// Level 14 Granite Reach: 13200pt high-plateau lane, 4 towers per side.
+    /// Same warm sunrise and same distant range as Stonewatch, but the field
+    /// is bare rock: granite shelves, scree, alpine scrub and pine stands.
+    /// Brutes/Heli Gunships keep the pressure; Mech pairs continue and the
+    /// summon cadence is a touch hotter. Enemy HP ×1.5514 (+5% over L13).
+    private static let layout14 = LevelLayout(
+        width: 13200,
+        playerBaseX: 220,
+        playerTowerXs: [840, 1640, 2440, 3240],
+        enemyTowerXs: [9050, 9850, 10650, 11450],
+        enemyBaseX: 12980,
+        heroSpawnX: 420,
+        platforms: [],
+        theme: .sunrise,
+        flags: true,
+        alienBirds: false,
+        lushFlora: false,
+        summonInterval: 4.0,
+        doubleChance: 0.49,
+        maxEnemies: 24,
+        bruteEvery: 3,
+        reaverEvery: 0,
+        skitterEvery: 2,
+        jetEvery: 6,
+        mechEvery: 8,
+        heliEvery: 5,
+        mechPairSize: 2,
+        towerHP: 460,
+        baseHP: 1180,
+        enemyHPScale: 1.5514,
+        alpinePass: true
     )
 
     /// Active battlefield. GameScene sets this from the level id before
@@ -520,6 +615,8 @@ enum Balance {
         case 10: return layout10
         case 11: return layout11
         case 12: return layout12
+        case 13: return layout13
+        case 14: return layout14
         default: return layout1
         }
     }
@@ -528,11 +625,14 @@ enum Balance {
     static var levelWidth: CGFloat { active.width }
     static var forgeNight: Bool { active.forgeNight }
     static var canyonNight: Bool { active.canyonNight }
+    static var alpinePass: Bool { active.alpinePass }
     static var groundTopY: CGFloat = 120        // y of the walkable surface
-    /// True on desert themes (dune sand + sand dressing; Levels 7-12).
+    /// True on desert themes (dune sand + sand dressing; Levels 7-13).
     static var dunes: Bool {
         let t = active.theme
-        return t == .dunesea || t == .oasis || t == .duskdesert || t == .nightdesert
+        if alpinePass { return false }
+        return t == .dunesea || t == .oasis || t == .duskdesert
+            || t == .nightdesert || t == .sunrise
     }
     /// Walkable surface height at world x. Flat on every level, dunes
     /// included — straight fields everywhere.
@@ -627,8 +727,10 @@ enum Balance {
     static var skitterEvery: Int { active.skitterEvery }
     static var jetEvery: Int { active.jetEvery }
     static var mechEvery: Int { active.mechEvery }
+    static var heliEvery: Int { active.heliEvery }
     static var mechPairSize: Int { active.mechPairSize }
     static var mechPairDelay: Double { active.mechPairDelay }
+    static var extraBruteSummons: [Int] { active.extraBruteSummons }
     static let firstSummonDelay: Double = 5.0
     /// Raider (the classic marcher — Levels 1+). Base 40; Level 5+ scales
     /// via the layout's enemyHPScale (L5 = ×1.05, L6 = ×1.1025).
@@ -706,6 +808,20 @@ enum Balance {
     static let mechBurstMax: Int = 3
     static let mechBurstGap: Double = 0.12   // seconds between rounds
     static let mechBoltSpeed: CGFloat = 640
+    /// Heli Gunship (futuristic attack helicopter — Level 13+): cruises
+    /// above the jet droid and fires tight 3-round machine-gun bursts.
+    /// Base 170, scaled.
+    static var heliHP: CGFloat { 170 * active.enemyHPScale }
+    static let heliSpeed: CGFloat = 112
+    static let heliReward: Int = 275
+    static let heliSightRange: CGFloat = 700
+    static let heliShootRange: CGFloat = 470
+    static let heliFireCooldown: Double = 2.6
+    static let heliBoltDamage: CGFloat = 9
+    static let heliHoverHeight: CGFloat = 160  // high cruise above the jets
+    static let heliBurstCount: Int = 3
+    static let heliBurstGap: Double = 0.09
+    static let heliBoltSpeed: CGFloat = 700
     static let jetJukeTime: Double = 0.45    // out-and-back dodge duration
     static let jetJukeCooldown: Double = 0.6 // min gap between dodge triggers
     static let enemyBoltSpeed: CGFloat = 520
@@ -733,7 +849,7 @@ enum Balance {
     // MARK: - Player army (summoned from cards, marches toward the enemy base)
     // Army cap: the player can field this many units at once. The card
     // says FULL and the deploy toast explains it — never a silent no-op.
-    static let maxAllies: Int = 20
+    static let maxAllies: Int = 15
     static let trooperCost: Int = 100
     static let trooperHP: CGFloat = 60
     static let trooperSpeed: CGFloat = 150

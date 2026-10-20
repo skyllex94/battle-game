@@ -34,7 +34,7 @@ final class SettingsStore: ObservableObject {
         particlesEnabled = bool("settings.particles", true)
         muzzleFlashEnabled = bool("settings.muzzleFlash", true)
         effectsQuality = defaults.string(forKey: "settings.effectsQuality")
-            ?? GameSettings.EffectsQuality.high.rawValue
+            ?? GameSettings.EffectsQuality.standard.rawValue
         sensitivity = double("settings.sensitivity", 1.0)
     }
 
@@ -53,7 +53,7 @@ final class SettingsStore: ObservableObject {
         hapticsEnabled = true
         particlesEnabled = true
         muzzleFlashEnabled = true
-        effectsQuality = GameSettings.EffectsQuality.high.rawValue
+        effectsQuality = GameSettings.EffectsQuality.standard.rawValue
         sensitivity = 1.0
         SoundEngine.shared.applyVolumes()
     }
@@ -104,7 +104,7 @@ enum GameSettings {
 
     static var effectsQuality: EffectsQuality {
         let raw = UserDefaults.standard.string(forKey: "settings.effectsQuality")
-        return EffectsQuality(rawValue: raw ?? "") ?? .high
+        return EffectsQuality(rawValue: raw ?? "") ?? .standard
     }
 
     static var particleScale: Double {

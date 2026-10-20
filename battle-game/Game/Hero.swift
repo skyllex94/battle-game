@@ -92,6 +92,7 @@ final class HeroNode: SKSpriteNode {
         super.init(texture: nil, color: .clear, size: CGSize(width: 44, height: Balance.heroHeight))
         name = "hero"
         zPosition = 10
+        _ = HeroFXTexture.pixel
         buildVisuals()
         addChild(visual)
     }
@@ -541,7 +542,10 @@ final class HeroNode: SKSpriteNode {
 
     /// Lane dust: pale moss tint, sandy gold on dune levels.
     private func groundDustColor() -> SKColor {
-        Balance.dunes ? SKColor(red: 0.90, green: 0.76, blue: 0.52, alpha: 1)
+        if Balance.alpinePass {
+            return SKColor(red: 0.62, green: 0.61, blue: 0.58, alpha: 1)
+        }
+        return Balance.dunes ? SKColor(red: 0.90, green: 0.76, blue: 0.52, alpha: 1)
             : SKColor(red: 0.75, green: 0.78, blue: 0.85, alpha: 1)
     }
 
@@ -552,6 +556,16 @@ final class HeroNode: SKSpriteNode {
         SoundEngine.shared.heroStep()
     }
 
+    private func pixelSprite(color: SKColor, size: CGSize,
+                             alpha: CGFloat = 1) -> SKSpriteNode {
+        let node = SKSpriteNode(texture: HeroFXTexture.pixel)
+        node.size = size
+        node.color = color.withAlphaComponent(1)
+        node.colorBlendFactor = 1
+        node.alpha = alpha
+        return node
+    }
+
     /// Tiny square-pixel dust kicked at the feet. Lives in the world so
     /// it stays behind while the hero runs on; self-removes.
     private func spawnDust(count: Int, spread: CGFloat, up: CGFloat, color: SKColor) {
@@ -560,8 +574,9 @@ final class HeroNode: SKSpriteNode {
         let origin = visual.convert(CGPoint(x: 0, y: feetY), to: parent)
         for _ in 0..<min(count, 10) {
             let side = CGFloat.random(in: 3...6)
-            let mote = SKSpriteNode(color: color.withAlphaComponent(0.85),
-                                    size: CGSize(width: side, height: side))
+            let mote = pixelSprite(color: color,
+                                   size: CGSize(width: side, height: side),
+                                   alpha: 0.85)
             mote.position = origin + CGVector(
                 dx: CGFloat.random(in: -spread...spread),
                 dy: CGFloat.random(in: 0...8))
@@ -608,10 +623,11 @@ final class HeroNode: SKSpriteNode {
         ]))
         // Rising light streaks.
         for _ in 0..<5 {
-            let streak = SKSpriteNode(
-                color: SKColor(white: 1, alpha: 0.8),
+            let streak = pixelSprite(
+                color: .white,
                 size: CGSize(width: CGFloat.random(in: 2...3.5),
-                             height: CGFloat.random(in: 10...20)))
+                             height: CGFloat.random(in: 10...20)),
+                alpha: 0.8)
             streak.position = origin + CGVector(
                 dx: CGFloat.random(in: -24...24),
                 dy: CGFloat.random(in: 0...6))
@@ -656,8 +672,9 @@ final class HeroNode: SKSpriteNode {
             CGPoint(x: CGFloat.random(in: -10...10),
                     y: CGFloat.random(in: -20...20)), to: parent)
         let side = CGFloat.random(in: 2.5...4.5)
-        let mote = SKSpriteNode(color: SKColor(white: 1, alpha: 0.55),
-                                size: CGSize(width: side, height: side))
+        let mote = pixelSprite(color: .white,
+                               size: CGSize(width: side, height: side),
+                               alpha: 0.55)
         mote.position = origin
         mote.zPosition = 9
         parent.addChild(mote)
@@ -671,6 +688,22 @@ final class HeroNode: SKSpriteNode {
             .removeFromParent(),
         ]))
     }
+}
+
+// MARK: - Shared runtime FX texture (file-local)
+
+private enum HeroFXTexture {
+    static let pixel: SKTexture = {
+        let size = CGSize(width: 2, height: 2)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+        }
+        let texture = SKTexture(image: image)
+        texture.filteringMode = .nearest
+        return texture
+    }()
 }
 
 // MARK: - CGPoint helpers (file-local)

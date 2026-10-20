@@ -108,14 +108,25 @@ final class MainMenuBattleScene: SKScene {
         let tileH: CGFloat = 104 // 125x26 @4x
         let groundY = -size.height * 0.22
         // Desert levels dress the diorama lane in sand, not moss turf.
+        // Granite Reach uses its own alpine rock tile.
         let sand = Balance.dunes
-        let lipColor = sand
+        let sunrise = Balance.active.theme == .sunrise
+        let alpine = Balance.alpinePass
+        let lipColor = alpine
+            ? SKColor(red: 1.0, green: 0.84, blue: 0.60, alpha: 0.8)
+            : sunrise
+            ? SKColor(red: 1.0, green: 0.84, blue: 0.56, alpha: 0.8)
+            : sand
             ? SKColor(red: 1.0, green: 0.93, blue: 0.70, alpha: 0.8)
             : SKColor(red: 0.80, green: 0.78, blue: 0.94, alpha: 0.55)
         var x: CGFloat = -laneW / 2
         var i = 0
         while x < laneW / 2 {
-            let tile = SKSpriteNode(texture: sand
+            let tile = SKSpriteNode(texture: alpine
+                ? TwilightRuinsBG.alpineTileTexture()
+                : sunrise
+                ? TwilightRuinsBG.sunriseSandTileTexture()
+                : sand
                 ? TwilightRuinsBG.sandTileTexture()
                 : TwilightRuinsBG.tileTexture(variant: i))
             tile.anchorPoint = CGPoint(x: 0, y: 1)

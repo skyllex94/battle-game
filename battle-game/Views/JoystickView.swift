@@ -5,10 +5,9 @@ import SwiftUI
 /// - horizontal deflection -> run (-1...1, with a small deadzone)
 /// - push up past threshold -> jump (held = auto-jump on landing)
 ///
-/// Output streams through `moveX` / `jumpHeld` bindings every gesture change.
 struct JoystickView: View {
-    @Binding var moveX: CGFloat
-    @Binding var jumpHeld: Bool
+    var onMove: (CGFloat) -> Void
+    var onJump: (Bool) -> Void
 
     private let radius: CGFloat = 70
     private let deadzone: CGFloat = 0.12
@@ -16,6 +15,7 @@ struct JoystickView: View {
 
     @State private var origin: CGPoint? = nil
     @State private var knob: CGSize = .zero
+    @State private var jumpHeld = false
 
     var body: some View {
         GeometryReader { geo in
@@ -68,14 +68,21 @@ struct JoystickView: View {
                             let t = (mag - deadzone) / (1 - deadzone)
                             shaped = pow(t, 1.35)
                         }
-                        moveX = (rawX >= 0 ? 1 : -1) * shaped
-                        jumpHeld = dy < jumpThreshold
+                        onMove((rawX >= 0 ? 1 : -1) * shaped)
+                        let wantsJump = dy < jumpThreshold
+                        if wantsJump != jumpHeld {
+                            jumpHeld = wantsJump
+                            onJump(wantsJump)
+                        }
                     }
                     .onEnded { _ in
                         origin = nil
                         knob = .zero
-                        moveX = 0
-                        jumpHeld = false
+                        onMove(0)
+                        if jumpHeld {
+                            jumpHeld = false
+                            onJump(false)
+                        }
                     }
             )
         }

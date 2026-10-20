@@ -1,3 +1,4 @@
+import QuartzCore
 import SpriteKit
 
 /// Level 1 scene — movement + shooting + tower/base combat + summoned enemies:
@@ -318,6 +319,7 @@ final class GameScene: SKScene {
         if layout.flags { LevelDressing.buildFlags(in: world) }
         if layout.alienBirds { LevelDressing.buildAlienBirds(in: skyLayer, sceneSize: size) }
         if layout.lushFlora { LevelDressing.buildGlowFlora(in: world) }
+        if Balance.alpinePass { LevelDressing.buildAlpinePass(in: world) }
         if Balance.active.theme == .dawn { LevelDressing.buildDuneWash(in: world) }
         if Balance.active.theme == .sunscorch { LevelDressing.buildSunscorchField(in: world) }
         if Balance.active.theme == .sandhold { LevelDressing.buildSandholdKeep(in: world) }
@@ -514,10 +516,38 @@ final class GameScene: SKScene {
     }
 
     override func update(_ currentTime: TimeInterval) {
+        let cpuStart = CACurrentMediaTime()
+        defer {
+            let ms = (CACurrentMediaTime() - cpuStart) * 1000
+            perfCPUMs = perfCPUMs == 0 ? ms : perfCPUMs * 0.9 + ms * 0.1
+        }
         frameCount += 1
         // ~1/sec: follow the music toggle without polling UserDefaults hot.
         if frameCount % 60 == 0 { SoundEngine.shared.syncMusic() }
-        var dt = lastUpdate > 0 ? currentTime - lastUpdate : 1.0 / 60
+        let rawDt = lastUpdate > 0 ? currentTime - lastUpdate : 1.0 / 60
+        if rawDt > 0, rawDt < 1 {
+            let ms = rawDt * 1000
+            perfFrameMs = perfFrameMs == 0 ? ms : perfFrameMs * 0.9 + ms * 0.1
+            fpsSmoothed = perfFrameMs > 0 ? min(240, 1000 / perfFrameMs) : 0
+            perfPeakWindow += rawDt
+            if perfPeakWindow >= 5 {
+                perfPeakWindow = 0
+                perfPeakMs = 0
+            }
+            perfHitchWindow += rawDt
+            if perfHitchWindow >= 1 {
+                perfHitchWindow = 0
+                perfHitches = 0
+            }
+            perfPeakMs = max(perfPeakMs, ms)
+            if ms > 34 { perfHitches += 1 }
+            perfSampleAccum += rawDt
+            if perfSampleAccum >= 0.25 {
+                perfSampleAccum = 0
+                refreshPerfCounts()
+            }
+        }
+        var dt = rawDt
         // Pause/hitch guard: while the pause menu is up update() stops, so
         // the first frame after resume would see a seconds-long dt — snapping
         // the camera (rate = min(1, 6*dt) = 1) and teleporting the sim.
@@ -940,13 +970,9 @@ final class GameScene: SKScene {
             guard bases[i].team == .enemy else { continue }
             // Summon marchers toward the player base, capped. Levels with a
             // doubleChance sometimes pop a PAIR out of the gate together.
-            // Levels with a bruteEvery march a Brute out every Nth summon
-            // (Level 3: every 4th); reaverEvery rushes a Reaver axe-fighter
-            // out instead (Level 4: every 3rd, Brutes winning ties);
-                    // skitterEvery scuttles a Skitter out instead (Level 6: every
-                    // 2nd — Brutes, then Reavers, win ties); jetEvery flies a
-                    // Jet gun-robot in instead (Level 7: every 5th — Brutes,
-                    // Reavers, then Skitters win ties).
+            // Priority order on a shared summon number: Heli Gunship (heliEvery),
+            // then Brute (bruteEvery), Reaver (reaverEvery), Mech (mechEvery,
+            // only while none is alive), Skitter (skitterEvery), Jet (jetEvery).
             bases[i].summonTimer -= dt
             if bases[i].summonTimer <= 0 {
                 bases[i].summonTimer = Balance.summonInterval
@@ -956,7 +982,9 @@ final class GameScene: SKScene {
                 while batch > 0, enemies.count < Balance.maxEnemies {
                     summonCount += 1
                     let kind: EnemyKind
-                    if Balance.bruteEvery > 0, summonCount % Balance.bruteEvery == 0 {
+                    if Balance.heliEvery > 0, summonCount % Balance.heliEvery == 0 {
+                        kind = .heli
+                    } else if Balance.bruteEvery > 0, summonCount % Balance.bruteEvery == 0 {
                         kind = .brute
                     } else if Balance.reaverEvery > 0, summonCount % Balance.reaverEvery == 0 {
                         kind = .reaver
@@ -1005,6 +1033,13 @@ final class GameScene: SKScene {
                             }
                         }
                         slot += Balance.jetPairSize - 1
+                    }
+                    // Level-specific bonus: an extra Brute marches out on
+                    // top of this wave's normal batch.
+                    if Balance.extraBruteSummons.contains(summonCount),
+                       enemies.count < Balance.maxEnemies {
+                        summonEnemy(from: bases[i], slot: slot, kind: .brute)
+                        slot += 1
                     }
                     batch -= 1
                 }
@@ -1080,9 +1115,9 @@ final class GameScene: SKScene {
     private func summonEnemy(from base: Base, slot: Int = 0, kind: EnemyKind = .raider) {
         let e = EnemyNode(kind: kind)
         let sx = base.node.position.x - 120 - CGFloat(slot) * 55
-        // Jets fly out of the gate already at cruise altitude.
+        // Flyers leave the gate already at their cruise altitude.
         let restY = kind.isFlying
-            ? Balance.groundY(at: sx) + Balance.jetHoverHeight
+            ? Balance.groundY(at: sx) + kind.flightHeight
             : Balance.groundY(at: sx) + e.size.height / 2
         e.position = CGPoint(x: sx, y: restY)
         world.addChild(e)
@@ -1102,13 +1137,13 @@ final class GameScene: SKScene {
     }
 
     // MARK: - Summoned enemies: advance, stop at range, shoot bolts
-    /// Rest height for a marcher: deck level for walkers, cruise altitude
-    /// (+ dodge-juke offset + hover sway) for jets.
+    /// Rest height for a marcher: deck level for walkers, per-kind cruise
+    /// altitude (+ dodge-juke offset + hover sway) for flyers.
     private func enemyRestY(_ e: EnemyNode) -> CGFloat {
         let deck = Balance.groundY(at: e.position.x)
         guard e.kind.isFlying else { return deck + e.size.height / 2 }
         let sway = 4 * sin(sceneTime * 2.5 + e.position.x * 0.05)
-        return deck + Balance.jetHoverHeight + e.jukeOffset + sway
+        return deck + e.kind.flightHeight + e.jukeOffset + sway
     }
 
     /// Jet dodge AI: counts incoming player/hero shots; every 5th bullet
@@ -1152,12 +1187,26 @@ final class GameScene: SKScene {
         }
     }
 
+    /// Gunship rotor wash: retriggers the synthesized blade-slap loop while
+    /// the helicopter is on the field (positional, so it fades with range).
+    private func updateHeliFlight(_ e: EnemyNode, dt: TimeInterval) {
+        e.rotorSoundTimer -= dt
+        if e.rotorSoundTimer <= 0 {
+            e.rotorSoundTimer = 2.25
+            SoundEngine.shared.heliRotor(at: e.position.x)
+        }
+    }
+
     private func updateEnemies(dt: TimeInterval) {
         let playerBase = bases.first(where: { $0.team == .player })
         for e in enemies {
             guard e.alive else { continue }
             e.fireCooldown -= dt
-            if e.kind.isFlying { updateJetDodge(e, dt: dt) }
+            if e.kind == .jet {
+                updateJetDodge(e, dt: dt)
+            } else if e.kind.isHelicopter {
+                updateHeliFlight(e, dt: dt)
+            }
 
             // Target priority: closest exposed body in sight (hero or ally)
             // > player tower > player base. Marchers chew what's nearest
@@ -1258,6 +1307,8 @@ final class GameScene: SKScene {
                         meleeStrike(from: e)
                     } else if e.kind.isMech {
                         fireMechBurst(from: e, to: aim)
+                    } else if e.kind.isHelicopter {
+                        fireHeliBurst(from: e, to: aim)
                     } else {
                         fireEnemyBolt(from: e, to: aim)
                     }
@@ -1392,6 +1443,44 @@ final class GameScene: SKScene {
                                       team: .enemy))
         let flash = ProjectileFactory.makeMuzzleFlash()
         flash.setScale(1.2)
+        flash.position = muzzle
+        world.addChild(flash)
+    }
+
+    /// Heli Gunship machine-gun burst: a tight three-round chatter from
+    /// the chin gun. Unlike the mech's ramping volley this is always
+    /// three rounds, so each pass is a predictable burst to dodge.
+    private func fireHeliBurst(from e: EnemyNode, to target: CGPoint) {
+        for r in 0..<Balance.heliBurstCount {
+            let delay = Double(r) * Balance.heliBurstGap
+            if delay == 0 {
+                fireHeliRound(from: e, to: target)
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    guard let self, e.alive else { return }
+                    self.fireHeliRound(from: e, to: target)
+                }
+            }
+        }
+    }
+
+    /// One gunship round: a slim high-velocity tracer + muzzle flash.
+    private func fireHeliRound(from e: EnemyNode, to target: CGPoint) {
+        let muzzle = e.muzzle()
+        var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
+        let len = max(1, hypot(dir.dx, dir.dy))
+        dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
+        SoundEngine.shared.enemyFire(at: muzzle.x)
+        let bolt = ProjectileFactory.makeTowerBolt(team: .enemy)
+        bolt.setScale(0.9)
+        bolt.position = muzzle
+        bolt.zRotation = atan2(dir.dy, dir.dx)
+        world.addChild(bolt)
+        projectiles.append(Projectile(node: bolt, dir: dir, life: Balance.enemyBoltLife,
+                                      speed: Balance.heliBoltSpeed, damage: e.boltDamage,
+                                      team: .enemy))
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.setScale(0.8)
         flash.position = muzzle
         world.addChild(flash)
     }
@@ -1773,7 +1862,7 @@ final class GameScene: SKScene {
                 p.fuse = fuse - dt
                 if p.fuse! <= 0 {
                     explode(p, at: p.node.position)
-                    p.node.removeFromParent()
+                    ProjectileFactory.recycle(p.node)
                     continue
                 }
             }
@@ -1815,13 +1904,13 @@ final class GameScene: SKScene {
                 if p.blast > 0 {
                     explode(p, at: p.node.position)
                 }
-                p.node.removeFromParent() // expired mid-air: no plain puff
+                ProjectileFactory.recycle(p.node) // expired mid-air: no plain puff
                 continue
             }
             if hitsGroundOrPlatform(p.node.position) {
                 // Out of the lane sideways: always gone, never bounces.
                 if p.node.position.x < 0 || p.node.position.x > Balance.levelWidth {
-                    p.node.removeFromParent()
+                    ProjectileFactory.recycle(p.node)
                     continue
                 }
                 // Grenades skip off turf (damped vertical flip + a hop).
@@ -1843,7 +1932,7 @@ final class GameScene: SKScene {
                 } else {
                     impact(at: p.node.position)
                 }
-                p.node.removeFromParent()
+                ProjectileFactory.recycle(p.node)
                 continue
             }
             // Blast shells detonate on contact (AoE covers the victim);
@@ -1851,12 +1940,12 @@ final class GameScene: SKScene {
             if p.blast > 0 {
                 if touchesFoe(p) {
                     explode(p, at: p.node.position)
-                    p.node.removeFromParent()
+                    ProjectileFactory.recycle(p.node)
                     continue
                 }
             } else if hitEnemy(p) {
                 impact(at: p.node.position)
-                p.node.removeFromParent()
+                ProjectileFactory.recycle(p.node)
                 continue
             }
             alive.append(p)
@@ -2042,6 +2131,94 @@ final class GameScene: SKScene {
 
     // MARK: - Debug (temporary HUD readout)
     private var frameCount = 0
+    private var fpsSmoothed: Double = 0
+    private var perfFrameMs: Double = 0
+    private var perfPeakMs: Double = 0
+    private var perfPeakWindow: TimeInterval = 0
+    private var perfHitchWindow: TimeInterval = 0
+    private var perfHitches = 0
+    private var perfCPUMs: Double = 0
+    private var perfSampleAccum: TimeInterval = 0
+    private var perfNodes = 0
+    private var perfDraws = 0
+    private var perfOffscreen = 0
+    private var perfTextures = 0
+    private var perfShapes = 0
+    private var perfProjectiles = 0
+    private var perfEnemies = 0
+    private var perfAllies = 0
+    private var perfMemoryMB: Double = 0
+    private var perfScreen = DebugDeviceInfo.screen
+
+    var perfSnapshot: DebugMetricsSnapshot {
+        DebugMetricsSnapshot(fps: fpsSmoothed,
+                             frameMs: perfFrameMs,
+                             peakMs: perfPeakMs,
+                             cpuMs: perfCPUMs,
+                             nodes: perfNodes,
+                             draws: perfDraws,
+                             offscreen: perfOffscreen,
+                             textures: perfTextures,
+                             shapes: perfShapes,
+                             projectiles: perfProjectiles,
+                             enemies: perfEnemies,
+                             allies: perfAllies,
+                             hitches: perfHitches,
+                             memoryMB: perfMemoryMB,
+                             thermal: DebugDeviceInfo.thermal,
+                             lowPower: DebugDeviceInfo.lowPower,
+                             device: DebugDeviceInfo.device,
+                             os: DebugDeviceInfo.os,
+                             screen: perfScreen,
+                             gpu: DebugDeviceInfo.gpu,
+                             ramGB: DebugDeviceInfo.ramGB,
+                             cores: DebugDeviceInfo.cores,
+                             maxHz: DebugDeviceInfo.maxHz)
+    }
+
+    /// Refresh node/draw/projectile counts a few times per second. Walking
+    /// the live scene graph is cheap at 4 Hz and keeps the SwiftUI poll light.
+    private func refreshPerfCounts() {
+        let viewW = size.width * cam.xScale
+        let viewH = size.height * cam.xScale
+        let viewRect = CGRect(x: cam.position.x - viewW / 2,
+                              y: cam.position.y - viewH / 2,
+                              width: viewW, height: viewH).insetBy(dx: -40, dy: -40)
+        var nodes = 0
+        var draws = 0
+        var offscreen = 0
+        var shapes = 0
+        var textures = Set<ObjectIdentifier>()
+        func walk(_ node: SKNode, parentVisible: Bool) {
+            nodes += 1
+            let visible = parentVisible && !node.isHidden && node.alpha > 0.01
+            if visible {
+                let sceneFrame = node.parent?.convert(node.frame, to: self) ?? node.frame
+                let inView = sceneFrame.intersects(viewRect)
+                if inView { draws += 1 } else { offscreen += 1 }
+                if let sprite = node as? SKSpriteNode {
+                    if inView, let texture = sprite.texture {
+                        textures.insert(ObjectIdentifier(texture))
+                    }
+                } else if node is SKShapeNode, inView {
+                    shapes += 1
+                }
+            }
+            for child in node.children { walk(child, parentVisible: visible) }
+        }
+        walk(self, parentVisible: true)
+        perfNodes = nodes
+        perfDraws = draws
+        perfOffscreen = offscreen
+        perfTextures = textures.count
+        perfShapes = shapes
+        perfProjectiles = projectiles.count
+        perfEnemies = enemies.count
+        perfAllies = allies.count
+        perfMemoryMB = DebugDeviceInfo.footprintMB()
+        perfScreen = DebugDeviceInfo.screen
+    }
+
     var debugLine: String {
         let v = hero?.velocity ?? .zero
         let g = hero?.isGrounded ?? false

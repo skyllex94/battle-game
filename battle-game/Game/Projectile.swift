@@ -65,6 +65,58 @@ enum ProjectileFactory {
         return node
     }
 
+    // MARK: - Effect pooling
+
+    /// Reuse short-lived shape nodes instead of rebuilding them per shot.
+    /// Each pool key keeps up to 128 idle nodes — enough for the busiest
+    /// max-allies wave without letting a one-off spike grow forever.
+    private static var shapePools: [String: [SKShapeNode]] = [:]
+    private static let maxPoolPerKey = 128
+
+    private static func acquireShape(_ key: String, make: () -> SKShapeNode) -> SKShapeNode {
+        if var pool = shapePools[key], let node = pool.popLast() {
+            shapePools[key] = pool
+            node.removeAllActions()
+            node.position = .zero
+            node.zRotation = 0
+            node.setScale(1)
+            node.alpha = 1
+            node.isHidden = false
+            return node
+        }
+        let node = make()
+        node.name = key
+        return node
+    }
+
+    private static func recycleShape(_ node: SKShapeNode) {
+        guard let key = node.name, key.hasPrefix("fx.pool.") else {
+            node.removeFromParent()
+            return
+        }
+        node.removeFromParent()
+        node.removeAllActions()
+        node.position = .zero
+        node.zRotation = 0
+        node.setScale(1)
+        node.alpha = 1
+        node.isHidden = false
+        var pool = shapePools[key] ?? []
+        guard pool.count < maxPoolPerKey else { return }
+        pool.append(node)
+        shapePools[key] = pool
+    }
+
+    /// Return a projectile/effect node to its pool when the scene is done
+    /// with it. Composite effects (rockets, explosions) simply detach.
+    static func recycle(_ node: SKNode) {
+        guard let shape = node as? SKShapeNode else {
+            node.removeFromParent()
+            return
+        }
+        recycleShape(shape)
+    }
+
     /// Glowing bolt, 18x5pt, oriented along +x (scene sets zRotation).
     static func makeBolt() -> SKShapeNode {
         heroBolt(.blaster)
@@ -74,6 +126,12 @@ enum ProjectileFactory {
     /// so the active gun reads mid-flight. Orb guns (nova) are round;
     /// rails (piercer/lancer) are long needles; heavies are fat slugs.
     static func heroBolt(_ gun: HeroWeapon) -> SKShapeNode {
+        acquireShape("fx.pool.hero.\(gun.rawValue)") {
+            buildHeroBolt(gun)
+        }
+    }
+
+    private static func buildHeroBolt(_ gun: HeroWeapon) -> SKShapeNode {
         switch gun {
         case .blaster:
             return bolt(w: 18, h: 5,
@@ -265,22 +323,32 @@ enum ProjectileFactory {
         let puff: SKShapeNode
         switch trail {
         case .smoke:
-            puff = SKShapeNode(circleOfRadius: 5)
-            puff.fillColor = SKColor(white: 0.6, alpha: 0.5)
-            puff.strokeColor = .clear
+            puff = acquireShape("fx.pool.trail.smoke") {
+                let node = SKShapeNode(circleOfRadius: 5)
+                node.fillColor = SKColor(white: 0.6, alpha: 0.5)
+                node.strokeColor = .clear
+                return node
+            }
             puff.run(.sequence([
                 .group([.scale(to: 2.0, duration: 0.5),
                         .fadeOut(withDuration: 0.5)]),
-                .removeFromParent(),
+                .run { [weak puff] in
+                    if let puff { recycleShape(puff) }
+                },
             ]))
         case .ember:
-            puff = SKShapeNode(circleOfRadius: 3)
-            puff.fillColor = SKColor(red: 1, green: 0.6, blue: 0.2, alpha: 0.9)
-            puff.strokeColor = .clear
+            puff = acquireShape("fx.pool.trail.ember") {
+                let node = SKShapeNode(circleOfRadius: 3)
+                node.fillColor = SKColor(red: 1, green: 0.6, blue: 0.2, alpha: 0.9)
+                node.strokeColor = .clear
+                return node
+            }
             puff.run(.sequence([
                 .group([.moveBy(x: 0, y: 14, duration: 0.4),
                         .fadeOut(withDuration: 0.4)]),
-                .removeFromParent(),
+                .run { [weak puff] in
+                    if let puff { recycleShape(puff) }
+                },
             ]))
         case .none:
             puff = SKShapeNode(circleOfRadius: 1)
@@ -336,30 +404,40 @@ enum ProjectileFactory {
     /// Quick expanding spark on impact. Runs its own remove action.
     static func makeImpactPuff() -> SKShapeNode {
         guard GameSettings.particlesEnabled else { return suppressedFX() }
-        let puff = SKShapeNode(circleOfRadius: 6)
-        puff.fillColor = SKColor(red: 1, green: 0.8, blue: 0.4, alpha: 0.9)
-        puff.strokeColor = .clear
-        puff.zPosition = 16
+        let puff = acquireShape("fx.pool.impact") {
+            let node = SKShapeNode(circleOfRadius: 6)
+            node.fillColor = SKColor(red: 1, green: 0.8, blue: 0.4, alpha: 0.9)
+            node.strokeColor = .clear
+            node.zPosition = 16
+            return node
+        }
         let pop = SKAction.group([
             .scale(to: 2.4, duration: 0.18),
             .fadeOut(withDuration: 0.18),
         ])
-        puff.run(.sequence([pop, .removeFromParent()]))
+        puff.run(.sequence([pop, .run { [weak puff] in
+            if let puff { recycleShape(puff) }
+        }]))
         return puff
     }
 
     /// Muzzle flash: bright dot at the gun tip, gone in a blink.
     static func makeMuzzleFlash() -> SKShapeNode {
         guard GameSettings.muzzleFlashEnabled else { return suppressedFX() }
-        let flash = SKShapeNode(circleOfRadius: 8)
-        flash.fillColor = SKColor(red: 1, green: 0.95, blue: 0.7, alpha: 1)
-        flash.strokeColor = .clear
-        flash.zPosition = 16
+        let flash = acquireShape("fx.pool.muzzleFlash") {
+            let node = SKShapeNode(circleOfRadius: 8)
+            node.fillColor = SKColor(red: 1, green: 0.95, blue: 0.7, alpha: 1)
+            node.strokeColor = .clear
+            node.zPosition = 16
+            return node
+        }
         let blink = SKAction.group([
             .scale(to: 0.2, duration: 0.09),
             .fadeOut(withDuration: 0.09),
         ])
-        flash.run(.sequence([blink, .removeFromParent()]))
+        flash.run(.sequence([blink, .run { [weak flash] in
+            if let flash { recycleShape(flash) }
+        }]))
         return flash
     }
 
@@ -367,16 +445,21 @@ enum ProjectileFactory {
     /// fades. Runs its own remove action.
     static func makeDustPuff() -> SKShapeNode {
         guard GameSettings.particlesEnabled else { return suppressedFX() }
-        let puff = SKShapeNode(circleOfRadius: 7)
-        puff.fillColor = SKColor(red: 0.78, green: 0.70, blue: 0.53, alpha: 0.55)
-        puff.strokeColor = .clear
-        puff.zPosition = 8
+        let puff = acquireShape("fx.pool.dust") {
+            let node = SKShapeNode(circleOfRadius: 7)
+            node.fillColor = SKColor(red: 0.78, green: 0.70, blue: 0.53, alpha: 0.55)
+            node.strokeColor = .clear
+            node.zPosition = 8
+            return node
+        }
         let drift = SKAction.moveBy(x: -34, y: 20, duration: 0.55)
         let grow = SKAction.group([
             .scale(to: 2.2, duration: 0.55),
             .fadeOut(withDuration: 0.55),
         ])
-        puff.run(.sequence([.group([drift, grow]), .removeFromParent()]))
+        puff.run(.sequence([.group([drift, grow]), .run { [weak puff] in
+            if let puff { recycleShape(puff) }
+        }]))
         return puff
     }
 
@@ -734,24 +817,32 @@ enum ProjectileFactory {
     /// Tower bolt, team-tinted so ownership reads at a glance:
     /// blue for player tower, red for enemy tower. Same 24x7 shape as hero bolts.
     static func makeTowerBolt(team: Team) -> SKShapeNode {
-        let bolt = SKShapeNode(ellipseOf: CGSize(width: 26, height: 9))
+        let key: String
         switch team {
-        case .player:
-            bolt.fillColor = SKColor(red: 0.45, green: 0.7, blue: 1.0, alpha: 1)
-            bolt.strokeColor = SKColor(red: 0.2, green: 0.4, blue: 1.0, alpha: 1)
-        case .enemy:
-            bolt.fillColor = SKColor(red: 1.0, green: 0.45, blue: 0.35, alpha: 1)
-            bolt.strokeColor = SKColor(red: 1.0, green: 0.2, blue: 0.15, alpha: 1)
-        case .neutral:
-            bolt.fillColor = SKColor(red: 1, green: 0.87, blue: 0.35, alpha: 1)
-            bolt.strokeColor = SKColor(red: 1, green: 0.55, blue: 0.15, alpha: 1)
+        case .player: key = "player"
+        case .enemy: key = "enemy"
+        case .neutral: key = "neutral"
         }
-        bolt.lineWidth = 2
-        bolt.zPosition = 15
-        let glow = SKShapeNode(ellipseOf: CGSize(width: 38, height: 20))
-        glow.fillColor = bolt.fillColor.withAlphaComponent(0.35)
-        glow.strokeColor = .clear
-        bolt.addChild(glow)
-        return bolt
+        return acquireShape("fx.pool.towerBolt.\(key)") {
+            let bolt = SKShapeNode(ellipseOf: CGSize(width: 26, height: 9))
+            switch team {
+            case .player:
+                bolt.fillColor = SKColor(red: 0.45, green: 0.7, blue: 1.0, alpha: 1)
+                bolt.strokeColor = SKColor(red: 0.2, green: 0.4, blue: 1.0, alpha: 1)
+            case .enemy:
+                bolt.fillColor = SKColor(red: 1.0, green: 0.45, blue: 0.35, alpha: 1)
+                bolt.strokeColor = SKColor(red: 1.0, green: 0.2, blue: 0.15, alpha: 1)
+            case .neutral:
+                bolt.fillColor = SKColor(red: 1, green: 0.87, blue: 0.35, alpha: 1)
+                bolt.strokeColor = SKColor(red: 1, green: 0.55, blue: 0.15, alpha: 1)
+            }
+            bolt.lineWidth = 2
+            bolt.zPosition = 15
+            let glow = SKShapeNode(ellipseOf: CGSize(width: 38, height: 20))
+            glow.fillColor = bolt.fillColor.withAlphaComponent(0.35)
+            glow.strokeColor = .clear
+            bolt.addChild(glow)
+            return bolt
+        }
     }
 }

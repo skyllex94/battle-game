@@ -9,7 +9,7 @@ import UIKit
 /// advancing for a scuttling march cycle.
 enum UnitPixelArt {
 
-    enum Kind { case trooper, heavy, ranger, truck, bombard, enemy, brute, reaver, skitter, jet, mech }
+    enum Kind { case trooper, heavy, ranger, truck, bombard, enemy, brute, reaver, skitter, jet, mech, heli }
 
     /// Walk frames for a kind: full 4-step stride
     /// (contact -> support -> toe-off -> swing). Generated once, shared.
@@ -27,6 +27,7 @@ enum UnitPixelArt {
         case .skitter: return (0...3).map { skitter(pose: $0) }
         case .jet: return (0...3).map { jet(pose: $0) }
         case .mech: return [mechBody(), mechBody(), mechBody(), mechBody()]
+        case .heli: return (0...3).map { heli(pose: $0) }
         }
     }
 
@@ -150,6 +151,32 @@ enum UnitPixelArt {
             portraitCache[kind] = portrait
             return portrait
         }
+        // Heli Gunship portrait: the whole aircraft, rotor included, with
+        // the chin gun angled forward under the nose.
+        if kind == .heli {
+            _ = frames(for: kind)
+            _ = armTexture(for: kind)
+            guard let body = imageCache["body-heli-0"],
+                  let arm = imageCache["arm-heli"] else { return UIImage() }
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            format.opaque = false
+            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
+                                                   format: format).image { ctx in
+                let cg = ctx.cgContext
+                let s: CGFloat = min(36.0 / 64.0, 24.0 / 36.0)
+                let bw = 64 * s, bh = 36 * s
+                let x0 = (36 - bw) / 2, y0 = (24 - bh) / 2
+                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+                cg.saveGState()
+                cg.translateBy(x: x0 + 43 * s, y: y0 + 29 * s)
+                cg.rotate(by: -0.16)
+                arm.draw(in: CGRect(x: -2, y: -2, width: 12, height: 6))
+                cg.restoreGState()
+            }
+            portraitCache[kind] = portrait
+            return portrait
+        }
         let bodyKey: String
         let armKey: String
         let shoulder: CGPoint // grip point in portrait px
@@ -186,6 +213,9 @@ enum UnitPixelArt {
             shoulder = CGPoint(x: 14, y: 15)
         case .mech:
             bodyKey = "body-mech-v5"; armKey = "arm-mech-v3"
+            shoulder = CGPoint(x: 14, y: 15)
+        case .heli:
+            bodyKey = "body-heli-0"; armKey = "arm-heli"
             shoulder = CGPoint(x: 14, y: 15)
         }
         // Warm the cache (no-ops once textures exist).
@@ -907,6 +937,7 @@ enum UnitPixelArt {
         case .skitter: return skitterArm()
         case .jet: return jetArm()
         case .mech: return mechArm()
+        case .heli: return heliArm()
         }
     }
 
@@ -1195,6 +1226,158 @@ enum UnitPixelArt {
             fill(cg, x: 15, y: 5, w: 6, h: 3, O)
             fill(cg, x: 16, y: 6, w: 4, h: 1, metalD)
             fill(cg, x: 19, y: 5, w: 2, h: 3, trim)
+        }
+    }
+
+    // MARK: - Heli Gunship (Level 13 flying enemy)
+
+    /// Futuristic attack helicopter (64x36), side view facing +x: a long
+    /// tail boom with a spinning tail rotor, dark angular fuselage with
+    /// crimson warning trim, amber canopy, engine nacelle with a hot
+    /// exhaust, stub wings with a missile pod, and a chin gun mount.
+    /// The 4 poses flicker the main/tail rotor blades so the hover reads
+    /// in motion even while holding station. The aimable chin gun lives
+    /// in heliArm(); the pivot sits at canvas (43, 29).
+    private static func heli(pose: Int) -> SKTexture {
+        canvas(w: 64, h: 36, key: "body-heli-\(pose)") { cg in
+            let hull = UIColor(red: 0.24, green: 0.28, blue: 0.35, alpha: 1)
+            let hullHi = UIColor(red: 0.40, green: 0.47, blue: 0.56, alpha: 1)
+            let hullD = UIColor(red: 0.13, green: 0.16, blue: 0.21, alpha: 1)
+            let hullLt = UIColor(red: 0.52, green: 0.59, blue: 0.67, alpha: 1)
+            let trim = UIColor(red: 0.90, green: 0.22, blue: 0.16, alpha: 1)
+            let trimD = UIColor(red: 0.48, green: 0.10, blue: 0.09, alpha: 1)
+            let glass = UIColor(red: 1.0, green: 0.62, blue: 0.16, alpha: 1)
+            let glassHi = UIColor(red: 1.0, green: 0.90, blue: 0.58, alpha: 1)
+            let blade = UIColor(red: 0.34, green: 0.38, blue: 0.45, alpha: 1)
+            let bladeD = UIColor(red: 0.11, green: 0.13, blue: 0.17, alpha: 1)
+            let bladeHi = UIColor(red: 0.64, green: 0.70, blue: 0.78, alpha: 1)
+            let hot = UIColor(red: 1.0, green: 0.48, blue: 0.12, alpha: 1)
+            let O = outline
+
+            let rotorLift = [0, 1, 0, -1][pose]
+            let tailLift = [0, 1, 2, 1][pose]
+
+            // --- Tail rotor: vertical blur disc + flickering cross blades.
+            fill(cg, x: 2, y: 7 + tailLift, w: 2, h: 11, bladeD)
+            fill(cg, x: 4, y: 8 + tailLift, w: 1, h: 9, blade)
+            fill(cg, x: 1, y: 11 + tailLift, w: 6, h: 1, blade)
+            if pose % 2 == 0 {
+                fill(cg, x: 3, y: 6 + tailLift, w: 1, h: 2, bladeHi)
+            } else {
+                fill(cg, x: 2, y: 14 + tailLift, w: 3, h: 1, bladeHi)
+            }
+
+            // --- Tail boom, swept fin, and stabilizer.
+            fill(cg, x: 7, y: 18, w: 17, h: 5, O)
+            fill(cg, x: 8, y: 19, w: 16, h: 3, hullD)
+            fill(cg, x: 8, y: 19, w: 16, h: 1, hull)
+            fill(cg, x: 10, y: 20, w: 13, h: 1, trim)
+            fill(cg, x: 6, y: 10, w: 5, h: 10, O)
+            fill(cg, x: 7, y: 11, w: 3, h: 8, hullD)
+            fill(cg, x: 7, y: 11, w: 1, h: 4, trim)
+            fill(cg, x: 5, y: 16, w: 2, h: 4, O)
+            fill(cg, x: 5, y: 17, w: 2, h: 2, trimD)
+
+            // --- Main rotor: a wide blurred disc that shimmers per pose.
+            fill(cg, x: 5, y: 2 + rotorLift, w: 54, h: 1, bladeD)
+            fill(cg, x: 8, y: 3 + rotorLift, w: 48, h: 1, blade)
+            fill(cg, x: 15, y: 4 + rotorLift, w: 35, h: 1, bladeHi)
+            fill(cg, x: 11, y: 2 + rotorLift, w: 40, h: 1,
+                 blade.withAlphaComponent(0.35))
+            if pose == 1 || pose == 3 {
+                fill(cg, x: 2, y: 3 + rotorLift, w: 3, h: 1, blade)
+                fill(cg, x: 60, y: 3 + rotorLift, w: 3, h: 1, blade)
+            }
+            fill(cg, x: 32, y: 4, w: 6, h: 3, O)
+            fill(cg, x: 33, y: 4, w: 4, h: 2, hullHi)
+            fill(cg, x: 34, y: 5, w: 3, h: 9, O)
+            fill(cg, x: 35, y: 5, w: 1, h: 8, hullLt)
+
+            // --- Engine nacelle + exhaust glow on the rear deck.
+            fill(cg, x: 22, y: 10, w: 11, h: 6, O)
+            fill(cg, x: 23, y: 11, w: 9, h: 4, hullHi)
+            fill(cg, x: 23, y: 13, w: 9, h: 2, hullD)
+            fill(cg, x: 24, y: 11, w: 2, h: 2, hullLt)
+            fill(cg, x: 21, y: 12, w: 1, h: 3, hot)
+            fill(cg, x: 22, y: 12, w: 1, h: 2, trim)
+
+            // --- Angular fuselage silhouette.
+            fill(cg, x: 22, y: 14, w: 28, h: 13, O)
+            fill(cg, x: 25, y: 12, w: 20, h: 2, O)
+            fill(cg, x: 19, y: 17, w: 4, h: 8, O)
+            fill(cg, x: 49, y: 16, w: 6, h: 11, O)
+            fill(cg, x: 53, y: 19, w: 2, h: 5, O)
+            fill(cg, x: 23, y: 15, w: 26, h: 11, hull)
+            fill(cg, x: 26, y: 13, w: 19, h: 2, hullHi)
+            fill(cg, x: 20, y: 18, w: 3, h: 6, hullD)
+            fill(cg, x: 49, y: 17, w: 5, h: 9, hull)
+            fill(cg, x: 53, y: 20, w: 1, h: 3, hull)
+            fill(cg, x: 24, y: 15, w: 22, h: 1, .white.withAlphaComponent(0.28))
+            fill(cg, x: 24, y: 24, w: 22, h: 2, hullD)
+            fill(cg, x: 49, y: 23, w: 5, h: 3, hullD)
+            fill(cg, x: 26, y: 13, w: 14, h: 1, hullLt)
+
+            // --- Armor panel, vents, insignia + crimson warning stripe.
+            fill(cg, x: 28, y: 18, w: 14, h: 6, O)
+            fill(cg, x: 29, y: 19, w: 12, h: 4, hullD)
+            fill(cg, x: 29, y: 20, w: 12, h: 1, trim)
+            fill(cg, x: 30, y: 22, w: 5, h: 1, hull)
+            fill(cg, x: 39, y: 20, w: 2, h: 2, trim)
+            fill(cg, x: 40, y: 20, w: 1, h: 1, glass)
+
+            // --- Amber canopy at the nose with a pilot silhouette.
+            fill(cg, x: 45, y: 16, w: 6, h: 7, O)
+            fill(cg, x: 46, y: 17, w: 4, h: 5, glass)
+            fill(cg, x: 47, y: 17, w: 2, h: 1, glassHi)
+            fill(cg, x: 46, y: 19, w: 1, h: 3, glassHi.withAlphaComponent(0.55))
+            fill(cg, x: 49, y: 18, w: 1, h: 3, hullD)
+            fill(cg, x: 54, y: 20, w: 1, h: 1, pose % 2 == 0 ? trim : .white)
+
+            // --- Stub wing + missile pod under the mid-body.
+            fill(cg, x: 29, y: 24, w: 14, h: 3, O)
+            fill(cg, x: 30, y: 24, w: 12, h: 2, hullLt)
+            fill(cg, x: 31, y: 26, w: 8, h: 4, O)
+            fill(cg, x: 32, y: 27, w: 6, h: 2, hullD)
+            fill(cg, x: 36, y: 27, w: 2, h: 2, trim)
+            fill(cg, x: 34, y: 27, w: 1, h: 1, hullHi)
+
+            // --- Chin gun mount; the aimable barrels are heliArm().
+            fill(cg, x: 41, y: 25, w: 6, h: 4, O)
+            fill(cg, x: 42, y: 26, w: 4, h: 2, hullHi)
+            fill(cg, x: 43, y: 27, w: 2, h: 1, trimD)
+        }
+    }
+
+    /// Chin-mounted rotary machine gun: armored mount + power cell +
+    /// three stacked barrels. Mounts at the nose belly (pivot canvas x=5)
+    /// and steers with the scene's aimAt(_) just like the other gun-arms.
+    private static func heliArm() -> SKTexture {
+        canvas(w: armW, h: armH, key: "arm-heli") { cg in
+            let hull = UIColor(red: 0.26, green: 0.30, blue: 0.37, alpha: 1)
+            let hullHi = UIColor(red: 0.48, green: 0.55, blue: 0.63, alpha: 1)
+            let hullD = UIColor(red: 0.13, green: 0.16, blue: 0.21, alpha: 1)
+            let trim = UIColor(red: 0.90, green: 0.22, blue: 0.16, alpha: 1)
+            let metal = UIColor(red: 0.18, green: 0.20, blue: 0.25, alpha: 1)
+            let hot = UIColor(red: 1.0, green: 0.58, blue: 0.16, alpha: 1)
+            let O = outline
+            // Armored mount wrapping the grip (x=5).
+            fill(cg, x: 1, y: 2, w: 8, h: 8, O)
+            fill(cg, x: 2, y: 3, w: 6, h: 6, hull)
+            fill(cg, x: 2, y: 3, w: 6, h: 1, hullHi)
+            fill(cg, x: 2, y: 7, w: 6, h: 1, trim)
+            // Receiver + hot power cell.
+            fill(cg, x: 8, y: 3, w: 7, h: 6, O)
+            fill(cg, x: 9, y: 4, w: 5, h: 4, hullD)
+            fill(cg, x: 9, y: 4, w: 5, h: 1, hull)
+            fill(cg, x: 12, y: 5, w: 1, h: 2, hot)
+            // Triple rotary barrels + muzzle block.
+            fill(cg, x: 14, y: 3, w: 8, h: 2, O)
+            fill(cg, x: 15, y: 3, w: 6, h: 1, metal)
+            fill(cg, x: 14, y: 5, w: 8, h: 2, O)
+            fill(cg, x: 15, y: 5, w: 6, h: 1, hullHi)
+            fill(cg, x: 14, y: 7, w: 8, h: 2, O)
+            fill(cg, x: 15, y: 7, w: 6, h: 1, metal)
+            fill(cg, x: 20, y: 3, w: 2, h: 6, trim)
         }
     }
 

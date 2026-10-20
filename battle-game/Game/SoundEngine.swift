@@ -84,6 +84,9 @@ final class SoundEngine {
     func baseFire(at x: CGFloat) { play(.baseFan, volume: 0.60, at: x) }
     func enemyFire(at x: CGFloat) { play(.enemy, volume: 0.28, at: x) }
     func allyFire(at x: CGFloat) { play(.ally, volume: 0.32, at: x) }
+    /// Helicopter rotor wash: looping blade-slap phrase, positional so it
+    /// swells as the gunship closes in.
+    func heliRotor(at x: CGFloat) { play(.heliRotor, volume: 0.24, at: x) }
     func dryFire() { play(.dry, volume: 0.40) }
 
     func reloadStart() { play(.reloadStart, volume: 0.50) }
@@ -366,7 +369,7 @@ final class SoundEngine {
 
     private enum Voice: String, CaseIterable {
         case blaster, scatter, cannon
-        case tower, baseFan, enemy, ally
+        case tower, baseFan, enemy, ally, heliRotor
         case dry, reloadStart, reloadDone, reloadTick
         case impact, enemyDown, heroHurt, heroDeath, bigBoom
         case summon, pickup, ui, weaponSwitch, victory
@@ -381,6 +384,7 @@ final class SoundEngine {
             case .tower: return 0.09
             case .baseFan: return 0.20
             case .enemy, .ally: return 0.09
+            case .heliRotor: return 0.80
             case .dry: return 0.25
             case .reloadStart, .reloadDone: return 0.20
             case .reloadTick: return 0.30
@@ -529,6 +533,7 @@ final class SoundEngine {
         made[.baseFan] = actionShot(bodyF0: 160, bodyF1: 52, dur: 0.30, crack: 1.0, sub: 0.6, drive: 1.4, hiss: 0.8, body: 0.9)
         made[.enemy] = actionShot(bodyF0: 360, bodyF1: 140, dur: 0.12, crack: 0.6, sub: 0.25, drive: 1.2, distance: 0.6, hiss: 0.4, body: 0.8)
         made[.ally] = actionShot(bodyF0: 280, bodyF1: 105, dur: 0.14, crack: 0.7, sub: 0.35, drive: 1.2, distance: 0.25, hiss: 0.6, body: 0.8)
+        made[.heliRotor] = helicopterRotor()
         made[.dry] = metalTick()
         made[.reloadStart] = rackPair(up: false)
         made[.reloadDone] = rackPair(up: true)
@@ -713,6 +718,39 @@ final class SoundEngine {
     }
 
     // MARK: - Movement foley synthesis (soft, never fights gunfire)
+
+    /// Rotary-wing loop: a low blade-passage thump (the "wop wop") over a
+    /// wash of filtered air. Runs ~2.4s so successive triggers overlap into
+    /// a continuous rotor note.
+    private func helicopterRotor() -> AVAudioPCMBuffer? {
+        let dur = 2.4
+        guard let (buffer, _) = pcm(dur),
+              let data = buffer.floatChannelData?[0] else { return nil }
+        let n = Int(buffer.frameLength)
+        var thumpPhase = 0.0
+        var washLP = 0.0
+        var slapLP = 0.0
+        for i in 0..<n {
+            let t = Double(i) / sampleRate
+            // 3.55 blade passes per second, sharpened into a chop envelope.
+            let blade = pow(max(0, sin(2.0 * .pi * 3.55 * t)), 3)
+            let chop = 0.35 + 0.65 * blade
+            let thumpFreq = 46.0 + 14.0 * blade
+            thumpPhase += 2.0 * .pi * thumpFreq / sampleRate
+            let rawWash = Double.random(in: -1...1)
+            washLP += 0.055 * (rawWash - washLP)
+            let rawSlap = Double.random(in: -1...1)
+            slapLP += 0.35 * (rawSlap - slapLP)
+            let slap = pow(blade, 4) * slapLP * 0.22
+            let body = sin(thumpPhase) * 0.55
+            let wash = washLP * 0.9 * chop
+            let sample = (body + wash + slap) * (0.7 + 0.3 * blade)
+            // Soft edges so overlapping triggers never click.
+            let fade = min(1, t / 0.15) * min(1, (dur - t) / 0.15)
+            data[i] = Float(grit(sample * 0.55, 1.2) * fade)
+        }
+        return buffer
+    }
 
     /// Takeoff whoosh: short rising air sweep (noise + swelling sine up).
     private func jumpWhoosh() -> AVAudioPCMBuffer? {

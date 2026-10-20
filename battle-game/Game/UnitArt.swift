@@ -15,20 +15,26 @@ enum UnitPixelArt {
     /// (contact -> support -> toe-off -> swing). Generated once, shared.
     /// (Truck frames roll the wheels instead of stepping.)
     static func frames(for kind: Kind) -> [SKTexture] {
+        if let cached = frameCache[kind] { return cached }
+        let made: [SKTexture]
         switch kind {
-        case .trooper: return (0...3).map { trooper(pose: $0) }
-        case .heavy: return (0...3).map { heavy(pose: $0) }
-        case .ranger: return (0...3).map { ranger(pose: $0) }
-        case .truck: return (0...3).map { truck(pose: $0) }
-        case .bombard: return (0...3).map { bombard(pose: $0) }
-        case .enemy: return (0...3).map { enemy(pose: $0) }
-        case .brute: return (0...3).map { brute(pose: $0) }
-        case .reaver: return (0...3).map { reaver(pose: $0) }
-        case .skitter: return (0...3).map { skitter(pose: $0) }
-        case .jet: return (0...3).map { jet(pose: $0) }
-        case .mech: return [mechBody(), mechBody(), mechBody(), mechBody()]
-        case .heli: return (0...3).map { heli(pose: $0) }
+        case .trooper: made = (0...3).map { trooper(pose: $0) }
+        case .heavy: made = (0...3).map { heavy(pose: $0) }
+        case .ranger: made = (0...3).map { ranger(pose: $0) }
+        case .truck: made = (0...3).map { truck(pose: $0) }
+        case .bombard: made = (0...3).map { bombard(pose: $0) }
+        case .enemy: made = (0...3).map { enemy(pose: $0) }
+        case .brute: made = (0...3).map { brute(pose: $0) }
+        case .reaver: made = (0...3).map { reaver(pose: $0) }
+        case .skitter: made = (0...3).map { skitter(pose: $0) }
+        case .jet: made = (0...3).map { jet(pose: $0) }
+        case .mech:
+            let body = mechBody()
+            made = [body, body, body, body]
+        case .heli: made = (0...3).map { heli(pose: $0) }
         }
+        frameCache[kind] = made
+        return made
     }
 
     /// Mech torso + leg textures (the mech animates its legs separately
@@ -44,6 +50,7 @@ enum UnitPixelArt {
 
     private static func canvas(w: Int = W, h: Int = H, key: String? = nil,
                                draw: (CGContext) -> Void) -> SKTexture {
+        if let key, let cached = textureCache[key] { return cached }
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = false
@@ -51,14 +58,21 @@ enum UnitPixelArt {
                                            format: format).image { ctx in
             draw(ctx.cgContext) // UIKit coords: row 0 = top
         }
-        if let key { imageCache[key] = img }
         let tex = SKTexture(image: img)
         tex.filteringMode = .nearest
+        if let key {
+            imageCache[key] = img
+            textureCache[key] = tex
+        }
         return tex
     }
 
     /// Raw pixel images behind the cached textures (for SwiftUI portraits).
     private static var imageCache: [String: UIImage] = [:]
+    /// Textures are immutable, so every named canvas is generated once.
+    private static var textureCache: [String: SKTexture] = [:]
+    /// Walk cycles are shared by every unit of a kind.
+    private static var frameCache: [Kind: [SKTexture]] = [:]
     /// Composed card portraits, built once per kind.
     private static var portraitCache: [Kind: UIImage] = [:]
 

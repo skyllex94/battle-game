@@ -519,6 +519,7 @@ final class GameScene: SKScene {
         let cpuStart = CACurrentMediaTime()
         defer {
             let ms = (CACurrentMediaTime() - cpuStart) * 1000
+            perfLastCPUms = ms
             perfCPUMs = perfCPUMs == 0 ? ms : perfCPUMs * 0.9 + ms * 0.1
         }
         frameCount += 1
@@ -533,13 +534,31 @@ final class GameScene: SKScene {
             if perfPeakWindow >= 5 {
                 perfPeakWindow = 0
                 perfPeakMs = 0
+                perfWorstCPUms = 0
+                perfWorstDraws = 0
+                perfWorstNodes = 0
+                perfWorstTextures = 0
+                perfWorstShapes = 0
+                perfWorstProjectiles = 0
+                perfWorstEnemies = 0
+                perfWorstAllies = 0
             }
             perfHitchWindow += rawDt
             if perfHitchWindow >= 1 {
                 perfHitchWindow = 0
                 perfHitches = 0
             }
-            perfPeakMs = max(perfPeakMs, ms)
+            if ms > perfPeakMs {
+                perfPeakMs = ms
+                perfWorstCPUms = perfLastCPUms
+                perfWorstDraws = perfDraws
+                perfWorstNodes = perfNodes
+                perfWorstTextures = perfTextures
+                perfWorstShapes = perfShapes
+                perfWorstProjectiles = perfProjectiles
+                perfWorstEnemies = perfEnemies
+                perfWorstAllies = perfAllies
+            }
             if ms > 34 { perfHitches += 1 }
             perfSampleAccum += rawDt
             if perfSampleAccum >= 0.25 {
@@ -2138,6 +2157,15 @@ final class GameScene: SKScene {
     private var perfHitchWindow: TimeInterval = 0
     private var perfHitches = 0
     private var perfCPUMs: Double = 0
+    private var perfLastCPUms: Double = 0
+    private var perfWorstCPUms: Double = 0
+    private var perfWorstDraws = 0
+    private var perfWorstNodes = 0
+    private var perfWorstTextures = 0
+    private var perfWorstShapes = 0
+    private var perfWorstProjectiles = 0
+    private var perfWorstEnemies = 0
+    private var perfWorstAllies = 0
     private var perfSampleAccum: TimeInterval = 0
     private var perfNodes = 0
     private var perfDraws = 0
@@ -2164,6 +2192,14 @@ final class GameScene: SKScene {
                              enemies: perfEnemies,
                              allies: perfAllies,
                              hitches: perfHitches,
+                             worstCPUms: perfWorstCPUms,
+                             worstDraws: perfWorstDraws,
+                             worstNodes: perfWorstNodes,
+                             worstTextures: perfWorstTextures,
+                             worstShapes: perfWorstShapes,
+                             worstProjectiles: perfWorstProjectiles,
+                             worstEnemies: perfWorstEnemies,
+                             worstAllies: perfWorstAllies,
                              memoryMB: perfMemoryMB,
                              thermal: DebugDeviceInfo.thermal,
                              lowPower: DebugDeviceInfo.lowPower,

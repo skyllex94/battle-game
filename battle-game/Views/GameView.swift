@@ -203,7 +203,8 @@ struct GameView: View {
                     }
                     PixelMenuButton(title: "Quit to Menu", style: .danger) {
                         SoundEngine.shared.uiTap()
-                        path = NavigationPath()
+                        showMenu = false
+                        popToMap()
                     }
                     Text("TAP OUTSIDE TO RESUME")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
@@ -1604,22 +1605,25 @@ private struct PixelSpriteView: View {
     let palette: [Character: Color]
     var pixel: CGFloat = 2
 
+    private var columns: Int {
+        grid.map(\.count).max() ?? 0
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            ForEach(grid.indices, id: \.self) { r in
-                HStack(spacing: 0) {
-                    ForEach(Array(grid[r]).indices, id: \.self) { c in
-                        let ch = Array(grid[r])[c]
-                        if ch == "." {
-                            Color.clear.frame(width: pixel, height: pixel)
-                        } else {
-                            (palette[ch] ?? .white)
-                                .frame(width: pixel, height: pixel)
-                        }
-                    }
+        Canvas { ctx, _ in
+            for (r, row) in grid.enumerated() {
+                for (c, ch) in row.enumerated() {
+                    guard let color = palette[ch] else { continue }
+                    let rect = CGRect(x: CGFloat(c) * pixel,
+                                      y: CGFloat(r) * pixel,
+                                      width: pixel, height: pixel)
+                    ctx.fill(Path(rect), with: .color(color))
                 }
             }
         }
+        .frame(width: CGFloat(columns) * pixel,
+               height: CGFloat(grid.count) * pixel)
+        .allowsHitTesting(false)
     }
 }
 

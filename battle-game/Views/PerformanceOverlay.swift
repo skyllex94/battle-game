@@ -1,7 +1,10 @@
+import Combine
+import QuartzCore
 import SwiftUI
 
 struct PerformanceOverlay: View {
     let scene: GameScene
+    @StateObject private var display = DisplayRefreshProbe()
 
     var body: some View {
         TimelineView(.periodic(from: Date(timeIntervalSinceReferenceDate: 0), by: 0.15)) { _ in
@@ -50,7 +53,39 @@ struct PerformanceOverlay: View {
             HStack(spacing: 10) {
                 metricPair("MEM", String(format: "%.0f", perf.memoryMB) + "MB",
                            valueColor(perf.memoryMB, green: 250, yellow: 400, orange: 600))
-                metricPair("MAX", "\(perf.maxHz)Hz", .white.opacity(0.7))
+                metricPair("DISP", "\(Int(display.fps))/\(perf.maxHz)",
+                           fpsColor(display.fps, green: 55, yellow: 45, orange: 30))
+            }
+            if perf.peakMs > 25 {
+                Rectangle()
+                    .fill(.orange.opacity(0.28))
+                    .frame(height: 1)
+                    .padding(.vertical, 1)
+                HStack(spacing: 10) {
+                    metricPair("WCPU", String(format: "%.1f", perf.worstCPUms) + "ms",
+                               timeColor(perf.worstCPUms, green: 4, yellow: 8, orange: 14))
+                    metricPair("DMAX", String(format: "%.0f", display.worstMs) + "ms",
+                               timeColor(display.worstMs, green: 20, yellow: 34, orange: 55))
+                }
+                HStack(spacing: 10) {
+                    metricPair("WDRAW", "\(perf.worstDraws)",
+                               loadColor(perf.worstDraws, green: 180, yellow: 300, orange: 450))
+                    metricPair("WNODE", "\(perf.worstNodes)",
+                               loadColor(perf.worstNodes, green: 550, yellow: 800, orange: 1200))
+                }
+                HStack(spacing: 10) {
+                    metricPair("WUNIT", "\(perf.worstEnemies)/\(perf.worstAllies)",
+                               loadColor(perf.worstEnemies + perf.worstAllies,
+                                         green: 20, yellow: 32, orange: 44))
+                    metricPair("WPROJ", "\(perf.worstProjectiles)",
+                               loadColor(perf.worstProjectiles, green: 25, yellow: 50, orange: 85))
+                }
+                HStack(spacing: 10) {
+                    metricPair("WTEX", "\(perf.worstTextures)",
+                               loadColor(perf.worstTextures, green: 40, yellow: 80, orange: 140))
+                    metricPair("WSHP", "\(perf.worstShapes)",
+                               loadColor(perf.worstShapes, green: 150, yellow: 300, orange: 500))
+                }
             }
             Rectangle()
                 .fill(.white.opacity(0.14))
@@ -116,5 +151,54 @@ struct PerformanceOverlay: View {
         if value <= yellow { return .yellow }
         if value <= orange { return .orange }
         return .red
+    }
+}
+
+
+private final class DisplayLinkTarget: NSObject {
+    weak var probe: DisplayRefreshProbe?
+    @objc func tick(_ link: CADisplayLink) { probe?.tick(link) }
+}
+
+private final class DisplayRefreshProbe: ObservableObject {
+    @Published private(set) var fps: Double = 0
+    @Published private(set) var worstMs: Double = 0
+    private var link: CADisplayLink?
+    private let target = DisplayLinkTarget()
+    private var lastTimestamp: CFTimeInterval = 0
+    private var accumulated: CFTimeInterval = 0
+    private var frames = 0
+    private var worstGap: CFTimeInterval = 0
+    private var worstWindow: CFTimeInterval = 0
+
+    init() {
+        target.probe = self
+        let link = CADisplayLink(target: target, selector: #selector(DisplayLinkTarget.tick(_:)))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 120, preferred: 60)
+        link.add(to: .main, forMode: .common)
+        self.link = link
+    }
+
+    deinit { link?.invalidate() }
+
+    fileprivate func tick(_ link: CADisplayLink) {
+        if lastTimestamp > 0 {
+            let dt = link.timestamp - lastTimestamp
+            accumulated += dt
+            frames += 1
+            if dt > worstGap { worstGap = dt }
+            worstWindow += dt
+            if accumulated >= 0.25 {
+                fps = Double(frames) / accumulated
+                accumulated = 0
+                frames = 0
+            }
+            if worstWindow >= 5 {
+                worstMs = worstGap * 1000
+                worstGap = 0
+                worstWindow = 0
+            }
+        }
+        lastTimestamp = link.timestamp
     }
 }

@@ -17,6 +17,14 @@ struct DebugMetricsSnapshot: Equatable {
     var enemies: Int = 0
     var allies: Int = 0
     var hitches: Int = 0
+    var worstCPUms: Double = 0
+    var worstDraws: Int = 0
+    var worstNodes: Int = 0
+    var worstTextures: Int = 0
+    var worstShapes: Int = 0
+    var worstProjectiles: Int = 0
+    var worstEnemies: Int = 0
+    var worstAllies: Int = 0
     var memoryMB: Double = 0
     var thermal: String = "?"
     var lowPower: Bool = false

@@ -9,7 +9,7 @@ import UIKit
 /// advancing for a scuttling march cycle.
 enum UnitPixelArt {
 
-    enum Kind { case trooper, heavy, ranger, truck, bombard, enemy, brute, reaver, skitter, jet, mech, heli }
+    enum Kind { case trooper, heavy, ranger, truck, bombard, tank, enemy, brute, reaver, skitter, jet, mech, heli, missileTruck, immortal }
 
     /// Walk frames for a kind: full 4-step stride
     /// (contact -> support -> toe-off -> swing). Generated once, shared.
@@ -23,6 +23,7 @@ enum UnitPixelArt {
         case .ranger: made = (0...3).map { ranger(pose: $0) }
         case .truck: made = (0...3).map { truck(pose: $0) }
         case .bombard: made = (0...3).map { bombard(pose: $0) }
+        case .tank: made = (0...3).map { tank(pose: $0) }
         case .enemy: made = (0...3).map { enemy(pose: $0) }
         case .brute: made = (0...3).map { brute(pose: $0) }
         case .reaver: made = (0...3).map { reaver(pose: $0) }
@@ -32,6 +33,8 @@ enum UnitPixelArt {
             let body = mechBody()
             made = [body, body, body, body]
         case .heli: made = (0...3).map { heli(pose: $0) }
+        case .missileTruck: made = (0...3).map { missileTruck(pose: $0) }
+        case .immortal: made = (0...3).map { immortal(pose: $0) }
         }
         frameCache[kind] = made
         return made
@@ -127,6 +130,35 @@ enum UnitPixelArt {
             portraitCache[kind] = portrait
             return portrait
         }
+        // Tank portrait: the whole tracked chassis with the turret cannon
+        // level and forward — the straight-flying missile shooter.
+        if kind == .tank {
+            _ = frames(for: kind)
+            _ = armTexture(for: kind)
+            guard let body = imageCache["body-tank-0"],
+                  let arm = imageCache["arm-tank-v1"] else { return UIImage() }
+            let m = armMetrics(for: kind)
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            format.opaque = false
+            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
+                                                   format: format).image { ctx in
+                let cg = ctx.cgContext
+                let s: CGFloat = 0.62
+                let bw = 48 * s, bh = 32 * s
+                let x0 = (36 - bw) / 2, y0 = (24 - bh) / 2
+                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+                // Cannon pivots on the turret grip.
+                cg.saveGState()
+                cg.translateBy(x: x0 + 20 * s, y: y0 + 8.5 * s)
+                cg.rotate(by: -0.12)
+                let aw = CGFloat(m.w) * s, ah = CGFloat(m.h) * s
+                arm.draw(in: CGRect(x: -aw * 0.2, y: -ah / 2, width: aw, height: ah))
+                cg.restoreGState()
+            }
+            portraitCache[kind] = portrait
+            return portrait
+        }
         // Mech portrait: the walker is taller + wider than the 24x32
         // trooper crop, so show the whole machine (scaled to fit) with
         // its gatling arm raised over the shoulder.
@@ -191,6 +223,67 @@ enum UnitPixelArt {
             portraitCache[kind] = portrait
             return portrait
         }
+        // Missile truck portrait: the whole chassis with the launcher rail
+        // raised out of the cradle in the module's nose.
+        if kind == .missileTruck {
+            _ = frames(for: kind)
+            _ = armTexture(for: kind)
+            guard let body = imageCache["body-missile-truck-0"],
+                  let arm = imageCache["arm-missile-truck"] else { return UIImage() }
+            let m = armMetrics(for: kind)
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            format.opaque = false
+            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
+                                                   format: format).image { ctx in
+                let cg = ctx.cgContext
+                // Body is 64x40 px: shrink it a touch so the raised rail
+                // still fits inside the card.
+                let s: CGFloat = 0.42
+                let bw = 64 * s, bh = 40 * s
+                let x0: CGFloat = 2, y0: CGFloat = 4
+                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+                // Rail pivots on the hot cradle in the launcher's nose.
+                cg.saveGState()
+                cg.translateBy(x: x0 + 59 * s, y: y0 + 10.5 * s)
+                cg.rotate(by: -0.6)
+                let aw = CGFloat(m.w) * s, ah = CGFloat(m.h) * s
+                arm.draw(in: CGRect(x: -aw * 0.24, y: -ah / 2, width: aw, height: ah))
+                cg.restoreGState()
+            }
+            portraitCache[kind] = portrait
+            return portrait
+        }
+        // Immortal portrait: the whole walker scaled to fit the card with
+        // the twin-disruptor turret raised off the shoulder hump.
+        if kind == .immortal {
+            _ = frames(for: kind)
+            _ = armTexture(for: kind)
+            guard let body = imageCache["body-immortal-0"],
+                  let arm = imageCache["arm-immortal"] else { return UIImage() }
+            let m = armMetrics(for: kind)
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            format.opaque = false
+            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
+                                                   format: format).image { ctx in
+                let cg = ctx.cgContext
+                // Body canvas is 40x36: shrink so the raised cannon fits.
+                let s: CGFloat = 0.55
+                let bw = 40 * s, bh = 36 * s
+                let x0 = (36 - bw) / 2, y0 = (24 - bh) / 2
+                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+                // Cannon pivots on the shoulder joint, breaking the frame.
+                cg.saveGState()
+                cg.translateBy(x: x0 + 19 * s, y: y0 + 7 * s)
+                cg.rotate(by: -0.5)
+                let aw = CGFloat(m.w) * s, ah = CGFloat(m.h) * s
+                arm.draw(in: CGRect(x: -aw * 0.15, y: -ah / 2, width: aw, height: ah))
+                cg.restoreGState()
+            }
+            portraitCache[kind] = portrait
+            return portrait
+        }
         let bodyKey: String
         let armKey: String
         let shoulder: CGPoint // grip point in portrait px
@@ -210,6 +303,9 @@ enum UnitPixelArt {
         case .bombard:
             bodyKey = "body-bombard-0"; armKey = "arm-bombard-v1"
             shoulder = CGPoint(x: 16, y: 12)
+        case .tank:
+            bodyKey = "body-tank-0"; armKey = "arm-tank-v1"
+            shoulder = CGPoint(x: 16, y: 14)
         case .enemy:
             bodyKey = "body-enemy-0"; armKey = "arm-enemy"
             shoulder = CGPoint(x: 16, y: 14)
@@ -231,6 +327,12 @@ enum UnitPixelArt {
         case .heli:
             bodyKey = "body-heli-0"; armKey = "arm-heli"
             shoulder = CGPoint(x: 14, y: 15)
+        case .missileTruck:
+            bodyKey = "body-missile-truck-0"; armKey = "arm-missile-truck"
+            shoulder = CGPoint(x: 10, y: 8)
+        case .immortal:
+            bodyKey = "body-immortal-0"; armKey = "arm-immortal"
+            shoulder = CGPoint(x: 20, y: 11)
         }
         // Warm the cache (no-ops once textures exist).
         _ = frames(for: kind)
@@ -532,6 +634,178 @@ enum UnitPixelArt {
         }
     }
 
+    // MARK: - Enemy missile truck (Level 15 debut)
+
+    /// Self-propelled missile launcher: the armored cab sits at the back,
+    /// the tall launcher module rides the nose, and the big rail (the
+    /// aimable arm) pivots out of the hot cradle in the module's face —
+    /// so the turret always points the way the truck drives. Stowed rounds
+    /// clip to the module's flank, a beacon rides its roof, and the chassis
+    /// rides the suspension while the wheels stay planted on the deck.
+    private static func missileTruck(pose: Int) -> SKTexture {
+        canvas(w: 64, h: 40, key: "body-missile-truck-\(pose)") { cg in
+            let hull = UIColor(red: 0.42, green: 0.13, blue: 0.16, alpha: 1)
+            let hullLit = UIColor(red: 0.66, green: 0.25, blue: 0.23, alpha: 1)
+            let hullDk = UIColor(red: 0.24, green: 0.07, blue: 0.10, alpha: 1)
+            let plate = UIColor(red: 0.32, green: 0.10, blue: 0.13, alpha: 1)
+            let trim = UIColor(red: 0.80, green: 0.34, blue: 0.20, alpha: 1)
+            let warn = UIColor(red: 1.0, green: 0.72, blue: 0.16, alpha: 1)
+            let steel = UIColor(red: 0.38, green: 0.40, blue: 0.46, alpha: 1)
+            let steelLit = UIColor(red: 0.58, green: 0.60, blue: 0.66, alpha: 1)
+            let glass = UIColor(red: 0.09, green: 0.07, blue: 0.10, alpha: 1)
+            let glint = UIColor(red: 0.52, green: 0.78, blue: 0.88, alpha: 1)
+            let under = UIColor(red: 0.05, green: 0.04, blue: 0.06, alpha: 1)
+            let tire = UIColor(red: 0.11, green: 0.10, blue: 0.13, alpha: 1)
+            let rim = UIColor(red: 0.30, green: 0.26, blue: 0.28, alpha: 1)
+            let rimLit = UIColor(red: 0.54, green: 0.45, blue: 0.45, alpha: 1)
+            let hub = UIColor(red: 0.88, green: 0.34, blue: 0.22, alpha: 1)
+            let glow = UIColor(red: 1.0, green: 0.34, blue: 0.18, alpha: 1)
+            let O = outline
+            let y = [0, 0, 1, 0][pose] // chassis rides the suspension
+
+            // --- TANK TRACKS: a continuous chain wraps the whole running
+            // gear, with road wheels turning inside it. The chain links
+            // crawl a pixel per frame phase, and the sprocket catches a
+            // glint of light.
+            let link = [0, 1, 2, 3][pose]
+            // Track outline: a long middle run with rounded ends.
+            fill(cg, x: 10, y: 25, w: 43, h: 15, O)
+            fill(cg, x: 4, y: 28, w: 7, h: 10, O)
+            fill(cg, x: 52, y: 28, w: 8, h: 10, O)
+            // Track interior.
+            fill(cg, x: 11, y: 26, w: 41, h: 13, tire)
+            fill(cg, x: 5, y: 29, w: 6, h: 8, tire)
+            fill(cg, x: 53, y: 29, w: 6, h: 8, tire)
+            // Road wheels turning inside the chain.
+            for rx in [18, 26, 34, 42] {
+                fill(cg, x: rx - 3, y: 29, w: 7, h: 7, rim)
+                fill(cg, x: rx - 3, y: 29, w: 3, h: 1, rimLit)
+                fill(cg, x: rx - 1, y: 31, w: 3, h: 3, hub)
+                fill(cg, x: rx - 1, y: 31, w: 3, h: 1, rimLit)
+            }
+            // Crawling chain links along the bottom run and around the
+            // idler (rear) and sprocket (front).
+            for i in 0..<11 {
+                let lx = 12 + ((i * 4 + link) % 40)
+                fill(cg, x: lx, y: 36, w: 2, h: 3, under)
+            }
+            for i in 0..<3 {
+                let ly = 29 + ((i * 3 + link) % 7)
+                fill(cg, x: 5, y: ly, w: 2, h: 2, under)
+                fill(cg, x: 57, y: ly, w: 2, h: 2, under)
+            }
+            // Sprocket cap on the nose end.
+            fill(cg, x: 55, y: 32, w: 3, h: 3, hub)
+            fill(cg, x: 55, y: 32, w: 3, h: 1, rimLit)
+
+            // --- Chassis: long armored hull, lit top deck, dark belly.
+            fill(cg, x: 2, y: 16 + y, w: 60, h: 12, O)
+            fill(cg, x: 3, y: 17 + y, w: 58, h: 10, hull)
+            fill(cg, x: 3, y: 17 + y, w: 58, h: 2, hullLit)
+            fill(cg, x: 3, y: 25 + y, w: 58, h: 2, hullDk)
+            // Flank plating: ribs, warning chevrons, inspection hatch.
+            for rx in [34, 44] {
+                fill(cg, x: rx, y: 19 + y, w: 1, h: 6, hullDk)
+            }
+            fill(cg, x: 28, y: 21 + y, w: 3, h: 1, warn)
+            fill(cg, x: 30, y: 22 + y, w: 3, h: 1, warn)
+            fill(cg, x: 32, y: 23 + y, w: 3, h: 1, warn)
+            fill(cg, x: 36, y: 20 + y, w: 6, h: 6, O)
+            fill(cg, x: 37, y: 21 + y, w: 4, h: 4, plate)
+            fill(cg, x: 38, y: 22 + y, w: 2, h: 2, rimLit)
+
+            // --- Cab at the back: the crew sits behind the launcher and
+            // looks forward over it. Rear glass, forward windshield, roof
+            // cap, mirror and a stowed exhaust stack.
+            fill(cg, x: 2, y: 8 + y, w: 26, h: 20, O)
+            fill(cg, x: 3, y: 9 + y, w: 24, h: 18, hull)
+            fill(cg, x: 3, y: 9 + y, w: 24, h: 2, hullLit)
+            fill(cg, x: 26, y: 11 + y, w: 1, h: 15, hullDk)
+            // Roof cap.
+            fill(cg, x: 6, y: 5 + y, w: 16, h: 4, O)
+            fill(cg, x: 7, y: 6 + y, w: 14, h: 1, hullLit)
+            // Crew window at the back.
+            fill(cg, x: 6, y: 12 + y, w: 5, h: 5, O)
+            fill(cg, x: 7, y: 13 + y, w: 3, h: 3, glass)
+            fill(cg, x: 7, y: 13 + y, w: 2, h: 1, glint)
+            // Forward windshield, split by a pillar.
+            fill(cg, x: 19, y: 11 + y, w: 7, h: 9, O)
+            fill(cg, x: 20, y: 12 + y, w: 5, h: 7, glass)
+            fill(cg, x: 20, y: 12 + y, w: 3, h: 1, glint)
+            fill(cg, x: 22, y: 16 + y, w: 3, h: 3, glass)
+            fill(cg, x: 20, y: 15 + y, w: 5, h: 1, hullDk)
+            // Mirror arm.
+            fill(cg, x: 17, y: 10 + y, w: 2, h: 1, O)
+            fill(cg, x: 17, y: 11 + y, w: 2, h: 2, steel)
+            // Exhaust stack at the very back, hot tip.
+            fill(cg, x: 0, y: 7 + y, w: 4, h: 12, O)
+            fill(cg, x: 1, y: 8 + y, w: 2, h: 10, steel)
+            fill(cg, x: 1, y: 8 + y, w: 1, h: 3, steelLit)
+            fill(cg, x: 0, y: 5 + y, w: 4, h: 3, O)
+            fill(cg, x: 1, y: 6 + y, w: 2, h: 1, glow)
+            // Rear bumper + tail lamp.
+            fill(cg, x: 0, y: 22 + y, w: 3, h: 5, O)
+            fill(cg, x: 0, y: 23 + y, w: 2, h: 3, steel)
+            fill(cg, x: 0, y: 19 + y, w: 2, h: 2, O)
+            fill(cg, x: 1, y: 20 + y, w: 1, h: 1, glow)
+
+            // --- Deck cargo between the cab and the launcher: a strapped
+            // ammo crate plus a spare can, so the hauler reads as a
+            // working truck.
+            fill(cg, x: 29, y: 10 + y, w: 8, h: 7, O)
+            fill(cg, x: 30, y: 11 + y, w: 6, h: 5, steel)
+            fill(cg, x: 30, y: 11 + y, w: 6, h: 1, steelLit)
+            fill(cg, x: 30, y: 13 + y, w: 6, h: 1, warn)
+            fill(cg, x: 34, y: 12 + y, w: 4, h: 5, O)
+            fill(cg, x: 35, y: 13 + y, w: 2, h: 3, plate)
+
+            // --- Launcher module at the nose: a tall armored box that
+            // steps down into a narrow mantlet, so the launcher head sits
+            // clear of the hull and the rail projects ahead of the body.
+            // Stowed rounds clip to the flank, a hazard band runs along the
+            // belly and a beacon rides the roof.
+            fill(cg, x: 36, y: 1 + y, w: 22, h: 17, O)
+            fill(cg, x: 37, y: 2 + y, w: 20, h: 15, hull)
+            fill(cg, x: 37, y: 2 + y, w: 20, h: 2, hullLit)
+            fill(cg, x: 37, y: 15 + y, w: 20, h: 1, hullDk)
+            // Mantlet: the narrow nose block the rail fires out of.
+            fill(cg, x: 56, y: 5 + y, w: 7, h: 11, O)
+            fill(cg, x: 57, y: 6 + y, w: 5, h: 9, hull)
+            fill(cg, x: 57, y: 6 + y, w: 5, h: 1, hullLit)
+            fill(cg, x: 57, y: 14 + y, w: 5, h: 1, hullDk)
+            // Hot cradle in the mantlet face.
+            fill(cg, x: 58, y: 7 + y, w: 4, h: 7, O)
+            fill(cg, x: 59, y: 8 + y, w: 2, h: 5, glow)
+            // Stowed rounds: two slim missiles clipped to the flank, nose
+            // cones forward, tail fins at the back.
+            for ry in [4, 9] {
+                fill(cg, x: 39, y: ry + y, w: 13, h: 4, O)
+                fill(cg, x: 40, y: ry + 1 + y, w: 11, h: 2, steel)
+                fill(cg, x: 45, y: ry + 1 + y, w: 1, h: 2, warn)
+                fill(cg, x: 49, y: ry + 1 + y, w: 2, h: 2, glow)
+                fill(cg, x: 39, y: ry + y, w: 2, h: 1, steelLit)
+            }
+            // Hazard band along the module's belly.
+            for bx in Swift.stride(from: 37, to: 50, by: 3) {
+                fill(cg, x: bx, y: 14 + y, w: 2, h: 2, warn)
+            }
+            // Roof beacon + antenna whip.
+            fill(cg, x: 42, y: 0 + y, w: 3, h: 2, O)
+            fill(cg, x: 43, y: 0 + y, w: 1, h: 1, glow)
+            fill(cg, x: 54, y: 0 + y, w: 1, h: 2, O)
+
+            // --- Nose: headlight, bumper tusk and chin skid.
+            fill(cg, x: 60, y: 19 + y, w: 3, h: 3, O)
+            fill(cg, x: 61, y: 20 + y, w: 1, h: 1, glow)
+            fill(cg, x: 58, y: 23 + y, w: 6, h: 5, O)
+            fill(cg, x: 59, y: 24 + y, w: 4, h: 3, steel)
+            fill(cg, x: 62, y: 25 + y, w: 1, h: 2, trim)
+            fill(cg, x: 54, y: 26 + y, w: 10, h: 2, O)
+            fill(cg, x: 55, y: 26 + y, w: 8, h: 1, under)
+
+        }
+    }
+
     // MARK: - Player Bombard (Level 11 mortar carrier)
 
     /// Same wide chassis language as the Vuran gun-truck, rebuilt as a
@@ -686,6 +960,156 @@ enum UnitPixelArt {
         }
     }
 
+    // MARK: - Player Tank (Level 17 main-battle tank)
+
+    /// Tracked main-battle tank in the same wide-canvas language as the
+    /// Vuran gun-truck: olive hull with a khaki top strip and cream trim,
+    /// a low armored turret carrying the aimable cannon (see tankArm()),
+    /// a running gear of road wheels inside a continuous track, blue team
+    /// stripes on the flank so it reads friendly at a glance, and a
+    /// stowed missile strapped to the turret flank. Faces +x.
+    private static func tank(pose: Int) -> SKTexture {
+        canvas(w: 48, h: 32, key: "body-tank-\(pose)") { cg in
+            let olive = UIColor(red: 0.40, green: 0.40, blue: 0.30, alpha: 1)
+            let oliveLit = UIColor(red: 0.62, green: 0.62, blue: 0.45, alpha: 1)
+            let oliveDk = UIColor(red: 0.25, green: 0.27, blue: 0.19, alpha: 1)
+            let camoD = UIColor(red: 0.20, green: 0.22, blue: 0.15, alpha: 1)
+            let team = UIColor(red: 0.30, green: 0.60, blue: 1.0, alpha: 1)
+            let teamLit = UIColor(red: 0.55, green: 0.80, blue: 1.0, alpha: 1)
+            let steel = UIColor(red: 0.36, green: 0.38, blue: 0.44, alpha: 1)
+            let steelLit = UIColor(red: 0.58, green: 0.60, blue: 0.66, alpha: 1)
+            let warn = UIColor(red: 1.0, green: 0.62, blue: 0.16, alpha: 1)
+            let glass = UIColor(red: 0.09, green: 0.09, blue: 0.10, alpha: 1)
+            let glow = UIColor(red: 0.55, green: 0.90, blue: 1.0, alpha: 1)
+            let under = UIColor(red: 0.06, green: 0.06, blue: 0.07, alpha: 1)
+            let tire = UIColor(red: 0.13, green: 0.15, blue: 0.18, alpha: 1)
+            let rimLit = UIColor(red: 0.62, green: 0.66, blue: 0.72, alpha: 1)
+            let lamp = UIColor(red: 1.0, green: 0.93, blue: 0.70, alpha: 1)
+            let O = outline
+            let y = [0, 0, 1, 0][pose] // suspension bounce
+
+            // --- TANK TRACKS: a continuous chain wrapping the running
+            // gear, road wheels turning inside it, chain links crawling
+            // a pixel per frame phase.
+            let link = [0, 1, 2, 3][pose]
+            fill(cg, x: 7, y: 22, w: 37, h: 10, O)
+            fill(cg, x: 2, y: 25, w: 6, h: 6, O)
+            fill(cg, x: 43, y: 25, w: 4, h: 6, O)
+            fill(cg, x: 8, y: 23, w: 35, h: 8, tire)
+            fill(cg, x: 3, y: 26, w: 5, h: 4, tire)
+            fill(cg, x: 43, y: 26, w: 3, h: 4, tire)
+            for rx in [14, 22, 30, 38] {
+                fill(cg, x: rx - 3, y: 26, w: 7, h: 6, oliveDk)
+                fill(cg, x: rx - 3, y: 26, w: 3, h: 1, rimLit)
+                fill(cg, x: rx - 1, y: 28, w: 3, h: 2, steel)
+                fill(cg, x: rx - 1, y: 28, w: 3, h: 1, steelLit)
+            }
+            for i in 0..<9 {
+                let lx = 10 + ((i * 4 + link) % 32)
+                fill(cg, x: lx, y: 29, w: 2, h: 2, under)
+            }
+            for i in 0..<2 {
+                let ly = 26 + ((i * 3 + link) % 5)
+                fill(cg, x: 3, y: ly, w: 2, h: 2, under)
+                fill(cg, x: 43, y: ly, w: 2, h: 2, under)
+            }
+
+            // --- Hull: long armored flank, lit top deck, dark belly and
+            // a blue team stripe down the middle.
+            fill(cg, x: 2, y: 13 + y, w: 44, h: 10, O)
+            fill(cg, x: 3, y: 14 + y, w: 42, h: 8, olive)
+            fill(cg, x: 3, y: 14 + y, w: 42, h: 2, oliveLit)
+            fill(cg, x: 3, y: 20 + y, w: 42, h: 2, oliveDk)
+            fill(cg, x: 3, y: 17 + y, w: 42, h: 2, team)
+            fill(cg, x: 3, y: 17 + y, w: 42, h: 1, teamLit)
+            // Camo flecks along the hull shoulder.
+            fill(cg, x: 7, y: 15 + y, w: 3, h: 1, camoD)
+            fill(cg, x: 14, y: 16 + y, w: 4, h: 1, camoD)
+            fill(cg, x: 23, y: 15 + y, w: 3, h: 1, camoD)
+            fill(cg, x: 31, y: 16 + y, w: 4, h: 1, camoD)
+
+            // --- Exhaust stack at the very back, hot tip.
+            fill(cg, x: 1, y: 10 + y, w: 4, h: 6, O)
+            fill(cg, x: 2, y: 11 + y, w: 2, h: 4, steel)
+            fill(cg, x: 1, y: 9 + y, w: 4, h: 2, O)
+            fill(cg, x: 2, y: 10 + y, w: 2, h: 1, warn)
+
+            // --- Rear stowage bin with a spare shell nose-up.
+            fill(cg, x: 5, y: 6 + y, w: 6, h: 7, O)
+            fill(cg, x: 6, y: 7 + y, w: 4, h: 5, oliveDk)
+            fill(cg, x: 7, y: 4 + y, w: 2, h: 3, warn)
+            fill(cg, x: 7, y: 4 + y, w: 1, h: 1, .white.withAlphaComponent(0.6))
+
+            // --- Turret: low slab with lit top, blue band, hatch ring and
+            // a stowed missile clipped to the flank. The mantlet sits at
+            // the nose edge of the turret and the aimable cannon fires
+            // out of it (arm pivot at the turret's grip).
+            fill(cg, x: 12, y: 2 + y, w: 19, h: 12, O)
+            fill(cg, x: 13, y: 3 + y, w: 17, h: 10, olive)
+            fill(cg, x: 13, y: 3 + y, w: 17, h: 2, oliveLit)
+            fill(cg, x: 13, y: 11 + y, w: 17, h: 2, oliveDk)
+            fill(cg, x: 13, y: 8 + y, w: 17, h: 2, team)
+            // Turret hatch ring + periscope pip.
+            fill(cg, x: 16, y: 5 + y, w: 5, h: 4, O)
+            fill(cg, x: 17, y: 6 + y, w: 3, h: 2, oliveDk)
+            fill(cg, x: 17, y: 5 + y, w: 1, h: 1, glow)
+            // Stowed missile on the flank: slim body, nose cone, fins.
+            fill(cg, x: 25, y: 6 + y, w: 9, h: 4, O)
+            fill(cg, x: 26, y: 7 + y, w: 7, h: 2, steel)
+            fill(cg, x: 31, y: 7 + y, w: 2, h: 2, warn)
+            fill(cg, x: 25, y: 6 + y, w: 1, h: 4, steelLit)
+            // Mantlet: the armored nose block the cannon mounts behind.
+            fill(cg, x: 30, y: 5 + y, w: 4, h: 8, O)
+            fill(cg, x: 31, y: 6 + y, w: 2, h: 6, oliveDk)
+
+            // --- Nose: headlight, lamp housing, chin skid.
+            fill(cg, x: 45, y: 16 + y, w: 2, h: 3, O)
+            fill(cg, x: 45, y: 17 + y, w: 1, h: 1, lamp)
+            fill(cg, x: 41, y: 22 + y, w: 6, h: 2, O)
+            fill(cg, x: 42, y: 22 + y, w: 4, h: 1, under)
+
+            // --- Antenna whip on the turret roof.
+            fill(cg, x: 24, y: 0 + y, w: 1, h: 3, O)
+        }
+    }
+
+    /// Tank cannon: a heavy barrel on the turret grip — reinforced breech
+    /// collar, ribbed recoil sleeve, long barrel drill and a hot muzzle
+    /// brake with the throat the straight-flying missile leaves from.
+    private static func tankArm() -> SKTexture {
+        let m = armMetrics(for: .tank)
+        return canvas(w: m.w, h: m.h, key: "arm-tank-v1") { cg in
+            let steel = UIColor(red: 0.34, green: 0.36, blue: 0.42, alpha: 1)
+            let steelHi = UIColor(red: 0.58, green: 0.60, blue: 0.66, alpha: 1)
+            let steelDk = UIColor(red: 0.17, green: 0.18, blue: 0.22, alpha: 1)
+            let olive = UIColor(red: 0.40, green: 0.40, blue: 0.30, alpha: 1)
+            let team = UIColor(red: 0.30, green: 0.60, blue: 1.0, alpha: 1)
+            let glow = UIColor(red: 1.0, green: 0.45, blue: 0.18, alpha: 1)
+            let O = outline
+            // Breech collar wrapping the grip (x=6).
+            fill(cg, x: 2, y: 4, w: 9, h: 8, O)
+            fill(cg, x: 3, y: 5, w: 7, h: 6, olive)
+            fill(cg, x: 3, y: 5, w: 7, h: 1, .white.withAlphaComponent(0.4))
+            fill(cg, x: 4, y: 6, w: 2, h: 3, team)
+            // Ribbed recoil sleeve along the barrel root.
+            fill(cg, x: 10, y: 4, w: 8, h: 7, O)
+            fill(cg, x: 11, y: 5, w: 6, h: 5, steel)
+            fill(cg, x: 11, y: 5, w: 6, h: 1, steelHi)
+            fill(cg, x: 11, y: 9, w: 6, h: 1, steelDk)
+            for rx in [13, 15] {
+                fill(cg, x: rx, y: 5, w: 1, h: 5, steelDk)
+            }
+            // Long barrel with a lit top line.
+            fill(cg, x: 17, y: 5, w: 9, h: 5, O)
+            fill(cg, x: 18, y: 6, w: 8, h: 3, steel)
+            fill(cg, x: 18, y: 6, w: 8, h: 1, steelHi)
+            // Muzzle brake with the hot throat inside.
+            fill(cg, x: 25, y: 3, w: 4, h: 9, O)
+            fill(cg, x: 26, y: 4, w: 2, h: 7, steel)
+            fill(cg, x: 26, y: 6, w: 1, h: 3, glow)
+        }
+    }
+
     // MARK: - Enemy raider (red alien)
 
     private static func enemy(pose: Int) -> SKTexture {
@@ -765,6 +1189,171 @@ enum UnitPixelArt {
             // Thick stomping legs (4-frame stride).
             legs(cg, frame: pose, cx: 12, top: 20, len: 8,
                  pants: hide, shade: chitinD, boot: dark, outline: O, wide: true)
+        }
+    }
+
+    // MARK: - Enemy immortal (crimson battle walker)
+
+    /// Heavy humanoid battle walker in armored crimson: huge rounded
+    /// shoulder pauldrons, helmet with a glowing visor, missile-pod racks
+    /// crowding the back, armored chest, and the whole left flank slung
+    /// with the giant rail cannon (the aimable arm mounts at that
+    /// shoulder). Digitigrade metal legs stomp on the 4-frame stride.
+    private static func immortal(pose: Int) -> SKTexture {
+        canvas(w: 40, h: 36, key: "body-immortal-\(pose)") { cg in
+            // Red family with a hot pink-red glow trim (the enemy ray).
+            let armor = UIColor(red: 0.74, green: 0.22, blue: 0.25, alpha: 1)   // lit plates
+            let armorMid = UIColor(red: 0.52, green: 0.14, blue: 0.18, alpha: 1)
+            let armorDk = UIColor(red: 0.30, green: 0.08, blue: 0.12, alpha: 1)
+            let armorUltra = UIColor(red: 0.17, green: 0.05, blue: 0.08, alpha: 1)
+            let mechDark = UIColor(red: 0.16, green: 0.13, blue: 0.15, alpha: 1)
+            let mechDk2 = UIColor(red: 0.10, green: 0.08, blue: 0.10, alpha: 1)
+            let glow = UIColor(red: 1.0, green: 0.38, blue: 0.50, alpha: 1)
+            let O = outline
+
+            // Missile-pod racks crowding the back of the shoulders:
+            // two stacked rounded racks behind the pauldron, ports lit.
+            fill(cg, x: 3, y: 1, w: 9, h: 5, O)
+            fill(cg, x: 4, y: 2, w: 7, h: 3, armorMid)
+            fill(cg, x: 4, y: 2, w: 7, h: 1, armor)
+            for px in [5, 8, 10] {
+                fill(cg, x: px, y: 3, w: 1, h: 1, glow)
+            }
+            fill(cg, x: 4, y: 6, w: 8, h: 5, O)
+            fill(cg, x: 5, y: 7, w: 6, h: 3, armorMid)
+            fill(cg, x: 5, y: 7, w: 6, h: 1, armorDk)
+            for px in [6, 9] {
+                fill(cg, x: px, y: 9, w: 1, h: 1, glow)
+            }
+            // Pod strut down to the shoulder line.
+            fill(cg, x: 9, y: 10, w: 4, h: 2, mechDk2)
+
+            // Helmet: angular, tucked between the pauldron and the arm.
+            fill(cg, x: 23, y: 4, w: 8, h: 6, O)
+            fill(cg, x: 24, y: 5, w: 6, h: 4, armor)
+            fill(cg, x: 24, y: 5, w: 6, h: 1, .white.withAlphaComponent(0.45))
+            fill(cg, x: 24, y: 8, w: 6, h: 1, armorDk)
+            // Glowing visor slit toward +x.
+            fill(cg, x: 27, y: 6, w: 3, h: 2, glow)
+            fill(cg, x: 30, y: 6, w: 1, h: 1, glow)
+            // Chin vent.
+            fill(cg, x: 26, y: 10, w: 4, h: 1, mechDk2)
+
+            // Giant shoulder pauldron: the walker's crown.
+            fill(cg, x: 12, y: 3, w: 13, h: 8, O)
+            fill(cg, x: 13, y: 4, w: 11, h: 6, armor)
+            fill(cg, x: 13, y: 4, w: 11, h: 1, .white.withAlphaComponent(0.5))
+            fill(cg, x: 13, y: 8, w: 11, h: 2, armorMid)
+            fill(cg, x: 14, y: 9, w: 9, h: 1, armorDk)
+            // Pink accent stripe across the pauldron face.
+            fill(cg, x: 15, y: 6, w: 6, h: 1, glow)
+            fill(cg, x: 15, y: 5, w: 1, h: 3, glow)
+            // Front edge shading down to the arm joint.
+            fill(cg, x: 23, y: 9, w: 3, h: 2, armorDk)
+
+            // Chest block under the pauldron, dark armored plates.
+            fill(cg, x: 14, y: 11, w: 10, h: 7, O)
+            fill(cg, x: 15, y: 12, w: 8, h: 5, armorMid)
+            fill(cg, x: 15, y: 12, w: 3, h: 5, armorDk)
+            fill(cg, x: 15, y: 12, w: 8, h: 1, armor)
+            // Glowing reactor core.
+            fill(cg, x: 18, y: 13, w: 3, h: 3, O)
+            fill(cg, x: 19, y: 14, w: 1, h: 1, glow)
+            fill(cg, x: 18, y: 13, w: 2, h: 1, glow.withAlphaComponent(0.7))
+            // Abdomen.
+            fill(cg, x: 15, y: 18, w: 8, h: 3, mechDk2)
+            fill(cg, x: 16, y: 19, w: 6, h: 1, armorDk)
+            // Cable noose: dark wires with a hot dangling socket.
+            segment(cg, x0: 17, y0: 21, x1: 21, y1: 23, w: 1, color: mechDk2)
+            fill(cg, x: 21, y: 23, w: 1, h: 1, glow)
+
+            // Shoulder joint block the cannon cradle rides on.
+            fill(cg, x: 23, y: 11, w: 6, h: 6, O)
+            fill(cg, x: 24, y: 12, w: 4, h: 4, mechDark)
+
+            // Pelvis under the abdomen.
+            fill(cg, x: 14, y: 21, w: 9, h: 4, O)
+            fill(cg, x: 15, y: 22, w: 7, h: 2, armorMid)
+            fill(cg, x: 15, y: 22, w: 2, h: 2, armorDk)
+
+            // Digitigrade metal legs, stomp gait: thigh armor, pink knee
+            // light, segmented dark shin, two-toed foot.
+            immortalWalkLeg(cg, hipX: 20, frame: pose,
+                            thigh: armor, thighD: armorDk, metal: mechDark,
+                            metalDk: mechDk2, glow: glow, O: O)
+            immortalWalkLeg(cg, hipX: 16, frame: (pose + 2) % 4,
+                            thigh: armor, thighD: armorDk, metal: mechDark,
+                            metalDk: mechDk2, glow: glow, O: O, front: false)
+        }
+    }
+
+    /// One digitigrade leg: hip -> forward knee -> down shin -> toe. The
+    /// knee carries a hot glow stripe; the shin is segmented metal.
+    private static func immortalWalkLeg(_ cg: CGContext, hipX: Int, frame: Int,
+                                        thigh: UIColor, thighD: UIColor,
+                                        metal: UIColor, metalDk: UIColor,
+                                        glow: UIColor, O: UIColor,
+                                        front: Bool = true) {
+        let s = stride(frame, back: false)
+        let dx = s.dx * (front ? 1 : -1)
+        // Hip -> knee (thigh, angling forward), knee -> ankle (shin).
+        let kneeX = hipX + dx + (front ? 2 : -1)
+        let kneeY = 26
+        let ankleX = kneeX + (front ? 1 : -2)
+        let ankleY = 31
+        segment(cg, x0: hipX, y0: 23, x1: kneeX, y1: kneeY, w: 5, color: O)
+        segment(cg, x0: hipX, y0: 23, x1: kneeX, y1: kneeY, w: 3, color: thigh)
+        segment(cg, x0: hipX, y0: 23, x1: hipX, y1: 25, w: 1, color: thighD)
+        // Knee joint + glow stripe.
+        fill(cg, x: kneeX - 2, y: kneeY - 1, w: 4, h: 3, O)
+        fill(cg, x: kneeX - 1, y: kneeY - 1, w: 2, h: 1, glow)
+        // Segmented shin down to the ankle.
+        segment(cg, x0: kneeX, y0: kneeY + 1, x1: ankleX, y1: ankleY, w: 4, color: O)
+        segment(cg, x0: kneeX, y0: kneeY + 1, x1: ankleX, y1: ankleY, w: 2, color: metal)
+        for sy in [kneeY + 3, kneeY + 5, kneeY + 7] {
+            fill(cg, x: min(kneeX, ankleX), y: sy, w: abs(ankleX - kneeX) + 3, h: 1, metalDk)
+        }
+        // Two-toed foot on the ground line.
+        fill(cg, x: ankleX - 3, y: ankleY, w: 6, h: 3, O)
+        fill(cg, x: ankleX - 2, y: ankleY, w: 5, h: 2, metal)
+        fill(cg, x: ankleX + (front ? 1 : -2), y: ankleY, w: 2, h: 1, metalDk)
+    }
+
+    /// The walker's whole weapon unit rides the aimable pivot: a black
+    /// rail cannon with a hot band under the shoulder, plus the
+    /// triple-barrel gatling cluster hung beneath it. Both muzzles burn.
+    private static func immortalArm() -> SKTexture {
+        let m = armMetrics(for: .immortal)
+        return canvas(w: m.w, h: m.h, key: "arm-immortal") { cg in
+            let armorDk = UIColor(red: 0.30, green: 0.08, blue: 0.12, alpha: 1)
+            let mechDark = UIColor(red: 0.16, green: 0.13, blue: 0.15, alpha: 1)
+            let mechDk2 = UIColor(red: 0.10, green: 0.08, blue: 0.10, alpha: 1)
+            let glow = UIColor(red: 1.0, green: 0.38, blue: 0.50, alpha: 1)
+            let O = outline
+            // Cradle gripping the shoulder joint (grip x=6).
+            fill(cg, x: 2, y: 4, w: 8, h: 9, O)
+            fill(cg, x: 3, y: 5, w: 6, h: 7, armorDk)
+            fill(cg, x: 3, y: 5, w: 6, h: 1, .white.withAlphaComponent(0.3))
+            fill(cg, x: 4, y: 10, w: 4, h: 2, mechDk2)
+            // Rail cannon: long black barrel along the top.
+            fill(cg, x: 8, y: 2, w: 26, h: 5, O)
+            fill(cg, x: 9, y: 3, w: 24, h: 3, mechDk2)
+            fill(cg, x: 9, y: 3, w: 24, h: 1, mechDark)
+            // Muzzle ring + hot band near the tip.
+            fill(cg, x: 29, y: 3, w: 2, h: 3, mechDark)
+            fill(cg, x: 24, y: 3, w: 3, h: 3, glow)
+            fill(cg, x: 33, y: 3, w: 1, h: 3, glow)
+            // Under-hung gatling: receiver + triple barrel cluster.
+            fill(cg, x: 10, y: 7, w: 8, h: 6, O)
+            fill(cg, x: 11, y: 8, w: 6, h: 4, mechDk2)
+            fill(cg, x: 18, y: 8, w: 4, h: 5, O)
+            fill(cg, x: 19, y: 9, w: 3, h: 3, mechDark)
+            // Three tube mouths, lit.
+            for py in [8, 10, 12] {
+                fill(cg, x: 22, y: py, w: 1, h: 1, glow)
+            }
+            // Power feed running back to the walker.
+            fill(cg, x: 3, y: 12, w: 6, h: 1, mechDk2)
         }
     }
 
@@ -936,6 +1525,31 @@ enum UnitPixelArt {
     static let armGripX = 5
     static let armTipX = 21
 
+    /// Arm canvas metrics per kind: pixel size plus the grip (rotation
+    /// pivot) and muzzle tip x. Most units share the rifle-sized default;
+    /// the missile truck mounts a much bigger launcher rail.
+    struct ArmMetrics {
+        let w: Int
+        let h: Int
+        let gripX: Int
+        let tipX: Int
+    }
+
+    /// Metrics for a kind's aimable arm. Nodes use these to place the
+    /// pivot anchor and the muzzle socket.
+    static func armMetrics(for kind: Kind) -> ArmMetrics {
+        switch kind {
+        case .missileTruck:
+            return ArmMetrics(w: 34, h: 16, gripX: 8, tipX: 30)
+        case .immortal:
+            return ArmMetrics(w: 40, h: 16, gripX: 6, tipX: 35)
+        case .tank:
+            return ArmMetrics(w: 30, h: 14, gripX: 6, tipX: 27)
+        default:
+            return ArmMetrics(w: armW, h: armH, gripX: armGripX, tipX: armTipX)
+        }
+    }
+
     /// Sleeve + glove + rifle pointing +x, vertically centred on row 6.
     /// Nodes mount it on a shoulder pivot and steer it at targets.
     static func armTexture(for kind: Kind) -> SKTexture {
@@ -945,6 +1559,7 @@ enum UnitPixelArt {
         case .ranger: return rangerArm()
         case .truck: return truckArm()
         case .bombard: return bombardArm()
+        case .tank: return tankArm()
         case .enemy: return enemyArm()
         case .brute: return bruteArm()
         case .reaver: return reaverArm()
@@ -952,6 +1567,50 @@ enum UnitPixelArt {
         case .jet: return jetArm()
         case .mech: return mechArm()
         case .heli: return heliArm()
+        case .missileTruck: return missileTruckArm()
+        case .immortal: return immortalArm()
+        }
+    }
+
+    /// Missile truck launcher: a heavy rail gun on a yoke — armored
+    /// cradle block, ribbed heat jacket, blast deflector fins and a hot
+    /// muzzle brake. The scene aims it like any other arm and the
+    /// missiles fly out of the brake.
+    private static func missileTruckArm() -> SKTexture {
+        let m = armMetrics(for: .missileTruck)
+        return canvas(w: m.w, h: m.h, key: "arm-missile-truck") { cg in
+            let steel = UIColor(red: 0.34, green: 0.36, blue: 0.42, alpha: 1)
+            let steelHi = UIColor(red: 0.58, green: 0.60, blue: 0.66, alpha: 1)
+            let steelDk = UIColor(red: 0.17, green: 0.18, blue: 0.22, alpha: 1)
+            let hull = UIColor(red: 0.40, green: 0.13, blue: 0.16, alpha: 1)
+            let warn = UIColor(red: 1.0, green: 0.72, blue: 0.16, alpha: 1)
+            let glow = UIColor(red: 1.0, green: 0.42, blue: 0.18, alpha: 1)
+            let O = outline
+            // Yoke block wrapping the grip (x=8).
+            fill(cg, x: 3, y: 5, w: 9, h: 7, O)
+            fill(cg, x: 4, y: 6, w: 7, h: 5, steel)
+            fill(cg, x: 4, y: 6, w: 7, h: 1, steelHi)
+            fill(cg, x: 5, y: 9, w: 2, h: 2, hull)
+            // Rail body with a ribbed heat jacket.
+            fill(cg, x: 11, y: 4, w: 16, h: 9, O)
+            fill(cg, x: 12, y: 5, w: 14, h: 7, steel)
+            fill(cg, x: 12, y: 5, w: 14, h: 2, steelHi)
+            fill(cg, x: 12, y: 10, w: 14, h: 2, steelDk)
+            for rx in [15, 19, 23] {
+                fill(cg, x: rx, y: 5, w: 1, h: 7, steelDk)
+            }
+            // Hazard band at the breech.
+            fill(cg, x: 12, y: 5, w: 2, h: 7, warn)
+            // Blast deflector fins above and below the brake.
+            fill(cg, x: 24, y: 1, w: 4, h: 4, O)
+            fill(cg, x: 25, y: 2, w: 3, h: 2, steel)
+            fill(cg, x: 24, y: 12, w: 4, h: 4, O)
+            fill(cg, x: 25, y: 12, w: 3, h: 2, steel)
+            // Muzzle brake with the hot throat inside it.
+            fill(cg, x: 27, y: 2, w: 6, h: 13, O)
+            fill(cg, x: 28, y: 3, w: 4, h: 11, steel)
+            fill(cg, x: 28, y: 3, w: 4, h: 1, steelHi)
+            fill(cg, x: 29, y: 4, w: 2, h: 9, glow)
         }
     }
 

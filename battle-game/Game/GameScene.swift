@@ -123,6 +123,9 @@ final class GameScene: SKScene {
     private var summonCooldowns: [ArmyKind: TimeInterval] = [:]
     // MARK: - Droid companion (owned battle buddy over the back shoulder)
     private var droid: DroidNode?
+    /// Screen-locked snowfall overlay (Level 20+ snow fields), camera-pinned
+    /// once per frame in updateParallax. Nil on non-snowy levels.
+    private var snowNode: SKNode?
     // MARK: - Hero death/respawn
     private var sceneTime: TimeInterval = 0
     private var respawnAt: TimeInterval = -1 // <0 = no pending respawn
@@ -320,6 +323,7 @@ final class GameScene: SKScene {
         if layout.alienBirds { LevelDressing.buildAlienBirds(in: skyLayer, sceneSize: size) }
         if layout.lushFlora { LevelDressing.buildGlowFlora(in: world) }
         if Balance.alpinePass { LevelDressing.buildAlpinePass(in: world) }
+        if Balance.ridgeRedoubt { LevelDressing.buildRidgeRedoubt(in: world) }
         if Balance.active.theme == .dawn { LevelDressing.buildDuneWash(in: world) }
         if Balance.active.theme == .sunscorch { LevelDressing.buildSunscorchField(in: world) }
         if Balance.active.theme == .sandhold { LevelDressing.buildSandholdKeep(in: world) }
@@ -327,6 +331,14 @@ final class GameScene: SKScene {
         if Balance.active.theme == .oasis { LevelDressing.buildOasisWaste(in: world) }
         if Balance.active.theme == .duskdesert { LevelDressing.buildDuskFlats(in: world) }
         if Balance.active.theme == .nightdesert { LevelDressing.buildNightFlats(in: world) }
+        // Snowfall (Level 20+): screen-locked looping overlay above the
+        // battle, below the foreground grass band / HUD.
+        snowNode?.removeFromParent()
+        snowNode = nil
+        if Balance.snowfall {
+            snowNode = SnowFX.buildSnow(sceneSize: size, cameraZoom: Balance.cameraZoom)
+            if let snowNode { addChild(snowNode) }
+        }
     }
 
     // MARK: - Layer 0: twilight ruins sky (static, factor 0.0)
@@ -405,7 +417,8 @@ final class GameScene: SKScene {
     /// Pixel-art tower + turning turret head (see TowerNode).
     /// Muzzle is the barrel tip; shots originate there.
     private func addTower(at x: CGFloat, team: Team) {
-        let tower = TowerNode(team: team)
+        // Mk-II tower shells from the refit roster tier on (both teams).
+        let tower = TowerNode(team: team, upgraded: levelId >= Balance.upgradedTowerLevel)
         tower.position = CGPoint(x: x, y: Balance.groundY(at: x))
         world.addChild(tower)
         // Stagger first shots round-robin so the line doesn't volley
@@ -514,6 +527,8 @@ final class GameScene: SKScene {
         midLayer.position.x = camX * (1 - Balance.parallaxMid)
         TwilightRuinsBG.updateMidParallax(in: midLayer, camX: camX)
         foregroundLayer.position.x = -camX * (Balance.parallaxForeground - 1)
+        // Snow is screen-locked: re-pin to the camera like skyLayer.
+        snowNode?.position = cam.position
     }
 
     override func update(_ currentTime: TimeInterval) {
@@ -928,13 +943,49 @@ final class GameScene: SKScene {
     /// Tower volley: one bolt on the early levels, a 3-bolt fan from Level
     /// 10 on (per-level `towerFanCount`). Bolt team matches the firing
     /// tower so hits land on the right side.
+    /// Mk-II turrets (Level 18+ both teams) fire a 3-missile volley instead:
+    /// each missile rides a slight angle fan and weaves. The player's
+    /// volley carries a much lighter payload than the enemy refit's.
     private func fireTowerBolt(from tower: Tower, to target: CGPoint) {
         let muzzle = towerMuzzle(for: tower)
         var baseDir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
         let len = max(1, hypot(baseDir.dx, baseDir.dy))
         baseDir = CGVector(dx: baseDir.dx / len, dy: baseDir.dy / len)
-        SoundEngine.shared.towerFire(at: muzzle.x)
         let baseAngle = atan2(baseDir.dy, baseDir.dx)
+        if levelId >= Balance.upgradedTowerLevel {
+            SoundEngine.shared.missileLaunch(at: muzzle.x)
+            let damage = tower.team == .enemy
+                ? Balance.towerDamage
+                : Balance.playerTowerMissileDamage
+            for k in 0..<Balance.towerMissileCount {
+                // Common launch line, one missile above / on / below center.
+                let a = baseAngle
+                    + (CGFloat(k) - CGFloat(Balance.towerMissileCount - 1) / 2)
+                    * Balance.towerMissileSpread
+                let dir = CGVector(dx: cos(a), dy: sin(a))
+                let missile = ProjectileFactory.makeMissile(team: tower.team)
+                missile.position = muzzle
+                missile.zRotation = a
+                world.addChild(missile)
+                projectiles.append(Projectile(node: missile, dir: dir,
+                                              life: Balance.towerMissileLife,
+                                              speed: Balance.towerMissileSpeed,
+                                              damage: damage,
+                                              team: tower.team,
+                                              weaveAmp: Balance.towerMissileWeaveAmp,
+                                              weaveFreq: Balance.towerMissileWeaveFreq,
+                                              weavePhase: Double(k) * 1.3,
+                                              weaveSteers: true,
+                                              contactBlast: 34,
+                                              trail: .smoke))
+            }
+            let flash = ProjectileFactory.makeMuzzleFlash()
+            flash.setScale(1.1)
+            flash.position = muzzle
+            world.addChild(flash)
+            return
+        }
+        SoundEngine.shared.towerFire(at: muzzle.x)
         let count = Balance.towerFanCount
         for k in 0..<count {
             // Symmetric fan: e.g. 3 bolts at -spread, 0, +spread.
@@ -993,6 +1044,8 @@ final class GameScene: SKScene {
             // Priority order on a shared summon number: Heli Gunship (heliEvery),
             // then Brute (bruteEvery), Reaver (reaverEvery), Mech (mechEvery,
             // only while none is alive), Skitter (skitterEvery), Jet (jetEvery).
+            // The Immortal (immortalEvery, Level 19+) is a singleton like
+            // the mech: it marches only while the last one stays dead.
             bases[i].summonTimer -= dt
             if bases[i].summonTimer <= 0 {
                 bases[i].summonTimer = Balance.summonInterval
@@ -1002,7 +1055,17 @@ final class GameScene: SKScene {
                 while batch > 0, enemies.count < Balance.maxEnemies {
                     summonCount += 1
                     let kind: EnemyKind
-                    if Balance.heliEvery > 0, summonCount % Balance.heliEvery == 0 {
+                    if Balance.truckEvery > 0, summonCount % Balance.truckEvery == 0 {
+                        // Missile-truck wave: the launcher roll out instead
+                        // of the normal unit.
+                        kind = .missileTruck
+                    } else if Balance.immortalEvery > 0,
+                              summonCount % Balance.immortalEvery == 0,
+                              !enemies.contains(where: { $0.alive && $0.kind == .immortal }) {
+                        // Immortal wave: the phase walker rolls out — but
+                        // only ever one at a time.
+                        kind = .immortal
+                    } else if Balance.heliEvery > 0, summonCount % Balance.heliEvery == 0 {
                         kind = .heli
                     } else if Balance.bruteEvery > 0, summonCount % Balance.bruteEvery == 0 {
                         kind = .brute
@@ -1020,6 +1083,21 @@ final class GameScene: SKScene {
                     }
                     summonEnemy(from: bases[i], slot: slot, kind: kind)
                     slot += 1
+                    // Extra missile trucks (when a level rolls out more than
+                    // one): the next one rolls out of the gate a beat
+                    // later, never side-by-side.
+                    if kind == .missileTruck, Balance.truckCount > 1 {
+                        let home = bases[i]
+                        for extra in 0..<(Balance.truckCount - 1) {
+                            let offset = slot + extra
+                            DispatchQueue.main.asyncAfter(deadline: .now()
+                                + 0.7 * Double(extra + 1)) { [weak self] in
+                                guard let self, self.enemies.count < Balance.maxEnemies else { return }
+                                self.summonEnemy(from: home, slot: offset, kind: .missileTruck)
+                            }
+                        }
+                        slot += Balance.truckCount - 1
+                    }
                     // Rank-and-file raiders march in twos: double the basic
                     // marcher pressure without changing elite cadence.
                     if kind == .raider, enemies.count < Balance.maxEnemies {
@@ -1313,7 +1391,7 @@ final class GameScene: SKScene {
                 e.position.x = max(40, e.position.x + dir * pace * CGFloat(dt))
                 e.animateMarch(dt: dt, advancing: true)
                 // Heavy walkers kick up dust with every step.
-                if e.kind.isMech {
+                if e.kind.isMech || e.kind == .immortal {
                     e.footDustTimer -= dt
                     if e.footDustTimer <= 0 {
                         e.footDustTimer = 0.34
@@ -1336,6 +1414,10 @@ final class GameScene: SKScene {
                         fireMechBurst(from: e, to: aim)
                     } else if e.kind.isHelicopter {
                         fireHeliBurst(from: e, to: aim)
+                    } else if e.kind == .missileTruck {
+                        fireMissile(from: e, to: aim)
+                    } else if e.kind == .immortal {
+                        fireImmortalOrbs(from: e, to: aim)
                     } else {
                         fireEnemyBolt(from: e, to: aim)
                     }
@@ -1410,6 +1492,78 @@ final class GameScene: SKScene {
         world.addChild(puff)
         let flash = ProjectileFactory.makeMuzzleFlash()
         flash.position = pos
+        world.addChild(flash)
+    }
+
+    /// Missile Truck launcher round: a twin-tube salvo — two missiles
+    /// leave the rail together, offset side to side, each flying a wavy
+    /// line toward the target (the weave makes them weave hard to dodge).
+    private func fireMissile(from e: EnemyNode, to target: CGPoint) {
+        let muzzle = e.muzzle()
+        var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
+        let len = max(1, hypot(dir.dx, dir.dy))
+        dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
+        SoundEngine.shared.missileLaunch(at: muzzle.x)
+        // Both rounds ride the same line, one either side of it, so the
+        // pair reads as a twin launcher instead of a single shot.
+        for side in [-1.0, 1.0] {
+            let offset = CGFloat(side) * 6
+            let shiftX = -dir.dy * offset
+            let shiftY = dir.dx * offset
+            let missile = ProjectileFactory.makeMissile()
+            missile.position = CGPoint(x: muzzle.x + shiftX, y: muzzle.y + shiftY)
+            missile.zRotation = atan2(dir.dy, dir.dx)
+            world.addChild(missile)
+            projectiles.append(Projectile(node: missile, dir: dir,
+                                          life: Balance.missileTruckMissileLife,
+                                          speed: Balance.missileTruckMissileSpeed,
+                                          damage: e.boltDamage, team: .enemy,
+                                          weaveAmp: Balance.missileTruckWeaveAmp,
+                                          weaveFreq: Balance.missileTruckWeaveFreq,
+                                          weavePhase: side > 0 ? 0.6 : 0,
+                                          weaveSteers: true,
+                                          contactBlast: 34,
+                                          trail: .smoke))
+        }
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.setScale(1.1)
+        flash.position = muzzle
+        world.addChild(flash)
+    }
+
+    /// Immortal twin-disruptor salvo: one orb leaves the rail cannon,
+    /// then a second follows it down the same line a beat later — the
+    /// walker uses its two arm guns back to back instead of bursting at
+    /// once. Slow, devastating rounds; dodge between them.
+    private func fireImmortalOrbs(from e: EnemyNode, to target: CGPoint) {
+        fireImmortalOrbRound(from: e, to: target)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Balance.immortalBurstGap) {
+            [weak self] in
+            guard let self, e.alive else { return }
+            self.fireImmortalOrbRound(from: e, to: target)
+        }
+    }
+
+    /// One disruptor round from the walker's arm guns.
+    private func fireImmortalOrbRound(from e: EnemyNode, to target: CGPoint) {
+        let muzzle = e.muzzle()
+        var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
+        let len = max(1, hypot(dir.dx, dir.dy))
+        dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
+        SoundEngine.shared.missileLaunch(at: muzzle.x)
+        SoundEngine.shared.enemyFire(at: muzzle.x)
+        let orb = ProjectileFactory.makePhaseOrb()
+        orb.position = muzzle
+        world.addChild(orb)
+        projectiles.append(Projectile(node: orb, dir: dir,
+                                      life: Balance.immortalOrbLife,
+                                      speed: Balance.immortalOrbSpeed,
+                                      damage: e.boltDamage, team: .enemy,
+                                      contactBlast: Balance.immortalOrbBlast,
+                                      trail: .ember))
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.setScale(1.4)
+        flash.position = muzzle
         world.addChild(flash)
     }
 
@@ -1513,19 +1667,10 @@ final class GameScene: SKScene {
     }
 
     // MARK: - Player army: summon + march toward the enemy base
-    /// Why a deploy was refused (shown as a toast so the button never
-    /// fails silently). Nil = no reason (the summon went through).
-    func summonRefusal(for kind: ArmyKind) -> String? {
-        if !ArmyKind.isUnlocked(kind, levelId: levelId) { return "NOT AVAILABLE" }
-        if allies.count >= Balance.maxAllies { return "ARMY FULL" }
-        if money < kind.cost { return "NEED \(kind.cost) GOLD" }
-        if (summonCooldowns[kind] ?? 0) > 0 { return "RECHARGING" }
-        if bases.first(where: { $0.team == .player })?.alive != true { return "HQ DOWN" }
-        return nil
-    }
     /// Called by the SwiftUI cards. Returns false when broke, capped,
     /// or the unit isn't fielded on this level yet (Ranger = Level 2+,
-    /// Heavy = Level 3+, Truck = Level 6+).
+    /// Heavy = Level 3+, Truck = Level 6+). Refusal reasons surface in
+    /// the cards themselves (FULL / RECHARGE / NO GOLD / HQ DOWN chips).
     @discardableResult
     func summonAlly(kind: ArmyKind) -> Bool {
         guard ArmyKind.isUnlocked(kind, levelId: levelId),
@@ -1614,6 +1759,8 @@ final class GameScene: SKScene {
                     a.fireCooldown = a.kind.fireCooldown
                     if a.kind == .bombard {
                         fireAllyBomb(from: a, to: aim)
+                    } else if a.kind == .tank {
+                        fireAllyTankMissile(from: a, to: aim)
                     } else {
                         fireAllyBolt(from: a, to: aim)
                         if a.kind == .truck {
@@ -1633,7 +1780,7 @@ final class GameScene: SKScene {
 
     /// Wheeled vehicles kick up dust behind the rear wheel while rolling.
     private func truckDust(_ a: AllyNode, dt: TimeInterval) {
-        guard a.kind == .truck || a.kind == .bombard else { return }
+        guard a.kind == .truck || a.kind == .bombard || a.kind == .tank else { return }
         a.dustTimer -= dt
         guard a.dustTimer <= 0 else { return }
         a.dustTimer = 0.22
@@ -1703,6 +1850,33 @@ final class GameScene: SKScene {
         world.addChild(flash)
     }
 
+    /// Tank missile: one trim-to-line round that flies DEAD STRAIGHT out
+    /// of the turret — no gravity arc (the Bombard's lob) and no weave
+    /// (the enemy launcher's snake). Detonates on contact.
+    private func fireAllyTankMissile(from a: AllyNode, to target: CGPoint) {
+        let muzzle = a.muzzle()
+        var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
+        let len = max(1, hypot(dir.dx, dir.dy))
+        dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
+        SoundEngine.shared.missileLaunch(at: muzzle.x)
+        let missile = ProjectileFactory.makeMissile()
+        missile.setScale(0.9)
+        missile.position = muzzle
+        missile.zRotation = atan2(dir.dy, dir.dx)
+        world.addChild(missile)
+        projectiles.append(Projectile(node: missile, dir: dir,
+                                      life: Balance.tankMissileLife,
+                                      speed: Balance.tankMissileSpeed,
+                                      damage: a.kind.damage,
+                                      team: .player,
+                                      contactBlast: Balance.tankMissileBlast,
+                                      trail: .smoke))
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.setScale(1.3)
+        flash.position = muzzle
+        world.addChild(flash)
+    }
+
     /// Enemy-bolt vs player army. Returns true when it struck an ally.
     private func hitAlly(at pt: CGPoint, amount: CGFloat) -> Bool {
         for a in allies where a.alive {
@@ -1722,7 +1896,7 @@ final class GameScene: SKScene {
         a.hp = max(0, a.hp - amount)
         a.refreshHPBar()
         if !a.alive {
-            if a.kind == .truck || a.kind == .bombard {
+            if a.kind == .truck || a.kind == .bombard || a.kind == .tank {
                 // Armor kill: full vehicle explosion (flash + fire + smoke
                 // + debris + sparks) instead of the trooper puff.
                 let boom = ProjectileFactory.makeTruckExplosion()
@@ -1912,9 +2086,16 @@ final class GameScene: SKScene {
             // Choir weave: snake perpendicular to the flight line.
             if p.weaveAmp > 0 {
                 p.weavePhase += p.weaveFreq * dt
-                let wob = cos(p.weavePhase) * p.weaveAmp * CGFloat(p.weaveFreq) * CGFloat(dt)
+                let lateral = cos(p.weavePhase) * p.weaveAmp * CGFloat(p.weaveFreq)
+                let wob = lateral * CGFloat(dt)
                 p.node.position.x += -p.dir.dy * wob
                 p.node.position.y += p.dir.dx * wob
+                if p.weaveSteers {
+                    // Nose into the wave: heading follows the real path.
+                    let vx = p.dir.dx * p.speed - p.dir.dy * lateral
+                    let vy = p.dir.dy * p.speed + p.dir.dx * lateral
+                    p.node.zRotation = atan2(vy, vx)
+                }
             }
             // Flight trails (smoke/embers shed on a cadence).
             if p.trail != .none {
@@ -1956,6 +2137,8 @@ final class GameScene: SKScene {
                 }
                 if p.blast > 0 {
                     explode(p, at: p.node.position)
+                } else if p.contactBlast > 0 {
+                    detonate(at: p.node.position, radius: p.contactBlast)
                 } else {
                     impact(at: p.node.position)
                 }
@@ -1971,7 +2154,11 @@ final class GameScene: SKScene {
                     continue
                 }
             } else if hitEnemy(p) {
-                impact(at: p.node.position)
+                if p.contactBlast > 0 {
+                    detonate(at: p.node.position, radius: p.contactBlast)
+                } else {
+                    impact(at: p.node.position)
+                }
                 ProjectileFactory.recycle(p.node)
                 continue
             }
@@ -2107,7 +2294,12 @@ final class GameScene: SKScene {
                                   heroWeapon.startReserve * 2)
             }
             maybeSpawnDrop(at: e.position)
-            if e.kind.isMech {
+            if e.kind == .immortal {
+                // The phase walker dies big: shield pop + crimson flare.
+                let boom = ProjectileFactory.makeImmortalExplosion()
+                boom.position = e.position
+                world.addChild(boom)
+            } else if e.kind.isMech {
                 // Mech walkers come apart in a heavy blast.
                 let boom = ProjectileFactory.makeMechExplosion()
                 boom.position = e.position
@@ -2153,6 +2345,19 @@ final class GameScene: SKScene {
         SoundEngine.shared.impact(at: pt.x)
         let puff = ProjectileFactory.makeImpactPuff()
         puff.position = pt
+        world.addChild(puff)
+    }
+
+    /// Contact detonation (missiles): the boom is the payoff for the hit —
+    /// the damage itself already landed on whatever it touched.
+    private func detonate(at pt: CGPoint, radius: CGFloat) {
+        SoundEngine.shared.missileDetonate(at: pt.x)
+        let boom = ProjectileFactory.makeExplosion(radius: radius)
+        boom.position = pt
+        world.addChild(boom)
+        let puff = ProjectileFactory.makeImpactPuff()
+        puff.position = pt
+        puff.setScale(1.4)
         world.addChild(puff)
     }
 
@@ -2306,7 +2511,8 @@ final class GameScene: SKScene {
             lost: lostAt != nil,
             summonCooldowns: summonCooldowns,
             allyCount: allies.count,
-            allyCap: Balance.maxAllies
+            allyCap: Balance.maxAllies,
+            playerHQAlive: bases.first(where: { $0.team == .player })?.alive ?? true
         )
     }
 

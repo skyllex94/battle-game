@@ -29,10 +29,16 @@ struct Projectile {
     var fuse: TimeInterval? = nil
     /// Remaining turf skips (grenades).
     var bounces: Int = 0
-    /// Lateral snake amplitude/frequency/phase (choir shards).
+    /// Lateral snake amplitude/frequency/phase (choir shards, missiles).
     var weaveAmp: CGFloat = 0
     var weaveFreq: Double = 0
     var weavePhase: Double = 0
+    /// Point the projectile along its weaved path (a missile noses into
+    /// the wave instead of flying sideways).
+    var weaveSteers: Bool = false
+    /// Detonation burst on contact (missiles): the explosion is visual,
+    /// the contact damage still comes from the normal hit.
+    var contactBlast: CGFloat = 0
     /// Flight trail artifact.
     var trail: TrailKind = .none
     var trailAcc: TimeInterval = 0
@@ -814,6 +820,55 @@ enum ProjectileFactory {
         return root
     }
 
+    /// Missile Truck / tower launcher round: one uniform body for every
+    /// missile (no size jitter), a lit nose, tail fins and a flickering
+    /// motor flame, nose + trim team-tinted so ownership reads mid-flight.
+    /// The scene flies it along the weave.
+    static func makeMissile(team: Team = .enemy) -> SKNode {
+        let redNose = SKColor(red: 0.85, green: 0.30, blue: 0.18, alpha: 1)
+        let redBand = SKColor(red: 1.0, green: 0.62, blue: 0.18, alpha: 0.95)
+        let blueNose = SKColor(red: 0.30, green: 0.62, blue: 0.95, alpha: 1)
+        let blueBand = SKColor(red: 0.55, green: 0.82, blue: 1.0, alpha: 0.95)
+        let noseColor = team == .player ? blueNose : redNose
+        let bandColor = team == .player ? blueBand : redBand
+        let root = SKNode()
+        root.zPosition = 15
+        let body = SKShapeNode(ellipseOf: CGSize(width: 26, height: 9))
+        body.fillColor = SKColor(red: 0.20, green: 0.19, blue: 0.22, alpha: 1)
+        body.strokeColor = SKColor(white: 0.75, alpha: 0.85)
+        body.lineWidth = 1.5
+        root.addChild(body)
+        // Hot nose cone + warning band.
+        let nose = SKShapeNode(circleOfRadius: 4.5)
+        nose.fillColor = noseColor
+        nose.strokeColor = .clear
+        nose.position = CGPoint(x: 10, y: 0)
+        root.addChild(nose)
+        let band = SKSpriteNode(color: bandColor,
+                                size: CGSize(width: 4, height: 9))
+        band.position = CGPoint(x: 3, y: 0)
+        root.addChild(band)
+        // Tail fins.
+        for dy in [-7.0, 7.0] {
+            let fin = SKShapeNode(rectOf: CGSize(width: 8, height: 5), cornerRadius: 1)
+            fin.fillColor = SKColor(red: 0.30, green: 0.28, blue: 0.32, alpha: 1)
+            fin.strokeColor = .clear
+            fin.position = CGPoint(x: -11, y: CGFloat(dy))
+            root.addChild(fin)
+        }
+        // Motor flame at the tail (-x, the scene rotates along the flight dir).
+        let flame = SKShapeNode(ellipseOf: CGSize(width: 13, height: 7))
+        flame.fillColor = SKColor(red: 1.0, green: 0.68, blue: 0.2, alpha: 0.9)
+        flame.strokeColor = .clear
+        flame.position = CGPoint(x: -17, y: 0)
+        root.addChild(flame)
+        flame.run(.repeatForever(.sequence([
+            .scaleX(to: 0.6, duration: 0.06),
+            .scaleX(to: 1.2, duration: 0.06),
+        ])))
+        return root
+    }
+
     /// Tower bolt, team-tinted so ownership reads at a glance:
     /// blue for player tower, red for enemy tower. Same 24x7 shape as hero bolts.
     static func makeTowerBolt(team: Team) -> SKShapeNode {
@@ -844,5 +899,140 @@ enum ProjectileFactory {
             bolt.addChild(glow)
             return bolt
         }
+    }
+
+    /// Immortal phase-disruptor round: a burning twin-layered orb — hot
+    /// pink core inside a wispy crimson shell, haloed and pulsing. Slow
+    /// but devastating: the scene detonates it on anything it touches.
+    static func makePhaseOrb() -> SKShapeNode {
+        return acquireShape("fx.pool.phaseOrb") {
+            let orb = SKShapeNode(circleOfRadius: 13)
+            orb.fillColor = SKColor(red: 1.0, green: 0.28, blue: 0.38, alpha: 0.28)
+            orb.strokeColor = SKColor(red: 1.0, green: 0.45, blue: 0.55, alpha: 0.85)
+            orb.lineWidth = 2
+            orb.zPosition = 15
+            // Halo: bigger, fainter, breathing behind the core.
+            let halo = SKShapeNode(circleOfRadius: 19)
+            halo.fillColor = SKColor(red: 1.0, green: 0.30, blue: 0.40, alpha: 0.14)
+            halo.strokeColor = SKColor(red: 1.0, green: 0.35, blue: 0.45, alpha: 0.40)
+            halo.lineWidth = 1.5
+            orb.addChild(halo)
+            halo.run(.repeatForever(.sequence([
+                .group([.scale(to: 1.25, duration: 0.30),
+                        .fadeIn(withDuration: 0.30)]),
+                .group([.scale(to: 1.0, duration: 0.30),
+                        .fadeOut(withDuration: 0.30)]),
+            ])))
+            // Hot core.
+            let core = SKShapeNode(circleOfRadius: 5.5)
+            core.fillColor = SKColor(red: 1.0, green: 0.65, blue: 0.75, alpha: 1)
+            core.strokeColor = .clear
+            orb.addChild(core)
+            return orb
+        }
+    }
+
+    /// Immortal kill: a crimson phase flare — shockwave ring, twin plasma
+    /// blooms, dark smoke, rising embers and heavy carapace debris.
+    /// Self-removes (~1.8s).
+    static func makeImmortalExplosion() -> SKNode {
+        let root = SKNode()
+        // Main shockwave: crimson, slower, wide.
+        let ring = SKShapeNode(circleOfRadius: 38)
+        ring.fillColor = .clear
+        ring.strokeColor = SKColor(red: 1, green: 0.30, blue: 0.38, alpha: 0.9)
+        ring.lineWidth = 5
+        ring.setScale(0.25)
+        root.addChild(ring)
+        ring.run(.sequence([
+            .group([.scale(to: 3.4, duration: 0.46), .fadeOut(withDuration: 0.46)]),
+            .removeFromParent(),
+        ]))
+        // Core flash: hot pink-white.
+        let flash = SKShapeNode(circleOfRadius: 36)
+        flash.fillColor = SKColor(red: 1, green: 0.75, blue: 0.85, alpha: 1)
+        flash.strokeColor = .clear
+        flash.zPosition = 16
+        root.addChild(flash)
+        flash.run(.sequence([.group([.scale(to: 2.2, duration: 0.26),
+                                     .fadeOut(withDuration: 0.26)]),
+                             .removeFromParent()]))
+        // Plasma blooms rippling outward in ember-red.
+        let fireOffsets = [CGPoint(x: -46, y: 16), CGPoint(x: 40, y: 30),
+                           CGPoint(x: 8, y: 48), CGPoint(x: -16, y: -12),
+                           CGPoint(x: 22, y: 4), CGPoint(x: -30, y: 40),
+                           CGPoint(x: 34, y: -4)]
+        for i in 0..<fxCount(fireOffsets.count) {
+            let off = fireOffsets[i]
+            let fire = SKShapeNode(circleOfRadius: 17)
+            fire.fillColor = SKColor(red: 1, green: 0.30 + CGFloat(i % 3) * 0.10,
+                                     blue: 0.24, alpha: 1)
+            fire.strokeColor = .clear
+            fire.position = .zero
+            fire.zPosition = 16
+            root.addChild(fire)
+            fire.run(.sequence([
+                .wait(forDuration: Double(i) * 0.05),
+                .group([.move(to: off, duration: 0.42),
+                        .scale(to: 0.26, duration: 0.42),
+                        .fadeOut(withDuration: 0.42)]),
+                .removeFromParent(),
+            ]))
+        }
+        // Dark smoke + rising embers.
+        for i in 0..<fxCount(6) {
+            let smoke = SKShapeNode(circleOfRadius: 13)
+            smoke.fillColor = SKColor(red: 0.16, green: 0.08, blue: 0.12, alpha: 0.78)
+            smoke.strokeColor = .clear
+            smoke.position = CGPoint(x: CGFloat(i - 3) * 9, y: 10)
+            smoke.zPosition = 15
+            root.addChild(smoke)
+            smoke.run(.sequence([
+                .wait(forDuration: 0.08 + Double(i) * 0.06),
+                .group([.moveBy(x: CGFloat(i - 3) * 12, y: 128, duration: 1.15),
+                        .scale(to: 3.0, duration: 1.15),
+                        .fadeOut(withDuration: 1.15)]),
+                .removeFromParent(),
+            ]))
+        }
+        for i in 0..<fxCount(8) {
+            let ember = SKShapeNode(circleOfRadius: 2.8)
+            ember.fillColor = SKColor(red: 1, green: 0.42, blue: 0.30, alpha: 1)
+            ember.strokeColor = .clear
+            ember.position = CGPoint(x: CGFloat(i - 4) * 5, y: 4)
+            ember.zPosition = 17
+            root.addChild(ember)
+            let drift = CGFloat(i - 4) * 14
+            ember.run(.sequence([
+                .wait(forDuration: Double(i) * 0.04),
+                .group([.moveBy(x: drift, y: 90 + CGFloat(i % 3) * 40, duration: 0.9),
+                        .fadeOut(withDuration: 0.9)]),
+                .removeFromParent(),
+            ]))
+        }
+        // Heavy carapace chunks — darker, redder than mech debris.
+        let debrisKicks = [CGVector(dx: -130, dy: 180), CGVector(dx: -70, dy: 220),
+                           CGVector(dx: 40, dy: 210), CGVector(dx: 125, dy: 170),
+                           CGVector(dx: 12, dy: 250), CGVector(dx: -100, dy: 115),
+                           CGVector(dx: 95, dy: 110)]
+        for i in 0..<fxCount(debrisKicks.count) {
+            let kick = debrisKicks[i]
+            let chunk = SKSpriteNode(color: SKColor(red: 0.26, green: 0.12, blue: 0.15, alpha: 1),
+                                     size: CGSize(width: 13, height: 9))
+            chunk.position = .zero
+            chunk.zPosition = 16
+            chunk.zRotation = CGFloat(i) * 0.9
+            root.addChild(chunk)
+            chunk.run(.sequence([
+                .wait(forDuration: Double(i) * 0.03),
+                .group([.moveBy(x: kick.dx, y: kick.dy, duration: 0.75),
+                        .rotate(byAngle: (CGFloat(i) - 3) * 2.4, duration: 0.75),
+                        .sequence([.wait(forDuration: 0.45),
+                                   .fadeOut(withDuration: 0.3)])]),
+                .removeFromParent(),
+            ]))
+        }
+        root.run(.sequence([.wait(forDuration: 1.8), .removeFromParent()]))
+        return root
     }
 }

@@ -1394,4 +1394,377 @@ enum LevelDressing {
         }
         return cairn
     }
+
+    // MARK: - Highridge Redoubt (Level 17): the fort's works on the shelf
+
+    /// The redoubt's field works: broken curtain-wall runs, dug-in gun
+    /// pits, stake barricades and the fort's banners. All of it is cut from
+    /// the same granite the shelf is made of, so the works read as part of
+    /// the ridge instead of props dropped onto it.
+    static func buildRidgeRedoubt(in world: SKNode) {
+        let gy = Balance.groundTopY
+        let width = Balance.levelWidth
+        bakeRedoubtRamparts(in: world, width: width, gy: gy)
+        bakeRedoubtGunPits(in: world, width: width, gy: gy)
+        bakeRedoubtBarricades(in: world, width: width, gy: gy)
+        bakeRedoubtBanners(in: world, width: width, gy: gy)
+    }
+
+    /// Curtain-wall runs: stacked granite courses with a merlon crown,
+    /// one end collapsed into a rubble spill.
+    private static func bakeRedoubtRamparts(in world: SKNode,
+                                             width: CGFloat, gy: CGFloat) {
+        let chunkW: CGFloat = 1024
+        var x0: CGFloat = 0
+        var chunk = 0
+        while x0 < width {
+            let span = min(chunkW, width - x0)
+            var rng = DressingRNG(seed: UInt64(171_700 + chunk * 457))
+            let root = SKNode()
+
+            let runs = max(0, Int((2.4 * span / width).rounded()))
+            var placed = 0
+            var guard_ = 0
+            while placed < runs, guard_ < runs * 40 + 40 {
+                guard_ += 1
+                let x = rng.cgFloat(in: 140...max(140, span - 140))
+                guard isClear(x0 + x, margin: 210) else { continue }
+                redoubtWallRun(rng: &rng, at: CGPoint(x: x, y: gy + 2), root: root)
+                placed += 1
+            }
+
+            if let baked = SceneryBake.baked(key: "redoubt.rampart.\(Int(width)).\(chunk)",
+                                             build: { root }) {
+                SceneryBake.add(baked, to: world,
+                                origin: CGPoint(x: x0, y: 0), zPosition: 3)
+            }
+            x0 += span
+            chunk += 1
+        }
+    }
+
+    /// One wall run. The intact part keeps its merlon crown; the broken
+    /// end steps down course by course and spills rubble at its foot.
+    private static func redoubtWallRun(rng: inout DressingRNG,
+                                       at base: CGPoint, root: SKNode) {
+        let stone = SKColor(red: 0.25, green: 0.23, blue: 0.25, alpha: 1)
+        let stoneLit = SKColor(red: 0.36, green: 0.33, blue: 0.34, alpha: 1)
+        let stoneDk = SKColor(red: 0.15, green: 0.14, blue: 0.16, alpha: 1)
+        let rim = SKColor(red: 0.96, green: 0.74, blue: 0.46, alpha: 0.7)
+
+        let len = rng.cgFloat(in: 120...220)
+        let h = rng.cgFloat(in: 30...42)
+        // Which end is broken: 0 left, 1 right, 2 both.
+        let broken = rng.int(in: 0...2)
+
+        // The wall body, drawn as three courses so the collapse can eat
+        // into it from the broken end.
+        let courses = 3
+        let courseH = h / CGFloat(courses)
+        for c in 0..<courses {
+            var from: CGFloat = 0
+            var to = len
+            if broken == 0 && c > 0 { from = len * 0.66 }
+            if broken == 1 && c > 0 { to = len * 0.34 }
+            if broken == 2 && c > 0 { from = len * 0.80; to = len * 0.20 }
+            guard to > from else { continue }
+            let course = SKShapeNode(
+                rectOf: CGSize(width: to - from, height: courseH + 1),
+                cornerRadius: 1)
+            course.fillColor = c == courses - 1 ? stone : stoneLit
+            course.strokeColor = .clear
+            course.position = CGPoint(x: from + (to - from) / 2,
+                                      y: base.y + courseH * (CGFloat(c) + 0.5))
+            course.zPosition = CGFloat(c)
+            root.addChild(course)
+            // Shadowed footing course where the wall meets the shelf.
+            if c == 0 {
+                let foot = SKSpriteNode(color: stoneDk, size: CGSize(width: to - from, height: 2))
+                foot.position = CGPoint(x: from + (to - from) / 2, y: base.y + 1)
+                foot.zPosition = 1
+                root.addChild(foot)
+            }
+            // Sunlit coping on the top edge of the course.
+            let coping = SKSpriteNode(color: rim, size: CGSize(width: to - from, height: 1))
+            coping.position = CGPoint(x: from + (to - from) / 2,
+                                      y: base.y + courseH * (CGFloat(c) + 1) - 1)
+            coping.zPosition = 3
+            root.addChild(coping)
+        }
+
+        // Merlon crown on the intact stretch.
+        let crownFrom: CGFloat = broken == 1 ? len * 0.34 : 0
+        let crownTo: CGFloat = broken == 0 ? len * 0.66 : len
+        var mx = crownFrom + 4
+        while mx < crownTo - 12 {
+            let merlon = SKShapeNode(rectOf: CGSize(width: 9, height: 9), cornerRadius: 1)
+            merlon.fillColor = stone
+            merlon.strokeColor = .clear
+            merlon.position = CGPoint(x: mx + 4.5, y: base.y + h + 4)
+            merlon.zPosition = 4
+            root.addChild(merlon)
+            let top = SKSpriteNode(color: rim, size: CGSize(width: 9, height: 1))
+            top.position = CGPoint(x: mx + 4.5, y: base.y + h + 8)
+            top.zPosition = 5
+            root.addChild(top)
+            mx += 15
+        }
+
+        // Rubble spill where the wall came down.
+        let spillX: CGFloat = broken == 1 ? base.x + len * 0.2
+            : (broken == 0 ? base.x + len * 0.82 : base.x + len * 0.5)
+        for _ in 0..<rng.int(in: 5...9) {
+            let s = rng.cgFloat(in: 4...9)
+            let chunk = SKShapeNode(rectOf: CGSize(width: s, height: s * 0.7), cornerRadius: 1)
+            chunk.fillColor = rng.int(in: 0...2) == 0 ? stoneLit : stone
+            chunk.strokeColor = .clear
+            chunk.position = CGPoint(x: spillX + rng.cgFloat(in: -26...26),
+                                     y: base.y + s * 0.35)
+            chunk.zRotation = rng.cgFloat(in: -0.5...0.5)
+            chunk.zPosition = 2
+            root.addChild(chunk)
+        }
+    }
+
+    /// Gun pits: a stone emplacement with a barrel poking out over the
+    /// lip, an ammunition crate and a sandbag lip in front of it.
+    private static func bakeRedoubtGunPits(in world: SKNode,
+                                           width: CGFloat, gy: CGFloat) {
+        let chunkW: CGFloat = 1024
+        var x0: CGFloat = 0
+        var chunk = 0
+        while x0 < width {
+            let span = min(chunkW, width - x0)
+            var rng = DressingRNG(seed: UInt64(171_800 + chunk * 523))
+            let root = SKNode()
+
+            let pits = max(0, Int((1.6 * span / width).rounded()))
+            var placed = 0
+            var guard_ = 0
+            while placed < pits, guard_ < pits * 40 + 40 {
+                guard_ += 1
+                let x = rng.cgFloat(in: 160...max(160, span - 160))
+                guard isClear(x0 + x, margin: 200) else { continue }
+                redoubtGunPit(rng: &rng, at: CGPoint(x: x, y: gy + 2), root: root)
+                placed += 1
+            }
+
+            if let baked = SceneryBake.baked(key: "redoubt.gunpit.\(Int(width)).\(chunk)",
+                                             build: { root }) {
+                SceneryBake.add(baked, to: world,
+                                origin: CGPoint(x: x0, y: 0), zPosition: 3)
+            }
+            x0 += span
+            chunk += 1
+        }
+    }
+
+    private static func redoubtGunPit(rng: inout DressingRNG,
+                                      at base: CGPoint, root: SKNode) {
+        let stone = SKColor(red: 0.23, green: 0.21, blue: 0.23, alpha: 1)
+        let stoneLit = SKColor(red: 0.34, green: 0.31, blue: 0.32, alpha: 1)
+        let rim = SKColor(red: 0.96, green: 0.74, blue: 0.46, alpha: 0.7)
+        let steel = SKColor(red: 0.20, green: 0.20, blue: 0.22, alpha: 1)
+        let bag = SKColor(red: 0.42, green: 0.38, blue: 0.28, alpha: 1)
+
+        // The emplacement: a low stone revetment.
+        let pit = SKShapeNode(rectOf: CGSize(width: 76, height: 24), cornerRadius: 2)
+        pit.fillColor = stone
+        pit.strokeColor = .clear
+        pit.position = CGPoint(x: base.x, y: base.y + 12)
+        pit.zPosition = 1
+        root.addChild(pit)
+        let coping = SKSpriteNode(color: rim, size: CGSize(width: 76, height: 1))
+        coping.position = CGPoint(x: base.x, y: base.y + 23)
+        coping.zPosition = 2
+        root.addChild(coping)
+        // Coursing lines.
+        for i in 0..<2 {
+            let line = SKSpriteNode(color: stoneLit, size: CGSize(width: 74, height: 1))
+            line.position = CGPoint(x: base.x, y: base.y + 8 + CGFloat(i) * 7)
+            line.zPosition = 2
+            root.addChild(line)
+        }
+        // The barrel: a long steel tube over the lip, aimed down the lane.
+        let barrel = SKShapeNode(rectOf: CGSize(width: 40, height: 7), cornerRadius: 2)
+        barrel.fillColor = steel
+        barrel.strokeColor = .clear
+        barrel.position = CGPoint(x: base.x - 18, y: base.y + 30)
+        barrel.zRotation = 0.16
+        barrel.zPosition = 3
+        root.addChild(barrel)
+        let muzzle = SKSpriteNode(color: rim, size: CGSize(width: 4, height: 7))
+        muzzle.position = CGPoint(x: base.x - 37, y: base.y + 33)
+        muzzle.zRotation = 0.16
+        muzzle.zPosition = 4
+        root.addChild(muzzle)
+        // Ammunition crate beside the pit.
+        let crate = SKShapeNode(rectOf: CGSize(width: 16, height: 13), cornerRadius: 1)
+        crate.fillColor = SKColor(red: 0.30, green: 0.22, blue: 0.14, alpha: 1)
+        crate.strokeColor = .clear
+        crate.position = CGPoint(x: base.x + 46, y: base.y + 7)
+        crate.zPosition = 2
+        root.addChild(crate)
+        // Sandbag lip in front.
+        for i in 0..<4 {
+            let sack = SKShapeNode(ellipseOf: CGSize(width: 17, height: 9))
+            sack.fillColor = bag
+            sack.strokeColor = .clear
+            sack.position = CGPoint(x: base.x - 30 + CGFloat(i) * 15,
+                                    y: base.y + 4)
+            sack.zPosition = 4
+            root.addChild(sack)
+        }
+    }
+
+    /// Stake barricades: sharpened timbers driven into the shelf, lashed
+    /// together with a rope line.
+    private static func bakeRedoubtBarricades(in world: SKNode,
+                                               width: CGFloat, gy: CGFloat) {
+        let chunkW: CGFloat = 1024
+        var x0: CGFloat = 0
+        var chunk = 0
+        while x0 < width {
+            let span = min(chunkW, width - x0)
+            var rng = DressingRNG(seed: UInt64(171_900 + chunk * 601))
+            let root = SKNode()
+
+            let rows = max(0, Int((2.2 * span / width).rounded()))
+            var placed = 0
+            var guard_ = 0
+            while placed < rows, guard_ < rows * 40 + 40 {
+                guard_ += 1
+                let x = rng.cgFloat(in: 120...max(120, span - 120))
+                guard isClear(x0 + x, margin: 190) else { continue }
+                redoubtStakeRow(rng: &rng, at: CGPoint(x: x, y: gy + 2), root: root)
+                placed += 1
+            }
+
+            if let baked = SceneryBake.baked(key: "redoubt.barricade.\(Int(width)).\(chunk)",
+                                             build: { root }) {
+                SceneryBake.add(baked, to: world,
+                                origin: CGPoint(x: x0, y: 0), zPosition: 3)
+            }
+            x0 += span
+            chunk += 1
+        }
+    }
+
+    private static func redoubtStakeRow(rng: inout DressingRNG,
+                                        at base: CGPoint, root: SKNode) {
+        let wood = SKColor(red: 0.31, green: 0.22, blue: 0.14, alpha: 1)
+        let woodLit = SKColor(red: 0.45, green: 0.32, blue: 0.19, alpha: 1)
+        let rope = SKColor(red: 0.52, green: 0.44, blue: 0.30, alpha: 1)
+
+        let count = rng.int(in: 6...9)
+        let span = CGFloat(count) * 15
+        for i in 0..<count {
+            let x = base.x - span / 2 + CGFloat(i) * 15 + rng.cgFloat(in: -2...2)
+            let h = rng.cgFloat(in: 22...34)
+            // The path is built from the base up, so the stake pivots
+            // around its foot when it leans.
+            let path = CGMutablePath()
+            path.move(to: CGPoint(x: -2.5, y: 0))
+            path.addLine(to: CGPoint(x: 2.5, y: 0))
+            path.addLine(to: CGPoint(x: 2.5, y: h))
+            path.addLine(to: CGPoint(x: -2.5, y: h))
+            path.closeSubpath()
+            let stake = SKShapeNode(path: path)
+            stake.fillColor = i % 2 == 0 ? wood : woodLit
+            stake.strokeColor = .clear
+            stake.position = CGPoint(x: x, y: base.y)
+            stake.zRotation = rng.cgFloat(in: -0.28...0.28)
+            stake.zPosition = 3
+            root.addChild(stake)
+            // Sharpened tip.
+            let tip = SKShapeNode(rectOf: CGSize(width: 3, height: 6), cornerRadius: 1)
+            tip.fillColor = woodLit
+            tip.strokeColor = .clear
+            tip.position = CGPoint(x: 0, y: h)
+            tip.zPosition = 4
+            stake.addChild(tip)
+        }
+        // Rope line lashing the stakes together.
+        let line = SKSpriteNode(color: rope, size: CGSize(width: span, height: 2))
+        line.position = CGPoint(x: base.x, y: base.y + 18)
+        line.zPosition = 5
+        root.addChild(line)
+    }
+
+    /// The redoubt's banners: a pole with the fort's colours, standing
+    /// over the works. They sway like the war flags.
+    private static func bakeRedoubtBanners(in world: SKNode,
+                                            width: CGFloat, gy: CGFloat) {
+        var bakes: [SceneryBake.Baked] = []
+        for v in 0..<3 {
+            if let baked = SceneryBake.baked(key: "redoubt.banner.\(v)", build: {
+                redoubtBanner(variant: v)
+            }) {
+                bakes.append(baked)
+            }
+        }
+        guard !bakes.isEmpty else { return }
+
+        var rng = DressingRNG(seed: 171_950)
+        var placed = 0
+        var guard_ = 0
+        while placed < 6, guard_ < 300 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 140...(width - 140))
+            guard isClear(x, margin: 220) else { continue }
+            let baked = bakes[rng.int(in: 0...(bakes.count - 1))]
+            let banner = SceneryBake.addAtRoot(baked, to: world,
+                                               at: CGPoint(x: x, y: gy + 2), zPosition: 4)
+            banner.run(.repeatForever(.sequence([
+                .rotate(toAngle: 0.035, duration: rng.double(in: 1.6...2.6)),
+                .rotate(toAngle: -0.035, duration: rng.double(in: 1.6...2.6)),
+            ])))
+            placed += 1
+        }
+    }
+
+    /// Banner motif: a leaning pole, a spear tip and the fort's dark red
+    /// cloth with a swallowtail notch.
+    private static func redoubtBanner(variant: Int) -> SKNode {
+        var rng = DressingRNG(seed: UInt64(171_960 + variant * 53))
+        let root = SKNode()
+        let poleH = rng.cgFloat(in: 96...128)
+        let pole = SKSpriteNode(color: SKColor(red: 0.20, green: 0.17, blue: 0.15, alpha: 1),
+                                size: CGSize(width: 5, height: poleH))
+        pole.anchorPoint = CGPoint(x: 0.5, y: 0)
+        pole.position = .zero
+        pole.zPosition = 1
+        root.addChild(pole)
+        let tip = SKSpriteNode(color: SKColor(red: 0.62, green: 0.58, blue: 0.50, alpha: 1),
+                               size: CGSize(width: 8, height: 8))
+        tip.position = CGPoint(x: 0, y: poleH + 3)
+        tip.zRotation = .pi / 4
+        tip.zPosition = 2
+        root.addChild(tip)
+        // Cloth.
+        let clothW: CGFloat = 40
+        let cloth = SKSpriteNode(color: SKColor(red: 0.58, green: 0.13, blue: 0.12, alpha: 1),
+                                 size: CGSize(width: clothW, height: 20))
+        cloth.anchorPoint = CGPoint(x: 0, y: 0.5)
+        cloth.position = CGPoint(x: 3, y: poleH - 16)
+        cloth.zPosition = 3
+        root.addChild(cloth)
+        let fold = SKSpriteNode(color: SKColor(red: 0.72, green: 0.20, blue: 0.16, alpha: 1),
+                                size: CGSize(width: 7, height: 20))
+        fold.position = CGPoint(x: 3, y: 0)
+        fold.zPosition = 4
+        cloth.addChild(fold)
+        let notch = SKSpriteNode(color: SKColor(white: 0, alpha: 0.55),
+                                 size: CGSize(width: 11, height: 9))
+        notch.position = CGPoint(x: clothW - 5, y: 0)
+        notch.zPosition = 5
+        cloth.addChild(notch)
+        // Bone-white sigil.
+        let pip = SKSpriteNode(color: SKColor(red: 0.88, green: 0.84, blue: 0.74, alpha: 0.9),
+                               size: CGSize(width: 7, height: 7))
+        pip.position = CGPoint(x: 18, y: 0)
+        pip.zPosition = 5
+        cloth.addChild(pip)
+        return root
+    }
 }

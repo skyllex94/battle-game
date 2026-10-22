@@ -43,4 +43,6 @@ struct MinimapSnapshot: Equatable {
     // refusing a deploy).
     var allyCount: Int = 0
     var allyCap: Int = 20
+    // Player HQ still standing: the cards flag HQ DOWN while it smoulders.
+    var playerHQAlive: Bool = true
 }

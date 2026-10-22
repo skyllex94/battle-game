@@ -37,6 +37,16 @@ struct LevelDetailView: View {
 
     private var stars: Int { CampaignData.stars(for: level.id) }
 
+    /// The briefing column width follows the hostile roster: chip grid of
+    /// six units on one row with the next unit wrapping underneath. Anything
+    /// inside the panel (title, desc, new-hostile strip) spans this width.
+    private func briefPanelWidth(tight: Bool) -> CGFloat {
+        let chip: CGFloat = tight ? 56 : 66
+        let gap: CGFloat = 6
+        let sixOnOneRow = chip * 6 + gap * 5
+        return sixOnOneRow + 8
+    }
+
     var body: some View {
         GeometryReader { geo in
             let tight = geo.size.height < 420
@@ -50,7 +60,8 @@ struct LevelDetailView: View {
                     // the screen stays clear for the level backdrop.
                     HStack(alignment: .top, spacing: 0) {
                         briefingPanel(tight: tight)
-                            .frame(maxWidth: min(620, geo.size.width * 0.72),
+                            .frame(maxWidth: min(briefPanelWidth(tight: tight),
+                                                 geo.size.width - 24),
                                    alignment: .leading)
                         Spacer(minLength: 0)
                     }
@@ -288,12 +299,11 @@ struct LevelDetailView: View {
                     .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 1)
             }
 
-            HStack(spacing: 6) {
+            ChipFlow {
                 ForEach(activeEnemies, id: \.rawValue) { kind in
                     HostileChip(kind: kind, isNew: kind.unlockLevel == level.id)
                         .frame(width: tight ? 56 : 66)
                 }
-                Spacer(minLength: 0)
             }
         }
     }
@@ -343,10 +353,55 @@ struct LevelDetailView: View {
 
 }
 
+// MARK: - Wrapping chips row
+
+private struct ChipFlow: Layout {
+    private static let gap: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews,
+                      cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var totalWidth: CGFloat = 0
+        var totalHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > maxWidth {
+                x = 0
+                totalHeight += rowHeight + Self.gap
+                rowHeight = 0
+            }
+            x += size.width + Self.gap
+            rowHeight = max(rowHeight, size.height)
+            totalWidth = max(totalWidth, x - Self.gap)
+        }
+        return CGSize(width: totalWidth, height: totalHeight + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize,
+                       subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+        for (index, subview) in subviews.enumerated() {
+            let size = subview.sizeThatFits(.unspecified)
+            if index > 0, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + Self.gap
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), anchor: .topLeading,
+                          proposal: .unspecified)
+            x += size.width + Self.gap
+            rowHeight = max(rowHeight, size.height)
+        }
+    }
+}
+
 // MARK: - Hostile roster chip
 
-private struct HostileChip: View {
-    let kind: EnemyKind
+private struct HostileChip: View {    let kind: EnemyKind
     let isNew: Bool
 
     var body: some View {

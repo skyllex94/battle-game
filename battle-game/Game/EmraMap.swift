@@ -550,6 +550,39 @@ enum EmraMap {
             px(x, y - 4, 1, 1, Color(white: 1), 0.55)
         }
 
+        // L20 Ironhold Bastion on the campaign map: the stronghold is
+        // built into the peak itself — a dark keep carved into a snowy
+        // granite summit, its gate seamed with ember light.
+        func mountainRedoubt(_ x: Int, _ baseY: Int) {
+            let rock = Color(red: 0.44, green: 0.45, blue: 0.52)
+            let darkRock = Color(red: 0.30, green: 0.31, blue: 0.38)
+            let snow = Color(white: 0.95)
+            let stone = Color(red: 0.20, green: 0.18, blue: 0.19)
+            let keepLit = Color(red: 0.31, green: 0.29, blue: 0.31)
+            let ember = Color(red: 1.0, green: 0.34, blue: 0.08)
+
+            // The summit: a broad granite cone with a snowfield crown.
+            for r in 0..<12 {
+                let half = r + 1
+                px(x - half, baseY - 12 + r, half * 2, 1, darkRock)
+                px(x - half, baseY - 12 + r, max(1, half / 2), 1, rock)
+            }
+            px(x - 3, baseY - 12, 6, 2, snow)
+            px(x - 1, baseY - 13, 3, 1, snow)
+
+            // The keep is carved into the eastern face, dark against
+            // the rock, with ember windows and a glowing gate slit.
+            px(x + 2, baseY - 8, 9, 8, stone)
+            px(x + 2, baseY - 8, 9, 1, keepLit)
+            px(x + 2, baseY - 7, 2, 7, keepLit, 0.8)
+            for wy in [baseY - 7, baseY - 5] {
+                px(x + 5, wy, 1, 1, ember, 0.85)
+                px(x + 8, wy, 1, 1, ember, 0.85)
+            }
+            px(x + 5, baseY - 2, 3, 2, ember, 0.6)
+            px(x + 6, baseY - 3, 1, 1, ember)
+        }
+
         func camp(_ x: Int, _ y: Int) {
             let cloth = Color(red: 0.44, green: 0.60, blue: 0.38)
             tent(x - 7, y + 2, cloth)
@@ -1178,7 +1211,7 @@ enum EmraMap {
         castle(182, 52, true, false)
         castle(310, 52, true, false)
         castle(590, 50, true, false)
-        castle(618, 48, false, true)
+        mountainRedoubt(618, 50)
         castle(880, 52, true, false)
         castle(938, 50, false, false)
         castle(1011, 50, false, false)

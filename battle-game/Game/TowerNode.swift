@@ -25,6 +25,8 @@ final class TowerNode: SKNode {
     private static let hpBarY: CGFloat = 205
 
     let team: Team
+    /// Level 18+ Mk-II refit: heavier armor shell + missile-pod turret.
+    let upgraded: Bool
 
     private let baseSprite: SKSpriteNode
     private let headPivot = SKNode()      // rotates to track targets
@@ -46,21 +48,22 @@ final class TowerNode: SKNode {
 
     // MARK: - Init
 
-    init(team: Team) {
+    init(team: Team, upgraded: Bool = false) {
         self.team = team
+        self.upgraded = upgraded
 
         let palette = TowerNode.palette(for: team)
-        let baseTex = TowerNode.makeBaseTexture(palette: palette)
+        let baseTex = TowerNode.makeBaseTexture(palette: palette, upgraded: upgraded)
         baseTex.filteringMode = .nearest
         baseSprite = SKSpriteNode(texture: baseTex)
         let baseScale = TowerNode.towerHeight / baseTex.size().height
         baseSprite.setScale(baseScale)
         baseSprite.anchorPoint = CGPoint(x: 0.5, y: 0)
 
-        let headTex = TowerNode.makeHeadTexture(palette: palette)
+        let headTex = TowerNode.makeHeadTexture(palette: palette, upgraded: upgraded)
         headTex.filteringMode = .nearest
         headSprite = SKSpriteNode(texture: headTex)
-        // Housing centre sits ~7px from the left of the 26px head texture.
+        // Housing centre sits ~7px from the left of the head texture.
         headSprite.anchorPoint = CGPoint(x: 7.0 / headTex.size().width, y: 0.5)
 
         super.init()
@@ -101,8 +104,8 @@ final class TowerNode: SKNode {
         headSprite.position = .zero
         headPivot.addChild(headSprite)
 
-        // Muzzle socket at the barrel tip (19px right of the pivot in texture space).
-        muzzleSocket.position = CGPoint(x: 19 * headScale, y: 0)
+        // Muzzle socket at the barrel tip (head-space x depends on variant).
+        muzzleSocket.position = CGPoint(x: (upgraded ? 22 : 19) * headScale, y: 0)
         headPivot.addChild(muzzleSocket)
 
         // Beacon light on the housing, pulses in update(dt:).
@@ -123,22 +126,28 @@ final class TowerNode: SKNode {
     /// Static pixel-art portrait of the in-battle tower (procedural base +
     /// turret). Enemy towers face left, matching their home angle. Cached
     /// because SwiftUI re-evaluates the intel card while the battle is paused.
-    static func previewImage(for team: Team) -> UIImage {
-        switch team {
-        case .player: return playerPreviewImage
-        case .enemy: return enemyPreviewImage
-        case .neutral: return neutralPreviewImage
+    static func previewImage(for team: Team, upgraded: Bool = false) -> UIImage {
+        switch (team, upgraded) {
+        case (.player, false): return playerPreviewImage
+        case (.enemy, false): return enemyPreviewImage
+        case (.neutral, false): return neutralPreviewImage
+        case (.player, true): return playerUpgradedPreviewImage
+        case (.enemy, true): return enemyUpgradedPreviewImage
+        default: return neutralUpgradedPreviewImage
         }
     }
 
     private static let playerPreviewImage = makePreviewImage(for: .player)
     private static let enemyPreviewImage = makePreviewImage(for: .enemy)
     private static let neutralPreviewImage = makePreviewImage(for: .neutral)
+    private static let playerUpgradedPreviewImage = makePreviewImage(for: .player, upgraded: true)
+    private static let enemyUpgradedPreviewImage = makePreviewImage(for: .enemy, upgraded: true)
+    private static let neutralUpgradedPreviewImage = makePreviewImage(for: .neutral, upgraded: true)
 
-    private static func makePreviewImage(for team: Team) -> UIImage {
+    private static func makePreviewImage(for team: Team, upgraded: Bool = false) -> UIImage {
         let palette = palette(for: team)
-        let baseImg = UIImage(cgImage: makeBaseTexture(palette: palette).cgImage())
-        let headImg = UIImage(cgImage: makeHeadTexture(palette: palette).cgImage())
+        let baseImg = UIImage(cgImage: makeBaseTexture(palette: palette, upgraded: upgraded).cgImage())
+        let headImg = UIImage(cgImage: makeHeadTexture(palette: palette, upgraded: upgraded).cgImage())
 
         let baseH: CGFloat = 190
         let baseW = baseH * baseImg.size.width / baseImg.size.height
@@ -362,9 +371,110 @@ final class TowerNode: SKNode {
         cg.fill(CGRect(x: x, y: y, width: w, height: h))
     }
 
+    /// 34×48 armored steel body (28×40 stone bunker): layered armor plates
+    /// with bolted seams, corner buttress pylons, glowing team energy ring,
+    /// watch mast on the deck, hazard strip and a wide riveted foundation.
+    private static func makeUpgradedBaseTexture(palette: Palette) -> SKTexture {
+        let W = 34, H = 48
+        return pixelTexture(w: W, h: H) { cg in
+            let outline = UIColor(red: 0.07, green: 0.05, blue: 0.08, alpha: 1)
+            let plateD = UIColor(red: 0.16, green: 0.17, blue: 0.23, alpha: 1)
+            let plateM = UIColor(red: 0.33, green: 0.35, blue: 0.43, alpha: 1)
+            let plateL = UIColor(red: 0.60, green: 0.64, blue: 0.74, alpha: 1)
+            let steel = UIColor(red: 0.22, green: 0.24, blue: 0.31, alpha: 1)
+            let dark = UIColor(red: 0.09, green: 0.09, blue: 0.13, alpha: 1)
+            let warn = UIColor(red: 0.95, green: 0.72, blue: 0.18, alpha: 1)
+            let cx = W / 2 // 17
+
+            // Tapered armored shell: 20px turret deck -> 32px foundation.
+            func halfWidth(at row: Int) -> Int {
+                if row < 4 { return 10 }
+                if row < 40 { return 10 + (row - 4) * 6 / 36 } // out to 11+
+                return 16
+            }
+
+            // Body: outline + armor gradient per row.
+            for row in 0..<H {
+                let hw = halfWidth(at: row)
+                fill(cg, x: cx - hw - 1, y: row, w: hw * 2 + 2, h: 1, color: outline)
+                fill(cg, x: cx - hw, y: row, w: 3, h: 1, color: plateL)
+                fill(cg, x: cx - hw + 3, y: row, w: hw * 2 - 6, h: 1, color: plateM)
+                fill(cg, x: cx + hw - 3, y: row, w: 3, h: 1, color: plateD)
+            }
+            // Corner buttress pylons (full height, steel) at the flanks.
+            for px in 2...3 {
+                fill(cg, x: px, y: 10, w: 1, h: 26, color: steel)
+                fill(cg, x: W - 4, y: 10, w: 1, h: 26, color: steel)
+                fill(cg, x: W - 3, y: 14, w: 1, h: 22, color: plateD)
+            }
+            // Riveted armor seams every 8 rows.
+            for row in stride(from: 9, to: 39, by: 8) {
+                let hw = halfWidth(at: row)
+                fill(cg, x: cx - hw, y: row, w: hw * 2, h: 2, color: dark)
+                fill(cg, x: cx - hw, y: row, w: hw * 2, h: 1, color: plateD)
+                for rx in stride(from: cx - hw + 2, to: cx + hw - 2, by: 5) {
+                    fill(cg, x: rx, y: row + 2, w: 1, h: 1, color: plateL)
+                    fill(cg, x: rx + 1, y: row + 2, w: 1, h: 1, color: dark)
+                }
+            }
+            // Heavy top deck (rows 1-4): dark plate + rivets + team edge.
+            fill(cg, x: cx - 10, y: 1, w: 20, h: 3, color: dark)
+            fill(cg, x: cx - 10, y: 1, w: 20, h: 1, color: plateL)
+            fill(cg, x: cx - 10, y: 4, w: 20, h: 1, color: palette.trim)
+            for rx in [cx - 9, cx - 5, cx, cx + 4, cx + 8] {
+                fill(cg, x: rx, y: 2, w: 1, h: 1, color: plateL)
+            }
+            // Watch mast on the deck (rows -): little radar pylon.
+            fill(cg, x: cx + 6, y: 0, w: 1, h: 2, color: plateL)
+            fill(cg, x: cx + 5, y: 0, w: 3, h: 1, color: plateM)
+            // Team banner band (rows 6-10) with dark border + emblem.
+            let hwB = halfWidth(at: 6)
+            fill(cg, x: cx - hwB, y: 6, w: hwB * 2, h: 1, color: palette.trimDark)
+            fill(cg, x: cx - hwB, y: 7, w: hwB * 2, h: 3, color: palette.trim)
+            fill(cg, x: cx - hwB, y: 10, w: hwB * 2, h: 1, color: palette.trimDark)
+            fill(cg, x: cx - hwB, y: 7, w: 2, h: 3, color: .white.withAlphaComponent(0.35))
+            fill(cg, x: cx - 1, y: 8, w: 3, h: 1, color: .white)
+            fill(cg, x: cx, y: 7, w: 1, h: 3, color: .white)
+            // Glowing energy ring (rows 17-20): team cell behind a shield frame.
+            let hwC = halfWidth(at: 18)
+            fill(cg, x: cx - hwC + 1, y: 16, w: (hwC - 1) * 2, h: 6, color: outline)
+            fill(cg, x: cx - hwC + 2, y: 17, w: (hwC - 2) * 2, h: 1, color: plateL)
+            fill(cg, x: cx - hwC + 2, y: 19, w: (hwC - 2) * 2, h: 1, color: plateL)
+            fill(cg, x: cx - 5, y: 17, w: 10, h: 4, color: palette.trimDark)
+            fill(cg, x: cx - 4, y: 17, w: 8, h: 3, color: palette.trim)
+            fill(cg, x: cx - 4, y: 17, w: 8, h: 1, color: .white)
+            fill(cg, x: cx - 6, y: 16, w: 1, h: 6, color: palette.trimDark)
+            fill(cg, x: cx + 5, y: 16, w: 1, h: 6, color: palette.trimDark)
+            // Vented core slit rows 28-31: darker steel grill.
+            fill(cg, x: cx - 4, y: 28, w: 8, h: 4, color: dark)
+            for vx in stride(from: cx - 3, to: cx + 4, by: 2) {
+                fill(cg, x: vx, y: 29, w: 1, h: 2, color: plateD)
+            }
+            // Hazard chevrons above the foundation (row 42).
+            let hwH = halfWidth(at: 42)
+            var hx = cx - hwH + 1
+            var flip = false
+            while hx < cx + hwH - 2 {
+                fill(cg, x: hx, y: 42, w: 2, h: 2, color: flip ? warn : dark)
+                hx += 2
+                flip.toggle()
+            }
+            // Wide foundation block (rows 45-47).
+            fill(cg, x: cx - 16, y: 44, w: 32, h: 1, color: plateL)
+            fill(cg, x: cx - 16, y: 45, w: 32, h: 3, color: plateD)
+            fill(cg, x: cx - 16, y: 47, w: 32, h: 1, color: outline)
+            for rx in [cx - 13, cx - 6, cx + 1, cx + 7, cx + 12] {
+                fill(cg, x: rx, y: 46, w: 1, h: 1, color: plateL)
+            }
+            // Right-side drop shadow strip for depth.
+            fill(cg, x: cx + 12, y: 6, w: 2, h: 38, color: UIColor(white: 0, alpha: 0.25))
+        }
+    }
+
     /// 28×40 bunker: tapered stone body, brick courses, team banner,
     /// glowing core slit, riveted foundation cap and turret deck.
-    private static func makeBaseTexture(palette: Palette) -> SKTexture {
+    private static func makeBaseTexture(palette: Palette, upgraded: Bool) -> SKTexture {
+        if upgraded { return makeUpgradedBaseTexture(palette: palette) }
         let W = 28, H = 40
         return pixelTexture(w: W, h: H) { cg in
             let outline = UIColor(red: 0.08, green: 0.06, blue: 0.10, alpha: 1)
@@ -444,9 +554,10 @@ final class TowerNode: SKNode {
         }
     }
 
-    /// 26×12 turret head, barrel pointing +x. Housing is vertically
+    /// 28×12 turret head, barrel pointing +x. Housing is vertically
     /// symmetric so full 360° rotation still reads correctly.
-    private static func makeHeadTexture(palette: Palette) -> SKTexture {
+    private static func makeHeadTexture(palette: Palette, upgraded: Bool) -> SKTexture {
+        if upgraded { return makeUpgradedHeadTexture(palette: palette) }
         let W = 26, H = 12
         return pixelTexture(w: W, h: H) { cg in
             let outline = UIColor(red: 0.08, green: 0.06, blue: 0.10, alpha: 1)
@@ -484,6 +595,66 @@ final class TowerNode: SKNode {
             // Rear vent fins.
             fill(cg, x: 0, y: 4, w: 3, h: 1, color: metalD)
             fill(cg, x: 0, y: 7, w: 3, h: 1, color: metalD)
+            _ = W
+        }
+    }
+
+    /// Mk-II turret head (32×18), barrel pointing +x. Heavy housing with
+    /// missile-pod banks above and below the barrel (kept vertically
+    /// symmetric so 360° rotation still reads), twin muzzle brake, pod lip
+    /// at the barrel root. Muzzle tip sits at x = 22.
+    private static func makeUpgradedHeadTexture(palette: Palette) -> SKTexture {
+        let W = 32, H = 18
+        return pixelTexture(w: W, h: H) { cg in
+            let outline = UIColor(red: 0.07, green: 0.05, blue: 0.08, alpha: 1)
+            let metalD = UIColor(red: 0.16, green: 0.17, blue: 0.23, alpha: 1)
+            let metalM = UIColor(red: 0.40, green: 0.43, blue: 0.52, alpha: 1)
+            let metalL = UIColor(red: 0.72, green: 0.76, blue: 0.84, alpha: 1)
+            let barrelD = UIColor(red: 0.10, green: 0.10, blue: 0.14, alpha: 1)
+            let podD = UIColor(red: 0.12, green: 0.12, blue: 0.16, alpha: 1)
+
+            // Thick barrel: x 14..21, rows 7..10 (4px), highlight + shade.
+            fill(cg, x: 14, y: 6, w: 9, h: 6, color: outline)
+            fill(cg, x: 15, y: 7, w: 7, h: 4, color: barrelD)
+            fill(cg, x: 15, y: 7, w: 7, h: 1, color: metalM)
+            // Twin muzzle brake rings + muzzle mouth.
+            fill(cg, x: 18, y: 7, w: 1, h: 4, color: palette.trimDark)
+            fill(cg, x: 19, y: 7, w: 2, h: 4, color: palette.trim)
+            fill(cg, x: 21, y: 7, w: 1, h: 4, color: outline)
+            fill(cg, x: 21, y: 7, w: 1, h: 4, color: .black)
+
+            // Heavy housing: x 2..13, rows 2..15.
+            fill(cg, x: 2, y: 2, w: 12, h: 14, color: outline)
+            fill(cg, x: 3, y: 3, w: 10, h: 12, color: metalM)
+            fill(cg, x: 3, y: 3, w: 10, h: 1, color: metalL)   // top highlight
+            fill(cg, x: 3, y: 14, w: 10, h: 1, color: metalD)  // bottom shade
+            fill(cg, x: 3, y: 4, w: 1, h: 10, color: metalL)   // left light edge
+            fill(cg, x: 12, y: 4, w: 1, h: 10, color: metalD)  // right shade
+            // Team stripe across the housing + white sight dot.
+            fill(cg, x: 5, y: 5, w: 2, h: 8, color: palette.trim)
+            fill(cg, x: 5, y: 5, w: 2, h: 1, color: .white.withAlphaComponent(0.6))
+            fill(cg, x: 9, y: 7, w: 2, h: 2, color: metalD)
+            fill(cg, x: 9, y: 7, w: 2, h: 1, color: .white)
+            // Pivot bolt.
+            fill(cg, x: 6, y: 7, w: 3, h: 2, color: outline)
+            fill(cg, x: 7, y: 7, w: 1, h: 2, color: metalL)
+
+            // Missile-pod banks (above + below the housing, symmetric).
+            for bankY: Int in [2, 13] {
+                fill(cg, x: 3, y: bankY, w: 10, h: 2, color: podD)
+                fill(cg, x: 3, y: bankY, w: 10, h: 1, color: metalD)
+                // Team trim dot on the bank + tube mouths at the front lip.
+                fill(cg, x: 4, y: bankY, w: 2, h: 1, color: palette.trim)
+                for tx in [8, 11] {
+                    let tubeY = bankY == 2 ? 4 : 11
+                    fill(cg, x: tx, y: tubeY, w: 2, h: 2, color: barrelD)
+                    fill(cg, x: tx + 1, y: bankY, w: 1, h: 1,
+                         color: SKColor(red: 1.0, green: 0.45, blue: 0.2, alpha: 1))
+                }
+            }
+            // Rear exhaust fins.
+            fill(cg, x: 0, y: 5, w: 3, h: 2, color: metalD)
+            fill(cg, x: 0, y: 11, w: 3, h: 2, color: metalD)
             _ = W
         }
     }

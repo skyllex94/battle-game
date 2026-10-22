@@ -39,6 +39,10 @@ extension Balance {
         extraMechSummons: [6, 13, 20],
         // The difference from Level 14: a much heavier treeline.
         pineDensity: 2.2,
-        towerFanCount: 3
+        towerFanCount: 3,
+        // Every 7th wave rolls out a single missile truck instead of the
+        // normal unit (the first one debuts on this level).
+        truckEvery: 7,
+        truckCount: 1
     )
 }

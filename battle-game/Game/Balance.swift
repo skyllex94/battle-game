@@ -35,7 +35,9 @@ enum Balance {
     /// hazy mountain range, warm morning light on the sand.
     /// Granite Reach (Level 14): the same sunrise over the same peaks, but
     /// the lane itself is bare alpine rock — no sand, no dunes.
-    enum BGTheme { case twilight, overgrown, bastion, dawn, sunscorch, sandhold, dunesea, oasis, duskdesert, nightdesert, sunrise }
+    /// Riven Pass (Level 18): the same alpine shelf at evening, just before
+    /// sunset — deep evening blue above, amber-gold horizon, low warm sun.
+    enum BGTheme { case twilight, overgrown, bastion, dawn, sunscorch, sandhold, dunesea, oasis, duskdesert, nightdesert, sunrise, dusk }
 
     // MARK: - Per-level battlefield layout
     struct LevelLayout {
@@ -103,6 +105,19 @@ enum Balance {
         /// peaks, but swap the desert field for bare granite, jagged mid
         /// ridges, alpine pines and rock outcrops (Level 14).
         var alpinePass: Bool = false
+    /// Highridge Redoubt variation (Level 17): the same alpine shelf,
+    /// but the field carries the redoubt's works (broken ramparts, gun
+    /// emplacements, banners) and the mid-ground range carries the
+    /// ridge fort itself.
+    var ridgeRedoubt: Bool = false
+    /// Stormcrown Summit variation (Level 19): the same dusk alpine
+    /// shelf, but the sky sits under heavy storm slate — darker grade,
+    /// thicker clouds, low-violet lightning flickering in the peaks.
+    var stormSummit: Bool = false
+    /// Ironhold snowfall (Level 20): the same storm shelf, but the storm
+    /// finally drops its load — a SnowFX looping snow overlay drifts over
+    /// the field (sprite-sheet loop, virtually free).
+    var snowfall: Bool = false
         /// Summon numbers (1-based) that get an EXTRA Brute on top of the
         /// normal gate batch. Empty = no bonus Brutes.
         var extraBruteSummons: [Int] = []
@@ -116,6 +131,15 @@ enum Balance {
         /// Bolts per tower volley: 1 = single shot, 3 = the fanned volley
         /// the towers switched to in Level 10.
         var towerFanCount: Int = 1
+        /// Every Nth summon rolls out the missile truck instead of the
+        /// normal unit (0 = the truck never shows up on this level).
+        var truckEvery: Int = 0
+        /// Missile trucks per truck wave.
+        var truckCount: Int = 1
+        /// Every Nth summon rolls out the Immortal (0 = never shows). The
+        /// walker is a singleton: the next one only marches once the
+        /// previous falls.
+        var immortalEvery: Int = 0
 
         /// The enemy kinds this level can actually summon, in roster order.
         /// Briefings use this instead of campaign unlock levels, so a level
@@ -128,6 +152,8 @@ enum Balance {
             if jetEvery > 0 { kinds.append(.jet) }
             if mechEvery > 0 { kinds.append(.mech) }
             if heliEvery > 0 { kinds.append(.heli) }
+            if truckEvery > 0 { kinds.append(.missileTruck) }
+            if immortalEvery > 0 { kinds.append(.immortal) }
             return kinds
         }
     }
@@ -155,9 +181,13 @@ enum Balance {
     }
 
     /// Enemy tower HP for a level (10% growth per level from the start).
-    /// Used by the battle and the briefing/prep dossiers.
+    /// Used by the battle and the briefing/prep dossiers. From the
+    /// refit level on, both teams' towers switch to the Mk-II design and
+    /// the enemy shells carry a ONE-TIME +400 HP boost (not compounding).
     static func enemyTowerHealth(forLevel levelId: Int) -> CGFloat {
-        startingTowerHP * enemyStructureHPMultiplier(for: levelId)
+        var hp = startingTowerHP * enemyStructureHPMultiplier(for: levelId)
+        if levelId >= upgradedTowerLevel { hp += upgradedTowerHPBonus }
+        return hp
     }
 
     /// Enemy main-base HP for a level (same 10% growth as the towers).
@@ -191,6 +221,11 @@ enum Balance {
         case 13: return layout13
         case 14: return layout14
         case 15: return layout15
+        case 16: return layout16
+        case 17: return layout17
+        case 18: return layout18
+        case 19: return layout19
+        case 20: return layout20
         default: return layout1
         }
     }
@@ -200,13 +235,19 @@ enum Balance {
     static var forgeNight: Bool { active.forgeNight }
     static var canyonNight: Bool { active.canyonNight }
     static var alpinePass: Bool { active.alpinePass }
+    /// Highridge Redoubt field + mid-ground fort (Level 17).
+    static var ridgeRedoubt: Bool { active.ridgeRedoubt }
+    /// Stormcrown storm sky over the dusk alpine shelf (Level 19).
+    static var stormSummit: Bool { active.stormSummit }
+    /// Looping snowfall over a snowy battlefield (Level 20).
+    static var snowfall: Bool { active.snowfall }
     static var groundTopY: CGFloat = 120        // y of the walkable surface
     /// True on desert themes (dune sand + sand dressing; Levels 7-13).
     static var dunes: Bool {
         let t = active.theme
         if alpinePass { return false }
         return t == .dunesea || t == .oasis || t == .duskdesert
-            || t == .nightdesert || t == .sunrise
+            || t == .nightdesert || t == .sunrise || t == .dusk
     }
     /// Walkable surface height at world x. Flat on every level, dunes
     /// included — straight fields everywhere.
@@ -279,6 +320,22 @@ enum Balance {
     static let towerBulletSpeed: CGFloat = 620
     static let towerBulletLife: Double = 2.2   // range ≈ speed × life, comfortably covers towerRange
     static let towerMuzzleHeight: CGFloat = 150 // muzzle above ground (near tower top)
+    /// From this roster level on, towers on BOTH teams render the heavy
+    /// Mk-II design (armored shell + missile-pod turret) — see TowerNode.
+    static let upgradedTowerLevel = 18
+    /// One-time enemy refit at the Mk-II tier: enemy tower shells carry
+    /// this flat bonus from Level 18 onward (+400 once, never per level).
+    static let upgradedTowerHPBonus: CGFloat = 400
+    /// Mk-II turret (Level 18+): a 3-missile volley replaces the bolt fan
+    /// on BOTH teams. The enemy volley lands at tower-bolt damage; the
+    /// player's fires at roughly half (safer to keep the defense fair).
+    static let towerMissileCount = 3
+    static let towerMissileSpeed: CGFloat = 520
+    static let towerMissileLife: Double = 1.7
+    static let towerMissileSpread: CGFloat = 0.12
+    static let towerMissileWeaveAmp: CGFloat = 34
+    static let towerMissileWeaveFreq: Double = 6.0
+    static let playerTowerMissileDamage: CGFloat = 6
 
     // MARK: - Main base (enemy base fans 3 bolts + summons marchers)
     /// Per-level via the layout table (matches each LevelDef dossier).
@@ -310,6 +367,12 @@ enum Balance {
     static var pineDensity: CGFloat { active.pineDensity }
     /// Bolts per tower volley (1 early, 3 from Level 10 on).
     static var towerFanCount: Int { active.towerFanCount }
+    /// Every Nth summon is a missile-truck wave (0 = never).
+    static var truckEvery: Int { active.truckEvery }
+    /// Missile trucks per truck wave.
+    static var truckCount: Int { active.truckCount }
+    /// Every Nth summon is the Immortal walker (0 = never). Singleton.
+    static var immortalEvery: Int { active.immortalEvery }
     static let firstSummonDelay: Double = 5.0
     /// Raider (the classic marcher — Levels 1+). Base 40; Level 5+ scales
     /// via the layout's enemyHPScale (L5 = ×1.05, L6 = ×1.1025).
@@ -403,6 +466,44 @@ enum Balance {
     static let heliBoltSpeed: CGFloat = 700
     static let jetJukeTime: Double = 0.45    // out-and-back dodge duration
     static let jetJukeCooldown: Double = 0.6 // min gap between dodge triggers
+    /// Missile Truck (Level 15+): a tracked self-propelled launcher —
+    /// armored cab at the back, missile module on the nose, and a big rail
+    /// that always points the way it drives. Long range: it shells the
+    /// lane from a distance, and its twin missiles weave on the way in.
+    /// Heavily armored: tougher than the Mech Walker.
+    static var missileTruckHP: CGFloat { 300 * active.enemyHPScale }
+    static let missileTruckSpeed: CGFloat = 108
+    static let missileTruckReward: Int = 150
+    /// Long sight: the launcher spots the hero from well down the lane.
+    static let missileTruckSightRange: CGFloat = 700
+    /// Long reach too — the rail throws a missile most of the way across
+    /// the field, so the truck can start shelling from a safe distance.
+    static let missileTruckShootRange: CGFloat = 390
+    static let missileTruckFireCooldown: Double = 2.2
+    static let missileTruckMissileDamage: CGFloat = 14
+    static let missileTruckMissileSpeed: CGFloat = 520
+    static let missileTruckMissileLife: Double = 0.9
+    /// Missile weave: lateral snake perpendicular to the flight line.
+    static let missileTruckWeaveAmp: CGFloat = 42
+    static let missileTruckWeaveFreq: Double = 7.0
+    /// Immortal (crimson battle walker — Level 19+): a fast armored
+    /// battle machine bigger than the Brute — huge rail cannon on the
+    /// arm, missile pods crowding the shoulders, hot pink-red glow trim.
+    /// Ranged only: it lobs twin phase-disruptor rounds one after
+    /// another down the lane. Base 280, scaled.
+    static var immortalHP: CGFloat { 280 * active.enemyHPScale }
+    static let immortalSpeed: CGFloat = 150
+    static let immortalReward: Int = 250
+    static let immortalSightRange: CGFloat = 640
+    static let immortalShootRange: CGFloat = 420
+    static let immortalFireCooldown: Double = 2.8
+    /// Twin disruptor rounds: heavy single hits, fired back to back —
+    /// this is the beat between the first and second round.
+    static let immortalBurstGap: Double = 0.22
+    static let immortalOrbDamage: CGFloat = 20
+    static let immortalOrbSpeed: CGFloat = 300
+    static let immortalOrbLife: Double = 2.0
+    static let immortalOrbBlast: CGFloat = 40
     static let enemyBoltSpeed: CGFloat = 520
     static let enemyBoltLife: Double = 1.2     // range ≈ 624: outranged by the hero
 
@@ -473,6 +574,19 @@ enum Balance {
     static let bombardSightRange: CGFloat = 940
     static let bombardBlast: CGFloat = 92
     static let bombardGravity: CGFloat = 980
+    // Tank: Level 17 main-battle tank. Tracked chassis with a top turret
+    // that fires one missile in a dead-straight line — no arc, no weave.
+    // Costs 600 and rolls out with 30% more life than the Gun-Truck.
+    static let tankCost: Int = 600
+    static let tankHP: CGFloat = truckHP * 1.3
+    static let tankSpeed: CGFloat = 84
+    static let tankDamage: CGFloat = 52
+    static let tankFireCooldown: Double = 1.9
+    static let tankRange: CGFloat = 560
+    static let tankSightRange: CGFloat = 780
+    static let tankMissileSpeed: CGFloat = 640
+    static let tankMissileLife: Double = 1.4
+    static let tankMissileBlast: CGFloat = 38
 
     // MARK: - Parallax scroll factors (ported from your Unity Parallaxing.cs idea:
     // background moves slower than the camera; factor 1.0 = locked to world)

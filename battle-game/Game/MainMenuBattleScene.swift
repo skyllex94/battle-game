@@ -177,11 +177,13 @@ final class MainMenuBattleScene: SKScene {
         let groundY = -size.height * 0.22
         let leftX = -size.width * 0.36
         let rightX = size.width * 0.36
-        let blue = TowerNode(team: .player)
+        // Diorama matches the pinned level's tower tier (Mk-II from 18 on).
+        let upgraded = levelId >= Balance.upgradedTowerLevel
+        let blue = TowerNode(team: .player, upgraded: upgraded)
         blue.position = CGPoint(x: leftX, y: groundY)
         world.addChild(blue)
         towers.append(blue)
-        let red = TowerNode(team: .enemy)
+        let red = TowerNode(team: .enemy, upgraded: upgraded)
         red.position = CGPoint(x: rightX, y: groundY)
         world.addChild(red)
         towers.append(red)
@@ -280,12 +282,13 @@ final class MainMenuBattleScene: SKScene {
         armPivot.position = CGPoint(x: 6, y: 8)
         body.addChild(armPivot)
         let armSprite = SKSpriteNode(texture: UnitPixelArt.armTexture(for: kind))
+        let arm = UnitPixelArt.armMetrics(for: kind)
         armSprite.setScale(s)
-        armSprite.anchorPoint = CGPoint(x: CGFloat(UnitPixelArt.armGripX) / CGFloat(UnitPixelArt.armW), y: 0.5)
+        armSprite.anchorPoint = CGPoint(x: CGFloat(arm.gripX) / CGFloat(arm.w), y: 0.5)
         armPivot.addChild(armSprite)
         // Muzzle socket at the barrel tip for tracer spawns.
         let tip = SKNode()
-        tip.position = CGPoint(x: CGFloat(UnitPixelArt.armTipX - UnitPixelArt.armGripX) * s, y: 0)
+        tip.position = CGPoint(x: CGFloat(arm.tipX - arm.gripX) * s, y: 0)
         armPivot.addChild(tip)
         holder.userData = NSMutableDictionary()
         holder.userData?["muzzle"] = tip

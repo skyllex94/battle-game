@@ -316,45 +316,70 @@ enum HeroPixelArt {
 
     // MARK: - Bulwark (siege armor: navy slabs + hazard core)
 
+    /// A walking bunker: slab helm, fortress pauldrons that bolt into a
+    /// WIDE chest plate, a hazard core burning in the middle of it and
+    /// stomping boots. The chest is the widest thing on him (cols 8-22)
+    /// so the torso reads as a body, not a gap between two shoulder pads.
     private static func bulwark(_ cg: CGContext, bob: Int, blink: Bool, step: Int) {
-        let plate = UIColor(red: 0.24, green: 0.34, blue: 0.58, alpha: 1)
-        let plateD = UIColor(red: 0.13, green: 0.18, blue: 0.35, alpha: 1)
-        let suit = UIColor(red: 0.14, green: 0.15, blue: 0.22, alpha: 1)
-        let suitD = UIColor(red: 0.08, green: 0.08, blue: 0.13, alpha: 1)
+        let plate = UIColor(red: 0.31, green: 0.43, blue: 0.70, alpha: 1)
+        let plateL = UIColor(red: 0.54, green: 0.66, blue: 0.94, alpha: 1)
+        let plateD = UIColor(red: 0.15, green: 0.21, blue: 0.40, alpha: 1)
+        let suit = UIColor(red: 0.16, green: 0.17, blue: 0.26, alpha: 1)
+        let suitD = UIColor(red: 0.09, green: 0.09, blue: 0.15, alpha: 1)
         let lamp = UIColor(red: 0.55, green: 0.9, blue: 1.0, alpha: 1)
-        let hazard = UIColor(red: 0.95, green: 0.7, blue: 0.15, alpha: 1)
+        let hazard = UIColor(red: 0.98, green: 0.72, blue: 0.16, alpha: 1)
         let O = outline
-        // Heavy backpack block + vents.
-        pack(cg, x: 5, top: 13 + bob, w: 5, h: 10, shell: suit, stripe: lamp)
-        fill(cg, x: 5, y: 18 + bob, w: 5, h: 1, hazard)
-        // Slab helm + crest + slit lamp.
-        fill(cg, x: 9, y: 2 + bob, w: 14, h: 8, O)
-        fill(cg, x: 10, y: 3 + bob, w: 12, h: 6, plate)
-        fill(cg, x: 10, y: 3 + bob, w: 12, h: 1, white.withAlphaComponent(0.35))
-        fill(cg, x: 14, y: 1 + bob, w: 4, h: 2, plateD)
-        fill(cg, x: 15, y: 6 + bob, w: 7, h: blink ? 1 : 3, O)
-        if !blink { fill(cg, x: 16, y: 6 + bob, w: 5, h: 2, lamp) }
-        // Fortress pauldrons with rivets.
-        fill(cg, x: 3, y: 10 + bob, w: 8, h: 6, O)
-        fill(cg, x: 4, y: 11 + bob, w: 6, h: 4, plate)
-        fill(cg, x: 4, y: 11 + bob, w: 6, h: 1, white.withAlphaComponent(0.3))
-        fill(cg, x: 5, y: 13 + bob, w: 1, h: 1, lamp)
-        fill(cg, x: 20, y: 10 + bob, w: 7, h: 6, O)
-        fill(cg, x: 21, y: 11 + bob, w: 5, h: 4, plate)
-        fill(cg, x: 24, y: 13 + bob, w: 1, h: 1, lamp)
-        // Barrel chest + hazard core + vent slats.
-        fill(cg, x: 8, y: 16 + bob, w: 14, h: 10, O)
-        fill(cg, x: 9, y: 17 + bob, w: 12, h: 8, plate)
-        fill(cg, x: 9, y: 17 + bob, w: 3, h: 8, plateD)
-        fill(cg, x: 9, y: 18 + bob, w: 3, h: 1, lamp)
-        fill(cg, x: 14, y: 19 + bob, w: 4, h: 4, O)
-        fill(cg, x: 14, y: 19 + bob, w: 4, h: 3, lamp)
-        fill(cg, x: 14, y: 19 + bob, w: 4, h: 1, white)
-        fill(cg, x: 14, y: 23 + bob, w: 4, h: 1, hazard)
-        // Belt + stomping walk legs.
-        fill(cg, x: 8, y: 26 + bob, w: 14, h: 2, suitD)
-        fill(cg, x: 13, y: 26 + bob, w: 4, h: 2, plateD)
-        marchLegs(cg, step: step, cx: 13, top: 28 + bob, len: 6, main: suit,
+        // Armored backpack with vents + a hazard band.
+        pack(cg, x: 4, top: 14 + bob, w: 6, h: 12, shell: suit, stripe: lamp)
+        fill(cg, x: 4, y: 19 + bob, w: 6, h: 1, hazard)
+        fill(cg, x: 5, y: 22 + bob, w: 4, h: 1, suitD)
+        // Slab helm: lit crown, crest, visor slit, chin guard.
+        fill(cg, x: 9, y: 1 + bob, w: 15, h: 10, O)
+        fill(cg, x: 10, y: 2 + bob, w: 13, h: 8, plate)
+        fill(cg, x: 10, y: 2 + bob, w: 13, h: 2, plateL)
+        fill(cg, x: 10, y: 9 + bob, w: 13, h: 1, plateD)
+        fill(cg, x: 13, y: 0 + bob, w: 5, h: 2, plateD)
+        fill(cg, x: 13, y: 0 + bob, w: 5, h: 1, lamp)
+        fill(cg, x: 15, y: 5 + bob, w: 8, h: blink ? 1 : 3, O)
+        if !blink { fill(cg, x: 16, y: 6 + bob, w: 6, h: 1, lamp) }
+        fill(cg, x: 19, y: 9 + bob, w: 5, h: 2, plateD)
+        // Neck + collar: bridges the helm and the chest plate so the
+        // body reads as one solid piece of armor.
+        fill(cg, x: 13, y: 10 + bob, w: 5, h: 3, suitD)
+        fill(cg, x: 11, y: 12 + bob, w: 9, h: 4, O)
+        fill(cg, x: 12, y: 13 + bob, w: 7, h: 2, plateD)
+        fill(cg, x: 12, y: 13 + bob, w: 7, h: 1, lamp)
+        // Fortress pauldrons: slabs that overlap the chest so the whole
+        // upper body reads as one piece of armor.
+        fill(cg, x: 2, y: 11 + bob, w: 9, h: 7, O)
+        fill(cg, x: 3, y: 12 + bob, w: 7, h: 5, plate)
+        fill(cg, x: 3, y: 12 + bob, w: 7, h: 1, plateL)
+        fill(cg, x: 4, y: 14 + bob, w: 1, h: 1, lamp)
+        fill(cg, x: 19, y: 11 + bob, w: 9, h: 7, O)
+        fill(cg, x: 20, y: 12 + bob, w: 7, h: 5, plate)
+        fill(cg, x: 20, y: 12 + bob, w: 7, h: 1, plateL)
+        fill(cg, x: 25, y: 14 + bob, w: 1, h: 1, lamp)
+        // TORSO: the wide chest plate — the widest thing on him.
+        fill(cg, x: 8, y: 15 + bob, w: 15, h: 12, O)
+        fill(cg, x: 9, y: 16 + bob, w: 13, h: 10, plate)
+        fill(cg, x: 9, y: 16 + bob, w: 13, h: 1, plateL)   // lit top edge
+        fill(cg, x: 9, y: 16 + bob, w: 2, h: 10, plateD)  // shaded back edge
+        fill(cg, x: 20, y: 16 + bob, w: 2, h: 10, plateD) // shaded front edge
+        // Vent slats across the chest.
+        for i in 0..<3 {
+            fill(cg, x: 10, y: 18 + i * 3 + bob, w: 10, h: 1, plateD)
+        }
+        // Hazard core burning in the middle of it.
+        fill(cg, x: 12, y: 18 + bob, w: 6, h: 6, O)
+        fill(cg, x: 13, y: 19 + bob, w: 4, h: 4, hazard)
+        fill(cg, x: 13, y: 19 + bob, w: 4, h: 1, white)
+        fill(cg, x: 14, y: 20 + bob, w: 2, h: 2, lamp)
+        // Hip plates + belt.
+        fill(cg, x: 8, y: 26 + bob, w: 15, h: 3, O)
+        fill(cg, x: 9, y: 27 + bob, w: 13, h: 1, suitD)
+        fill(cg, x: 14, y: 27 + bob, w: 3, h: 2, plateD)
+        // Stomping walk legs.
+        marchLegs(cg, step: step, cx: 14, top: 29 + bob, len: 7, main: suit,
                   shade: suitD, pad: plate, boot: suitD, sole: plateD, wide: true)
     }
 

@@ -12,6 +12,9 @@ import SpriteKit
 /// 5th incoming shot.
 /// .heli is the Heli Gunship debuting in Level 13 — a futuristic attack
 /// helicopter that cruises above the jets and fires 3-round bursts.
+/// .immortal is the phase-disruptor walker debuting in Level 19 — bigger
+/// than the Brute, a non-regenerating shield drinks damage before its
+/// shell, and its twin disruptors lob slow phase orbs that detonate.
 enum EnemyKind: Int, CaseIterable {
     case raider
     case brute
@@ -20,6 +23,8 @@ enum EnemyKind: Int, CaseIterable {
     case jet
     case mech
     case heli
+    case missileTruck
+    case immortal
 
     /// True for claw/axe fighters (swing + direct damage); false for shooters.
     var isMelee: Bool { self == .reaver || self == .skitter }
@@ -29,6 +34,18 @@ enum EnemyKind: Int, CaseIterable {
     var isMech: Bool { self == .mech }
     /// True for the high-altitude attack helicopter.
     var isHelicopter: Bool { self == .heli }
+
+    /// Draw tier — light infantry render IN FRONT of the heavy walkers so
+    /// a big chassis never hides the small, fast threats on top of it.
+    /// Air units float above everything (they are up in the air anyway).
+    var zTier: CGFloat {
+        switch self {
+        case .heli: return 9.8
+        case .raider, .skitter: return 9.6
+        case .reaver, .jet: return 9.2
+        case .brute, .mech, .missileTruck, .immortal: return 8.0
+        }
+    }
 
     /// Cruise altitude above the walkable deck (0 for grounded kinds).
     var flightHeight: CGFloat {
@@ -49,6 +66,8 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return "Jetpack Droid"
         case .mech: return "Mech Walker"
         case .heli: return "Heli Gunship"
+        case .missileTruck: return "Missile Truck"
+        case .immortal: return "Immortal"
         }
     }
 
@@ -63,6 +82,8 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return 7
         case .mech: return 9
         case .heli: return 13
+        case .missileTruck: return 15
+        case .immortal: return 19
         }
     }
 
@@ -76,6 +97,8 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return "Flying droid. Hovers and jukes around your fire."
         case .mech: return "Walking gun platform. Heavy armor, burst fire."
         case .heli: return "Attack helicopter. High hover, 3-round gun bursts."
+        case .missileTruck: return "Missile launcher truck. Short range, weaving missiles."
+        case .immortal: return "Crimson battle walker. Fast, huge cannons, twin disruptor rounds."
         }
     }
 
@@ -88,6 +111,8 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return Balance.jetHP
         case .mech: return Balance.mechHP
         case .heli: return Balance.heliHP
+        case .missileTruck: return Balance.missileTruckHP
+        case .immortal: return Balance.immortalHP
         }
     }
 
@@ -100,6 +125,8 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return Balance.jetSpeed
         case .mech: return Balance.mechSpeed
         case .heli: return Balance.heliSpeed
+        case .missileTruck: return Balance.missileTruckSpeed
+        case .immortal: return Balance.immortalSpeed
         }
     }
 
@@ -112,6 +139,8 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return Balance.jetSightRange
         case .mech: return Balance.mechSightRange
         case .heli: return Balance.heliSightRange
+        case .missileTruck: return Balance.missileTruckSightRange
+        case .immortal: return Balance.immortalSightRange
         }
     }
 
@@ -125,6 +154,8 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return Balance.jetShootRange
         case .mech: return Balance.mechShootRange
         case .heli: return Balance.heliShootRange
+        case .missileTruck: return Balance.missileTruckShootRange
+        case .immortal: return Balance.immortalShootRange
         }
     }
 
@@ -137,6 +168,8 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return Balance.jetFireCooldown
         case .mech: return Balance.mechFireCooldown
         case .heli: return Balance.heliFireCooldown
+        case .missileTruck: return Balance.missileTruckFireCooldown
+        case .immortal: return Balance.immortalFireCooldown
         }
     }
 
@@ -149,6 +182,8 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return Balance.jetBoltDamage
         case .mech: return Balance.mechBoltDamage
         case .heli: return Balance.heliBoltDamage
+        case .missileTruck: return Balance.missileTruckMissileDamage
+        case .immortal: return Balance.immortalOrbDamage
         }
     }
 
@@ -157,7 +192,7 @@ enum EnemyKind: Int, CaseIterable {
         switch self {
         case .reaver: return Balance.reaverMeleeDamage
         case .skitter: return Balance.skitterMeleeDamage
-        case .raider, .brute, .jet, .mech, .heli: return 0
+        case .raider, .brute, .jet, .mech, .heli, .missileTruck, .immortal: return 0
         }
     }
 
@@ -172,6 +207,8 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: base = Balance.jetReward
         case .mech: base = Balance.mechReward
         case .heli: base = Balance.heliReward
+        case .missileTruck: base = Balance.missileTruckReward
+        case .immortal: base = Balance.immortalReward
         }
         let scaled = Int((CGFloat(base) * Balance.enemyRewardScale).rounded(.down))
         return (scaled / 10) * 10
@@ -187,6 +224,8 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return .jet
         case .mech: return .mech
         case .heli: return .heli
+        case .missileTruck: return .missileTruck
+        case .immortal: return .immortal
         }
     }
 
@@ -200,6 +239,8 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return "FLYER"
         case .mech: return "HEAVY"
         case .heli: return "GUNSHIP"
+        case .missileTruck: return "LAUNCHER"
+        case .immortal: return "PHASE"
         }
     }
 
@@ -295,6 +336,8 @@ final class EnemyNode: SKSpriteNode {
             case .jet: return .jet
             case .mech: return .mech
             case .heli: return .heli
+            case .missileTruck: return .missileTruck
+            case .immortal: return .immortal
             }
         }())
         let size: CGSize
@@ -306,10 +349,15 @@ final class EnemyNode: SKSpriteNode {
         case .jet: size = CGSize(width: 84, height: 60)
         case .mech: size = CGSize(width: 112, height: 104)
         case .heli: size = CGSize(width: 120, height: 64)
+        case .missileTruck: size = CGSize(width: 128, height: 80)
+        case .immortal: size = CGSize(width: 128, height: 114)
         }
         super.init(texture: nil, color: .clear, size: size)
         name = "enemy"
-        zPosition = 9
+        // Tier + a tiny stable per-unit offset: two overlapping units of
+        // the same kind (e.g. missile trucks walking side by side) get a
+        // fixed draw order — one stays fully in front, no z-tie flicker.
+        zPosition = kind.zTier + CGFloat.random(in: 0 ..< 0.14)
         xScale = -abs(xScale) // marchers head left
         buildVisuals()
         buildHPBar()
@@ -370,7 +418,7 @@ final class EnemyNode: SKSpriteNode {
 
         // Aimable spike-arm on the shoulder; the scene steers it via aimAt(_).
         // Reavers mount a great-axe on the same pivot (swung via swing()).
-        let armTex = UnitPixelArt.armTexture(for: {
+        let armKind: UnitPixelArt.Kind = {
             switch kind {
             case .raider: return UnitPixelArt.Kind.enemy
             case .brute: return .brute
@@ -379,13 +427,17 @@ final class EnemyNode: SKSpriteNode {
             case .jet: return .jet
             case .mech: return .mech
             case .heli: return .heli
+            case .missileTruck: return .missileTruck
+            case .immortal: return .immortal
             }
-        }())
+        }()
+        let armTex = UnitPixelArt.armTexture(for: armKind)
         armTex.filteringMode = .nearest
         let s = bodyScale
+        let arm = UnitPixelArt.armMetrics(for: armKind)
         spikeSprite = SKSpriteNode(texture: armTex)
         spikeSprite.setScale(s)
-        spikeSprite.anchorPoint = CGPoint(x: CGFloat(UnitPixelArt.armGripX) / CGFloat(UnitPixelArt.armW),
+        spikeSprite.anchorPoint = CGPoint(x: CGFloat(arm.gripX) / CGFloat(arm.w),
                                            y: 0.5)
         armPivot.position = {
             switch kind {
@@ -396,12 +448,21 @@ final class EnemyNode: SKSpriteNode {
             case .jet: return CGPoint(x: 13, y: 0)
             case .mech: return CGPoint(x: 41, y: 19)
             case .heli: return CGPoint(x: 21, y: -20)
+            // Launcher cradle in the mantlet at the very nose: the rail
+            // (and every missile it fires) clears the hull in front.
+            case .missileTruck: return CGPoint(x: 54, y: 19)
+            // Cannon grip sits at the front shoulder joint, up where the
+            // huge rail mounts on the walker's flank.
+            case .immortal: return CGPoint(x: 10, y: 22)
             }
         }()
         armPivot.addChild(spikeSprite)
-        gunTip.position = CGPoint(x: CGFloat(UnitPixelArt.armTipX - UnitPixelArt.armGripX) * s,
+        gunTip.position = CGPoint(x: CGFloat(arm.tipX - arm.gripX) * s,
                                   y: 0)
         armPivot.addChild(gunTip)
+        // Small z so the arm/layers over the own body but never climbs
+        // above the next unit tier (child z is cumulative with the node's).
+        armPivot.zPosition = 0.3
         body.addChild(armPivot)
     }
 
@@ -428,7 +489,7 @@ final class EnemyNode: SKSpriteNode {
         mechLegBack.setScale(s)
         mechLegBack.anchorPoint = CGPoint(x: 0.5, y: 1)
         mechLegBack.position = CGPoint(x: -8, y: hipY + 2)
-        mechLegBack.zPosition = -1
+        mechLegBack.zPosition = -0.2
         body.addChild(mechLegBack)
 
         let legTexFront = UnitPixelArt.mechLegTexture(front: true, phase: 0)
@@ -437,20 +498,22 @@ final class EnemyNode: SKSpriteNode {
         mechLegFront.setScale(s)
         mechLegFront.anchorPoint = CGPoint(x: 0.5, y: 1)
         mechLegFront.position = CGPoint(x: 8, y: hipY + 2)
-        mechLegFront.zPosition = 1
+        mechLegFront.zPosition = 0.2
         body.addChild(mechLegFront)
 
         // Gatling arm on the gun-side shoulder.
-        let armTex = UnitPixelArt.armTexture(for: .mech)
+        let armKind: UnitPixelArt.Kind = .mech
+        let armTex = UnitPixelArt.armTexture(for: armKind)
         armTex.filteringMode = .nearest
+        let arm = UnitPixelArt.armMetrics(for: armKind)
         spikeSprite = SKSpriteNode(texture: armTex)
         spikeSprite.setScale(s)
-        spikeSprite.anchorPoint = CGPoint(x: CGFloat(UnitPixelArt.armGripX) / CGFloat(UnitPixelArt.armW),
+        spikeSprite.anchorPoint = CGPoint(x: CGFloat(arm.gripX) / CGFloat(arm.w),
                                            y: 0.5)
         armPivot.position = CGPoint(x: 32, y: 0)
-        armPivot.zPosition = 2
+        armPivot.zPosition = 0.4
         armPivot.addChild(spikeSprite)
-        gunTip.position = CGPoint(x: CGFloat(UnitPixelArt.armTipX - UnitPixelArt.armGripX) * s,
+        gunTip.position = CGPoint(x: CGFloat(arm.tipX - arm.gripX) * s,
                                   y: 0)
         armPivot.addChild(gunTip)
         body.addChild(armPivot)
@@ -462,7 +525,8 @@ final class EnemyNode: SKSpriteNode {
         // Pro chunky pixel bar, same language as TowerNode/BaseNode:
         // dark padded BG + thin light border + left-anchored fill that
         // drains from the right side only. Brutes wear a wider bar.
-        let barW: CGFloat = kind == .brute ? 56 : (kind.isMech ? 64 : 44)
+        let barW: CGFloat = kind == .brute ? 56
+            : (kind.isMech || kind == .missileTruck || kind == .immortal ? 64 : 44)
         let barH: CGFloat = 7
         // Soft + sunk: more transparent than the structure bars, and pinned
         // deep behind so the hero always covers it when passing by units.

@@ -84,6 +84,18 @@ final class SoundEngine {
     func baseFire(at x: CGFloat) { play(.baseFan, volume: 0.60, at: x) }
     func enemyFire(at x: CGFloat) { play(.enemy, volume: 0.28, at: x) }
     func allyFire(at x: CGFloat) { play(.ally, volume: 0.32, at: x) }
+    /// Missile launch: the tube cracks open with an ignition blast, then
+    /// the round tears away on a falling whistle.
+    func missileLaunch(at x: CGFloat) {
+        play(.missileLaunch, volume: 0.62, at: x)
+        // The whistle trails the blast by a beat — the round clearing the
+        // rail and running off into the distance.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) { [weak self] in
+            self?.play(.missileWhistle, volume: 0.34, at: x)
+        }
+    }
+    /// Missile detonation on contact: a punchy mid-weight blast.
+    func missileDetonate(at x: CGFloat) { play(.missileBoom, volume: 0.72, at: x) }
     /// Helicopter rotor wash: looping blade-slap phrase, positional so it
     /// swells as the gunship closes in.
     func heliRotor(at x: CGFloat) { play(.heliRotor, volume: 0.24, at: x) }
@@ -370,6 +382,7 @@ final class SoundEngine {
     private enum Voice: String, CaseIterable {
         case blaster, scatter, cannon
         case tower, baseFan, enemy, ally, heliRotor
+        case missileLaunch, missileWhistle, missileBoom
         case dry, reloadStart, reloadDone, reloadTick
         case impact, enemyDown, heroHurt, heroDeath, bigBoom
         case summon, pickup, ui, weaponSwitch, victory
@@ -385,6 +398,9 @@ final class SoundEngine {
             case .baseFan: return 0.20
             case .enemy, .ally: return 0.09
             case .heliRotor: return 0.80
+            case .missileLaunch: return 0.22
+            case .missileWhistle: return 0.22
+            case .missileBoom: return 0.18
             case .dry: return 0.25
             case .reloadStart, .reloadDone: return 0.20
             case .reloadTick: return 0.30
@@ -534,6 +550,9 @@ final class SoundEngine {
         made[.enemy] = actionShot(bodyF0: 360, bodyF1: 140, dur: 0.12, crack: 0.6, sub: 0.25, drive: 1.2, distance: 0.6, hiss: 0.4, body: 0.8)
         made[.ally] = actionShot(bodyF0: 280, bodyF1: 105, dur: 0.14, crack: 0.7, sub: 0.35, drive: 1.2, distance: 0.25, hiss: 0.6, body: 0.8)
         made[.heliRotor] = helicopterRotor()
+        made[.missileLaunch] = missileLaunch()
+        made[.missileWhistle] = missileWhistle()
+        made[.missileBoom] = missileDetonation()
         made[.dry] = metalTick()
         made[.reloadStart] = rackPair(up: false)
         made[.reloadDone] = rackPair(up: true)
@@ -713,6 +732,95 @@ final class SoundEngine {
             let raw = Double.random(in: -1...1)
             lp += 0.25 * (raw - lp)
             data[i] = Float(grit((sin(phase) + lp * 0.8) * env * 0.6, 1.5) * 0.8)
+        }
+        return buffer
+    }
+
+    // MARK: - Missile synthesis (launch, flight, detonation)
+
+    /// Tube launch: a hard ignition crack, a sub thump under it and a
+    /// rocket-motor roar that climbs as the round leaves the rail. The
+    /// roar trails off into the distance instead of cutting out.
+    private func missileLaunch() -> AVAudioPCMBuffer? {
+        let dur = 0.5
+        guard let (buffer, _) = pcm(dur),
+              let data = buffer.floatChannelData?[0] else { return nil }
+        let n = Int(buffer.frameLength)
+        var motorPhase = 0.0
+        var subPhase = 0.0
+        var roarLP = 0.0
+        var hissLP = 0.0
+        for i in 0..<n {
+            let t = Double(i) / sampleRate
+            let raw = Double.random(in: -1...1)
+            // Motor tone climbs out of the tube, then sags as it recedes.
+            let freq = 110.0 + 260.0 * exp(-t * 4.5) - 40.0 * t
+            motorPhase += 2.0 * .pi * freq / sampleRate
+            subPhase += 2.0 * .pi * freq * 0.5 / sampleRate
+            roarLP += 0.22 * (raw - roarLP)
+            hissLP += 0.72 * (raw - hissLP)
+            // Ignition crack at the very start of the shot.
+            let crack = (raw - hissLP) * exp(-t * 220.0) * 0.9
+            // Motor roar: filtered noise plus the pitched core.
+            let roar = (roarLP * 1.7 + sin(motorPhase) * 0.45) * exp(-t * 3.4)
+            // Sub thump under the crack.
+            let thump = sin(subPhase) * exp(-t * 24.0) * 0.85
+            // Air rush swelling as the round accelerates away.
+            let rush = (raw - hissLP) * min(1.0, t / 0.04) * exp(-t * 5.0) * 0.35
+            let sample = (crack + roar + thump + rush) * 0.5
+            data[i] = Float(grit(sample, 1.9) * 0.95)
+        }
+        return buffer
+    }
+
+    /// Round in flight: a doppler whistle sliding down as it streaks off,
+    /// over a thin wash of air. Quiet — it sells speed, not presence.
+    private func missileWhistle() -> AVAudioPCMBuffer? {
+        let dur = 0.42
+        guard let (buffer, _) = pcm(dur),
+              let data = buffer.floatChannelData?[0] else { return nil }
+        let n = Int(buffer.frameLength)
+        var phase = 0.0
+        var washLP = 0.0
+        for i in 0..<n {
+            let t = Double(i) / sampleRate
+            // Falling pitch: the classic receding-missile doppler.
+            let freq = 1650.0 * exp(-t * 4.0) + 240.0
+            phase += 2.0 * .pi * freq / sampleRate
+            let raw = Double.random(in: -1...1)
+            washLP += 0.30 * (raw - washLP)
+            let whistle = sin(phase) * exp(-t * 4.6) * 0.55
+            let wash = (raw - washLP) * exp(-t * 6.0) * 0.45
+            // Fade in fast so the whistle doesn't pop when it starts.
+            let env = min(1.0, t / 0.02)
+            data[i] = Float((whistle + wash) * env * 0.5)
+        }
+        return buffer
+    }
+
+    /// Contact detonation: sub drop, sharp crack, debris crackle and a
+    /// rolling dirt tail. Between a rifle shot and a structure collapse.
+    private func missileDetonation() -> AVAudioPCMBuffer? {
+        let dur = 0.6
+        guard let (buffer, _) = pcm(dur),
+              let data = buffer.floatChannelData?[0] else { return nil }
+        let n = Int(buffer.frameLength)
+        var phase = 0.0
+        var crackLP = 0.0
+        var bodyLP = 0.0
+        for i in 0..<n {
+            let t = Double(i) / sampleRate
+            let k = t / dur
+            let freq = 120.0 - 74.0 * k
+            phase += 2.0 * .pi * freq / sampleRate
+            let raw = Double.random(in: -1...1)
+            crackLP += 0.62 * (raw - crackLP)
+            bodyLP += 0.10 * (raw - bodyLP)
+            let attack = min(1.0, t / 0.002)
+            // Early sharp crack settling into a rolling body.
+            let crack = (raw - crackLP) * max(0.0, 1.0 - k * 3.0) * exp(-t * 26.0)
+            let body = (sin(phase) * 1.1 + bodyLP * 1.7) * exp(-t * 5.0)
+            data[i] = Float(grit((crack * 0.9 + body) * attack * 0.5, 2.2) * 0.9)
         }
         return buffer
     }

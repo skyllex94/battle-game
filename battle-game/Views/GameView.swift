@@ -76,8 +76,6 @@ struct GameView: View {
     /// Shown one modal after another on battle entry; each CLAIM grants.
     @State private var grantStep: Int?
     @State private var weapon: HeroWeapon = .blaster
-    /// Why the last deploy tap was refused (toast). Nil = none.
-    @State private var deployRefusal: String?
     /// Milestone hero unlocked by this level's briefing (shown once, then
     /// claimed + auto-equipped). Nil when nothing new or already owned.
     @State private var heroUnlock: HeroDef?
@@ -124,33 +122,12 @@ struct GameView: View {
                         ForEach(ArmyKind.allCases.filter { ArmyKind.isUnlocked($0, levelId: level.id) }) { kind in
                             ArmyCardButton(kind: kind, money: minimap.money,
                                            cooldownFrac: cooldownFraction(for: kind),
-                                           armyFull: minimap.allyCount >= minimap.allyCap) {
-                                if !scene.summonAlly(kind: kind) {
-                                    deployRefusal = scene.summonRefusal(for: kind)
-                                    // Auto-clear the toast so it never sticks.
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-                                        deployRefusal = nil
-                                    }
-                                } else {
-                                    deployRefusal = nil
-                                }
+                                           armyFull: minimap.allyCount >= minimap.allyCap,
+                                           hqDown: !minimap.playerHQAlive) {
+                                scene.summonAlly(kind: kind)
                             }
                         }
                         Spacer()
-                    }
-                    // Refusal toast: explains WHY a deploy didn't happen
-                    // (army full / not enough gold / still recharging).
-                    if let refusal = deployRefusal {
-                        Text(refusal)
-                            .font(.system(size: 11, weight: .black, design: .monospaced))
-                            .tracking(2)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 10).padding(.vertical, 4)
-                            .background(.red.opacity(0.9))
-                            .clipShape(PixelPanelShape(cut: 5))
-                            .overlay(PixelPanelShape(cut: 5).stroke(.white.opacity(0.6), lineWidth: 1.5))
-                            .shadow(color: .black.opacity(0.5), radius: 6)
-                            .transition(.opacity)
                     }
                 }
                 .padding(.horizontal, 14)
@@ -801,10 +778,28 @@ struct GameView: View {
     }
 
     /// Victory stars from clear time: fast clears earn the full row.
+    /// The time targets scale with the campaign tier — later levels are
+    /// legitimately longer fights (mech walls, missile trucks, the tower
+    /// refit), so a slow-but-solid run there never drops to the floor.
     private func starsFor(time: Double) -> Int {
-        if time <= 180 { return 3 }
-        if time <= 300 { return 2 }
+        let budget = starTimeBudget(for: level.id)
+        if time <= budget { return 3 }
+        if time <= budget * 5 / 3 { return 2 }
         return 1
+    }
+
+    /// 3-star clear target per tier (seconds): L1-5 ≈ 2.5 min skirmishes,
+    /// L6-9 ≈ 3.5, L10-14 ≈ 5, L15-17 ≈ 6, L18+ (the refit levels and
+    /// beyond) ≈ 9+. A 2-star run gets 1.67x that; everything under
+    /// beats one star.
+    private func starTimeBudget(for levelId: Int) -> TimeInterval {
+        switch levelId {
+        case 1...5: return 150
+        case 6...9: return 210
+        case 10...14: return 300
+        case 15...17: return 360
+        default: return 540
+        }
     }
 
     /// Next campaign level, if any (Continue hides on the final level).
@@ -921,7 +916,8 @@ struct GameView: View {
                     .fill(.red.opacity(0.24))
                     .frame(width: 172, height: 1)
                     .offset(y: 46)
-                Image(uiImage: TowerNode.previewImage(for: .enemy))
+                Image(uiImage: TowerNode.previewImage(for: .enemy,
+                                                      upgraded: level.id >= Balance.upgradedTowerLevel))
                     .interpolation(.none)
                     .resizable()
                     .scaledToFit()
@@ -1130,6 +1126,7 @@ struct GameView: View {
                     .padding(.trailing, 6)
                     Text(minimap.ammoText)
                         .monospacedDigit()
+                        .fixedSize(horizontal: true, vertical: false)
                         .foregroundStyle(minimap.ammoMag == 0 ? .red
                             : minimap.reloading ? .gray : .white.opacity(0.85))
                     if LoadoutStore.loadout.count > 1 {
@@ -1146,11 +1143,15 @@ struct GameView: View {
 
             HUDDivider()
 
-            // Treasury.
+            // Treasury. The digit box is width-pinned so growing balances
+            // (4+ digits) never reflow the bar and squeeze the gun ammo.
             HStack(spacing: 5) {
                 PixelCoinView()
                 Text("\(minimap.money)")
                     .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .frame(width: 34, alignment: .trailing)
             }
             .font(.system(size: 11, weight: .bold, design: .monospaced))
             .foregroundStyle(.yellow)
@@ -1162,6 +1163,9 @@ struct GameView: View {
                 PixelDiamondView()
                 Text("\(wallet.diamonds)")
                     .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .frame(width: 26, alignment: .trailing)
             }
             .font(.system(size: 11, weight: .bold, design: .monospaced))
             .foregroundStyle(.cyan)
@@ -1347,10 +1351,13 @@ private struct ArmyCardButton: View {
     let money: Int
     /// 0 = ready, 1 = just deployed (veil covers the tile, drains down).
     let cooldownFrac: Double
-    /// True when the on-field army hit the cap — the card shows FULL and
-    /// the deploy toast explains it instead of silently refusing.
+    /// True when the on-field army hit the cap.
     let armyFull: Bool
-    let onTap: () -> Void
+    /// True while your own HQ smoulders — nothing deploys without it.
+    let hqDown: Bool
+    /// Deploy attempt; the scene refuses on its own — the card does not
+    /// need the result, its chip reflects the live block reason instead.
+    let onDeploy: () -> Bool
 
     private var affordable: Bool { money >= kind.cost }
     private var cooling: Bool { cooldownFrac > 0 }
@@ -1358,8 +1365,18 @@ private struct ArmyCardButton: View {
     private let tileW: CGFloat = 78
     private let tileH: CGFloat = 56
 
+    /// Status chip pinned inside the card top (same language as FULL):
+    /// HQ down > army at the cap. Recharging needs no label — the
+    /// cooldown veil's drain animation says it — and being broke needs
+    /// no label either: the dimmed cost strip already says NO GOLD.
+    private var statusChip: (label: String, color: Color)? {
+        if hqDown { return ("HQ DOWN", Color.red) }
+        if armyFull { return ("FULL", Color.red) }
+        return nil
+    }
+
     var body: some View {
-        Button(action: onTap) {
+        Button(action: { _ = onDeploy() }) {
             ZStack(alignment: .bottom) {
                 // Tint wash behind the sprite.
                 Rectangle()
@@ -1422,14 +1439,17 @@ private struct ArmyCardButton: View {
             .overlay(tileShape.stroke(affordable && !cooling ? Color.cyan : Color.gray.opacity(0.5),
                                      lineWidth: 2.5))
             .overlay(alignment: .top) {
-                // Army at the cap: say so instead of silently refusing.
-                if armyFull {
-                    Text("FULL")
-                        .font(.system(size: 9, weight: .black, design: .monospaced))
-                        .tracking(1)
+                // Status chip pinned inside the top of the tile: why this
+                // unit can't deploy right now (army at cap, cooling, broke).
+                if let chip = statusChip {
+                    Text(chip.label)
+                        .font(.system(size: 8.5, weight: .black, design: .monospaced))
+                        .tracking(0.5)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(.red)
+                        .padding(.horizontal, 4).padding(.vertical, 1)
+                        .background(chip.color)
                 }
             }
             .opacity(affordable ? 1.0 : 0.6)

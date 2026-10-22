@@ -94,6 +94,12 @@ enum TwilightRuinsBG {
         let duskdesert = theme == .duskdesert
         let nightdesert = theme == .nightdesert
         let sunrise = theme == .sunrise
+        // Evening before sunset (Level 18): the sun is dropping but still
+        // up — deep evening blue overhead, amber-gold building at the horizon.
+        let dusk = theme == .dusk
+        // Stormcrown (Level 19): the same dusk shelf under a heavy storm
+        // grade — darker, more violet, thicker slate clouds.
+        let storm = Balance.stormSummit
         let canyonNight = Balance.canyonNight
         // Golden desert day: bright sky, harsh sun, washed-out stars.
         // Duskfall: the sun is going down — deep indigo, stars coming out.
@@ -103,6 +109,8 @@ enum TwilightRuinsBG {
         let gTop = nightdesert ? UIColor(red: 0.015, green: 0.025, blue: 0.085, alpha: 1)
             : duskdesert ? UIColor(red: 0.05, green: 0.05, blue: 0.14, alpha: 1)
             : sunrise ? UIColor(red: 0.17, green: 0.27, blue: 0.50, alpha: 1)
+            : storm ? UIColor(red: 0.05, green: 0.08, blue: 0.22, alpha: 1)
+            : dusk ? UIColor(red: 0.08, green: 0.12, blue: 0.30, alpha: 1)
             : oasis ? UIColor(red: 0.26, green: 0.50, blue: 0.74, alpha: 1)
             : dunesea ? UIColor(red: 0.30, green: 0.52, blue: 0.75, alpha: 1)
             : sandhold ? UIColor(red: 0.10, green: 0.06, blue: 0.13, alpha: 1)
@@ -113,6 +121,8 @@ enum TwilightRuinsBG {
         let gMid = nightdesert ? UIColor(red: 0.06, green: 0.08, blue: 0.21, alpha: 1)
             : duskdesert ? UIColor(red: 0.22, green: 0.13, blue: 0.24, alpha: 1)
             : sunrise ? UIColor(red: 0.56, green: 0.44, blue: 0.58, alpha: 1)
+            : storm ? UIColor(red: 0.20, green: 0.15, blue: 0.33, alpha: 1)
+            : dusk ? UIColor(red: 0.30, green: 0.22, blue: 0.42, alpha: 1)
             : oasis ? UIColor(red: 0.58, green: 0.68, blue: 0.62, alpha: 1)
             : dunesea ? UIColor(red: 0.62, green: 0.66, blue: 0.62, alpha: 1)
             : sandhold ? UIColor(red: 0.28, green: 0.12, blue: 0.11, alpha: 1)
@@ -123,6 +133,8 @@ enum TwilightRuinsBG {
         let gLow = nightdesert ? UIColor(red: 0.13, green: 0.16, blue: 0.34, alpha: 1)
             : duskdesert ? UIColor(red: 0.72, green: 0.32, blue: 0.22, alpha: 1)
             : sunrise ? UIColor(red: 0.96, green: 0.68, blue: 0.45, alpha: 1)
+            : storm ? UIColor(red: 0.62, green: 0.36, blue: 0.30, alpha: 1)
+            : dusk ? UIColor(red: 0.80, green: 0.42, blue: 0.28, alpha: 1)
             : oasis ? UIColor(red: 0.94, green: 0.80, blue: 0.52, alpha: 1)
             : dunesea ? UIColor(red: 0.95, green: 0.76, blue: 0.48, alpha: 1)
             : sandhold ? UIColor(red: 0.55, green: 0.25, blue: 0.12, alpha: 1)
@@ -133,6 +145,8 @@ enum TwilightRuinsBG {
         let gHorizon = nightdesert ? UIColor(red: 0.34, green: 0.38, blue: 0.58, alpha: 1)
             : duskdesert ? UIColor(red: 1.0, green: 0.52, blue: 0.26, alpha: 1)
             : sunrise ? UIColor(red: 1.0, green: 0.84, blue: 0.56, alpha: 1)
+            : storm ? UIColor(red: 0.95, green: 0.55, blue: 0.38, alpha: 1)
+            : dusk ? UIColor(red: 1.0, green: 0.62, blue: 0.34, alpha: 1)
             : oasis ? UIColor(red: 0.90, green: 0.94, blue: 0.72, alpha: 1)
             : dunesea ? UIColor(red: 1.0, green: 0.86, blue: 0.58, alpha: 1)
             : sandhold ? UIColor(red: 1.0, green: 0.55, blue: 0.25, alpha: 1)
@@ -143,6 +157,8 @@ enum TwilightRuinsBG {
         let gMist = nightdesert ? UIColor(red: 0.20, green: 0.24, blue: 0.42, alpha: 1)
             : duskdesert ? UIColor(red: 0.42, green: 0.24, blue: 0.22, alpha: 1)
             : sunrise ? UIColor(red: 0.82, green: 0.66, blue: 0.54, alpha: 1)
+            : storm ? UIColor(red: 0.40, green: 0.28, blue: 0.32, alpha: 1)
+            : dusk ? UIColor(red: 0.50, green: 0.32, blue: 0.30, alpha: 1)
             : oasis ? UIColor(red: 0.86, green: 0.82, blue: 0.62, alpha: 1)
             : dunesea ? UIColor(red: 0.90, green: 0.74, blue: 0.52, alpha: 1)
             : sandhold ? UIColor(red: 0.40, green: 0.25, blue: 0.18, alpha: 1)
@@ -188,31 +204,38 @@ enum TwilightRuinsBG {
         // Moonveil: a huge cold moon riding high over the night sand.
         // Sunrise: a low golden sun just clearing the distant peaks.
         let sunY: CGFloat = nightdesert ? 0.36
-            : (duskdesert ? 0.06 : (sunrise ? 0.14 : (brightDay ? 0.22 : 0.30)))
+            : duskdesert ? 0.06
+            : sunrise ? 0.14
+            : dusk ? 0.10
+            : (brightDay ? 0.22 : 0.30)
         let moon = SKShapeNode(circleOfRadius: nightdesert ? 44
-            : (duskdesert ? 30 : (sunrise ? 38 : (brightDay ? 34 : 26))))
+            : (duskdesert ? 30 : (sunrise || dusk ? 38 : (brightDay ? 34 : 26))))
         moon.fillColor = nightdesert
             ? SKColor(red: 0.88, green: 0.92, blue: 1.0, alpha: 1.0)
             : duskdesert
             ? SKColor(red: 1.0, green: 0.48, blue: 0.20, alpha: 1.0)
             : sunrise
             ? SKColor(red: 1.0, green: 0.80, blue: 0.46, alpha: 1.0)
+            : dusk
+            ? SKColor(red: 1.0, green: 0.62, blue: 0.26, alpha: 1.0)
             : brightDay
             ? SKColor(red: 1.0, green: 0.95, blue: 0.82, alpha: 1.0)
             : SKColor(red: 0.82, green: 0.80, blue: 0.94, alpha: 0.95)
         moon.strokeColor = .clear
-        moon.position = CGPoint(x: W * (nightdesert ? 0.72 : (duskdesert ? 0.68 : (sunrise ? 0.70 : 0.30))),
+        moon.position = CGPoint(x: W * (nightdesert ? 0.72 : (duskdesert ? 0.68 : (sunrise || dusk ? 0.70 : 0.30))),
                                 y: H * sunY)
         moon.zPosition = 1
         layer.addChild(moon)
         let halo = SKShapeNode(circleOfRadius: nightdesert ? 132
-            : (duskdesert ? 96 : (sunrise ? 118 : (brightDay ? 70 : 52))))
+            : (duskdesert ? 96 : (sunrise || dusk ? 118 : (brightDay ? 70 : 52))))
         halo.fillColor = nightdesert
             ? SKColor(red: 0.55, green: 0.70, blue: 1.0, alpha: 0.22)
             : duskdesert
             ? SKColor(red: 1.0, green: 0.45, blue: 0.15, alpha: 0.35)
             : sunrise
             ? SKColor(red: 1.0, green: 0.66, blue: 0.30, alpha: 0.30)
+            : dusk
+            ? SKColor(red: 1.0, green: 0.54, blue: 0.22, alpha: 0.32)
             : brightDay
             ? SKColor(red: 1.0, green: 0.90, blue: 0.65, alpha: 0.30)
             : SKColor(red: 0.55, green: 0.52, blue: 0.85, alpha: 0.14)
@@ -224,7 +247,7 @@ enum TwilightRuinsBG {
             .fadeAlpha(to: 0.55, duration: 3.2), .fadeAlpha(to: 1.0, duration: 3.2),
         ])))
         // Moon craters (pixel blocks). Skipped under day/dusk/sunrise suns.
-        if !brightDay, !duskdesert, !sunrise {
+        if !brightDay, !duskdesert, !sunrise, !dusk {
             let craterSpots: [(CGFloat, CGFloat, CGFloat)] = nightdesert
                 ? [(-14, 9, 8), (10, -8, 7), (3, 16, 5), (18, 8, 4)]
                 : [(-8, 5, 5), (6, -4, 4), (2, 9, 3)]
@@ -244,7 +267,7 @@ enum TwilightRuinsBG {
         // Bright day washes them out — a few faint ones only.
         // Moonveil: a dense cold starfield, with a handful of big sparkles.
         var rng = SeededRNG(seed: 20260917)
-        let starCount = nightdesert ? 160 : (sunrise ? 34 : (brightDay ? 18 : 90))
+        let starCount = nightdesert ? 160 : ((sunrise || dusk) ? 34 : storm ? 14 : (brightDay ? 18 : 90))
         for i in 0..<starCount {
             let sx = rng.cgFloat(in: -W * 0.6...W * 0.6)
             let sy = rng.cgFloat(in: -H * 0.05...H * 0.68)
@@ -254,7 +277,7 @@ enum TwilightRuinsBG {
                 ? (pink
                     ? SKColor(red: 0.62, green: 0.78, blue: 1.0, alpha: 0.95)
                     : SKColor(red: 0.92, green: 0.96, blue: 1.0, alpha: 0.95))
-                : sunrise
+                : sunrise || dusk
                 ? (pink
                     ? SKColor(red: 1.0, green: 0.78, blue: 0.72, alpha: 0.40)
                     : SKColor(red: 1.0, green: 0.94, blue: 0.84, alpha: 0.35))
@@ -266,9 +289,9 @@ enum TwilightRuinsBG {
             star.zPosition = 1
             layer.addChild(star)
             let wait = SKAction.wait(forDuration: rng.double(in: 0...2.5))
-            let dim = SKAction.fadeAlpha(to: nightdesert ? 0.3 : (sunrise ? 0.12 : 0.15),
+            let dim = SKAction.fadeAlpha(to: nightdesert ? 0.3 : ((sunrise || dusk) ? 0.12 : 0.15),
                                          duration: rng.double(in: 0.7...1.8))
-            let bright = SKAction.fadeAlpha(to: sunrise ? 0.45
+            let bright = SKAction.fadeAlpha(to: (sunrise || dusk) ? 0.45
                                             : (brightDay ? 0.3 : (nightdesert ? 1.0 : 0.95)),
                                             duration: rng.double(in: 0.7...1.8))
             star.run(.repeatForever(.sequence([wait, dim, bright])))
@@ -335,6 +358,8 @@ enum TwilightRuinsBG {
                     }
                 } else if sunrise {
                     cg.setFillColor(UIColor(red: 1, green: 0.70, blue: 0.34, alpha: 0.36 * (1 - edge)).cgColor)
+                } else if dusk {
+                    cg.setFillColor(UIColor(red: 1, green: 0.60, blue: 0.28, alpha: 0.34 * (1 - edge)).cgColor)
                 } else if duskdesert {
                     cg.setFillColor(UIColor(red: 1, green: 0.45, blue: 0.18, alpha: 0.40 * (1 - edge)).cgColor)
                 } else if oasis {
@@ -370,13 +395,17 @@ enum TwilightRuinsBG {
         // Drifting clouds: 5 long wispy streaks, pink-purple, very dim
         // (teal-green for the overgrown theme, ember for the bastion theme,
         // warm pale for dawn, bright white-gold for sunscorch, burnt
-        // ember for sandhold).
-        for i in 0..<5 {
+        // ember for sandhold). Stormcrown: thicker slate deck, 7 streaks.
+        for i in 0..<(storm ? 7 : 5) {
             let cw = W * rng.cgFloat(in: 0.35...0.6)
             let cloud = SKSpriteNode(color: nightdesert
                 ? SKColor(red: 0.14, green: 0.20, blue: 0.38, alpha: 0.30)
+                : storm
+                ? SKColor(red: 0.22, green: 0.16, blue: 0.32, alpha: 0.36)
                 : sunrise
                 ? SKColor(red: 1.0, green: 0.78, blue: 0.62, alpha: 0.22)
+                : dusk
+                ? SKColor(red: 0.70, green: 0.36, blue: 0.30, alpha: 0.24)
                 : duskdesert
                 ? SKColor(red: 0.55, green: 0.26, blue: 0.24, alpha: 0.28)
                 : oasis
@@ -405,6 +434,39 @@ enum TwilightRuinsBG {
             cloud.run(.repeatForever(.sequence([drift, drift.reversed()])))
         }
 
+        // Stormcrown: lightning walks the summit — soft violet-white
+        // flashes deep in the cloud deck over the peaks. Each pocket
+        // double-blinks on a long irregular loop (no strike lines, just
+        // the glow through the slate).
+        if storm {
+            let pockets: [(CGFloat, CGFloat, UInt64)] = [
+                (W * 0.20, H * 0.55, 90301),
+                (W * 0.62, H * 0.62, 90302),
+                (W * 0.84, H * 0.50, 90303),
+            ]
+            for (px, py, seed) in pockets {
+                var lrng = SeededRNG(seed: seed)
+                let puff = SKShapeNode(ellipseOf: CGSize(width: W * 0.30,
+                                                         height: H * 0.18))
+                puff.fillColor = SKColor(red: 0.80, green: 0.82, blue: 1.0, alpha: 0)
+                puff.strokeColor = .clear
+                puff.position = CGPoint(x: px, y: py)
+                puff.zPosition = 1
+                layer.addChild(puff)
+                func flashAction() -> SKAction {
+                    let bright: CGFloat = lrng.cgFloat(in: 0.35...0.58)
+                    return .sequence([
+                        .wait(forDuration: lrng.double(in: 2.5...7.0)),
+                        .fadeAlpha(to: bright, duration: 0.05),
+                        .fadeAlpha(to: 0.10, duration: 0.09),
+                        .fadeAlpha(to: bright * 0.72, duration: 0.05),
+                        .fadeAlpha(to: 0, duration: 0.30),
+                    ])
+                }
+                puff.run(.repeatForever(.sequence([flashAction(), flashAction()])))
+            }
+        }
+
         // Distant birds: tiny dark chevrons gliding across, very slow.
         for i in 0..<3 {
             let bird = SKLabelNode(fontNamed: "Helvetica-Bold")
@@ -427,7 +489,8 @@ enum TwilightRuinsBG {
                     let dx = (CGFloat(px) - 64) / 64, dy = (CGFloat(py) - 64) / 64
                     let d = min(1, sqrt(dx * dx + dy * dy))
                     let a: CGFloat = max(0, d - 0.55)
-                        * (nightdesert ? 0.92 : (sunrise ? 0.42 : (brightDay ? 0.25 : 0.75)))
+                        * (nightdesert ? 0.92 : (sunrise ? 0.42
+                        : (dusk ? 0.50 : (brightDay ? 0.25 : 0.75))))
                     cg.setFillColor(UIColor(white: 0, alpha: a).cgColor)
                     cg.fill(CGRect(x: px, y: 127 - py, width: 1, height: 1))
                 }
@@ -465,6 +528,14 @@ enum TwilightRuinsBG {
                     drawAlpineRange(cg, PW: PW, PH: PH)
                 } else {
                     drawSunriseRange(cg, PW: PW, PH: PH)
+                }
+            } else if Balance.active.theme == .dusk {
+                // Evening-before-sunset alpine shelf: the same ridge fort
+                // panorama, lit low and warm (desert dusk if non-alpine).
+                if Balance.alpinePass {
+                    drawAlpineRange(cg, PW: PW, PH: PH)
+                } else {
+                    drawDuskRange(cg, PW: PW, PH: PH)
                 }
             } else if Balance.active.theme == .duskdesert {
                 drawDuskRange(cg, PW: PW, PH: PH)
@@ -648,6 +719,8 @@ enum TwilightRuinsBG {
             ? SKColor(red: 0.05, green: 0.04, blue: 0.10, alpha: 0.30)
             : theme0 == .sunrise
             ? SKColor(red: 1.0, green: 0.72, blue: 0.48, alpha: 0.12)
+            : theme0 == .dusk
+            ? SKColor(red: 0.30, green: 0.16, blue: 0.14, alpha: 0.30)
             : theme0 == .sunscorch
             ? SKColor(red: 0.90, green: 0.82, blue: 0.66, alpha: 0.18)
             : theme0 == .dunesea
@@ -745,6 +818,16 @@ enum TwilightRuinsBG {
         // Moonveil theme: moonlit warm ridges under the moon + pale dust.
         if Balance.active.theme == .nightdesert {
             buildNightRidges(in: layer, sceneSize: sceneSize)
+            return
+        }
+        // Evening (Level 18): the alpine crags carry over, just lit for
+        // the last hour before sunset (desert ridges off the alpine shelf).
+        if Balance.active.theme == .dusk {
+            if Balance.alpinePass {
+                buildAlpineRidges(in: layer, sceneSize: sceneSize)
+            } else {
+                buildDuskRidges(in: layer, sceneSize: sceneSize)
+            }
             return
         }
         // Granite Reach: the same sunrise, but jagged alpine crags instead
@@ -2504,6 +2587,217 @@ enum TwilightRuinsBG {
                                         duration: rng.double(in: 9...14))
             band.run(.repeatForever(.sequence([drift, drift.reversed()])))
         }
+    }
+
+    // MARK: - Highridge Redoubt (Level 17): the fort in the mid ground
+
+    private static var redoubtFortTex: SKTexture?
+    private static var redoubtOutpostTex: SKTexture?
+
+    /// Seats the ridge fort on the crest of the nearest mid ridge. The fort
+    /// and its outwork are drawn in the same chunky pixel language as the
+    /// crags and carry the same haze tint, so they read as part of the
+    /// range instead of a sprite pasted on top of it.
+    private static func addRidgeFort(to root: SKNode,
+                                     panoW: CGFloat, panoH: CGFloat,
+                                     tint: UIColor, blend: CGFloat,
+                                     variant: Int) {
+        let hScale = panoW / CGFloat(alpineRidgeW)
+        let vScale = panoH / CGFloat(alpineRidgeH)
+        let crest = alpineRidgeTop(variant: variant)
+        // Texture column -> root-local x; crest row -> root-local y.
+        func rootX(_ texX: CGFloat) -> CGFloat { texX * hScale }
+        func crestY(_ texX: CGFloat) -> CGFloat {
+            let col = min(crest.count - 1, max(0, Int(texX)))
+            return panoH / 2 - CGFloat(crest[col]) * vScale
+        }
+        // The fort stands on the highest crest under its footprint, so the
+        // knoll it sits on never floats over a dip.
+        func seatY(centerTexX: CGFloat, halfWidthTexX: CGFloat,
+                   rows: CGFloat) -> CGFloat {
+            var top = -CGFloat.greatestFiniteMagnitude
+            let from = max(0, Int(centerTexX - halfWidthTexX))
+            let to = min(crest.count - 1, Int(centerTexX + halfWidthTexX))
+            for col in from...to {
+                top = max(top, crestY(CGFloat(col)))
+            }
+            return top - rows * vScale
+        }
+
+        // Main fort: curtain wall, square keep, two drum towers, banner.
+        let fortW: CGFloat = 300
+        let fortH: CGFloat = 150
+        let fort = SKSpriteNode(texture: redoubtFortTexture())
+        fort.size = CGSize(width: fortW * hScale, height: fortH * vScale)
+        fort.anchorPoint = CGPoint(x: 0.5, y: 0)
+        fort.color = tint
+        fort.colorBlendFactor = blend
+        fort.zPosition = 1
+        fort.position = CGPoint(x: rootX(320),
+                                y: seatY(centerTexX: 320, halfWidthTexX: fortW / 2, rows: 30))
+        root.addChild(fort)
+
+        // A smaller watchtower further along the ridge, past the main fort.
+        let outW: CGFloat = 90
+        let outH: CGFloat = 130
+        let outpost = SKSpriteNode(texture: redoubtOutpostTexture())
+        outpost.size = CGSize(width: outW * hScale, height: outH * vScale)
+        outpost.anchorPoint = CGPoint(x: 0.5, y: 0)
+        outpost.color = tint
+        outpost.colorBlendFactor = blend
+        outpost.zPosition = 1
+        outpost.position = CGPoint(x: rootX(1180),
+                                   y: seatY(centerTexX: 1180, halfWidthTexX: outW / 2, rows: 26))
+        root.addChild(outpost)
+    }
+
+    /// The ridge fort itself: a square keep with a banner, a curtain wall
+    /// with a gate arch, two drum towers and a rocky knoll under it all.
+    private static func redoubtFortTexture() -> SKTexture {
+        if let redoubtFortTex { return redoubtFortTex }
+        let W = 300, H = 150
+        let tex = render(w: W, h: H) { cg in
+            cg.setShouldAntialias(false)
+            let stone = UIColor(red: 0.27, green: 0.23, blue: 0.26, alpha: 1)
+            let stoneLit = UIColor(red: 0.40, green: 0.35, blue: 0.35, alpha: 1)
+            let stoneDk = UIColor(red: 0.16, green: 0.12, blue: 0.16, alpha: 1)
+            let rock = UIColor(red: 0.31, green: 0.25, blue: 0.29, alpha: 1)
+            let rockLit = UIColor(red: 0.44, green: 0.36, blue: 0.36, alpha: 1)
+            let rockDk = UIColor(red: 0.21, green: 0.16, blue: 0.21, alpha: 1)
+            let rim = UIColor(red: 1.0, green: 0.74, blue: 0.44, alpha: 1)
+            let cloth = UIColor(red: 0.52, green: 0.11, blue: 0.10, alpha: 1)
+            let clothLit = UIColor(red: 0.74, green: 0.22, blue: 0.16, alpha: 1)
+            let window = UIColor(red: 1.0, green: 0.68, blue: 0.30, alpha: 1)
+
+            // --- Knoll: the rock the fort was cut into. It fills the
+            // bottom of the canvas so the footing always meets the ridge.
+            for x in 0..<W {
+                let t = CGFloat(x) / CGFloat(W)
+                let shoulder = abs(t - 0.5) * 2
+                let wobble = CGFloat(hash(x, 3, 517) % 9) - 4
+                let row = Int(94 + shoulder * 20 + wobble)
+                fill(cg, x, row, 1, H - row, rock)
+                fill(cg, x, row, 1, 2, rockLit)
+                if hash(x, 5, 519) < 24 {
+                    fill(cg, x, row + 4 + hash(x, 6, 521) % 14, 1, 2, rockDk)
+                }
+            }
+
+            // --- Curtain wall: two runs either side of the keep.
+            for (wx, ww) in [(40, 72), (190, 72)] {
+                fill(cg, wx, 72, ww, 26, stone)
+                fill(cg, wx, 72, ww, 2, stoneLit)
+                fill(cg, wx, 94, ww, 4, stoneDk)
+                // Merlon crown.
+                var mx = wx + 2
+                while mx < wx + ww - 10 {
+                    fill(cg, mx, 64, 10, 8, stone)
+                    fill(cg, mx, 64, 10, 2, stoneLit)
+                    mx += 16
+                }
+                // Sunrise rim along the crown, same light as the crags.
+                fill(cg, wx, 63, ww, 1, rim)
+            }
+            // Gate arch in the left run.
+            fill(cg, 92, 78, 16, 20, stoneDk)
+            fill(cg, 95, 74, 10, 5, stoneDk)
+
+            // --- Keep: the tall square tower with slit windows.
+            fill(cg, 112, 30, 78, 68, stone)
+            fill(cg, 112, 30, 78, 3, stoneLit)
+            fill(cg, 112, 30, 3, 68, stoneLit)
+            fill(cg, 112, 92, 78, 6, stoneDk)
+            // Corner quoins.
+            for qy in stride(from: 34, to: 92, by: 12) {
+                fill(cg, 112, qy, 6, 4, stoneLit)
+                fill(cg, 184, qy, 6, 4, stoneLit)
+            }
+            // Merlon crown.
+            var kx = 114
+            while kx < 186 {
+                fill(cg, kx, 22, 10, 8, stone)
+                fill(cg, kx, 22, 10, 2, stoneLit)
+                kx += 16
+            }
+            // Sunrise rim along the keep's crown and shoulders.
+            fill(cg, 112, 21, 78, 1, rim)
+            fill(cg, 112, 29, 78, 1, rim)
+            // Lit windows.
+            fill(cg, 126, 46, 6, 12, window)
+            fill(cg, 160, 46, 6, 12, window)
+            fill(cg, 143, 66, 8, 14, stoneDk)
+            fill(cg, 145, 68, 4, 10, window)
+
+            // --- Drum towers: round flanking towers with conical roofs.
+            for tx in [4, 264] {
+                fill(cg, tx, 44, 34, 54, stone)
+                fill(cg, tx, 44, 34, 2, stoneLit)
+                fill(cg, tx, 92, 34, 6, stoneDk)
+                // Conical roof.
+                for i in 0..<20 {
+                    let roofW = 34 - i * 2
+                    if roofW <= 0 { break }
+                    fill(cg, tx + i, 26 + i, roofW, 2, stoneDk)
+                }
+                // Arrow slit.
+                fill(cg, tx + 16, 60, 4, 12, window)
+            }
+
+            // --- The fort's banner, flying off the keep.
+            fill(cg, 148, 8, 3, 16, stoneDk)
+            fill(cg, 151, 10, 24, 12, cloth)
+            fill(cg, 151, 10, 24, 2, clothLit)
+        }
+        tex.filteringMode = .nearest
+        redoubtFortTex = tex
+        return tex
+    }
+
+    /// A lone watchtower on the ridge: a drum tower with a conical roof
+    /// and a small banner, on its own knoll.
+    private static func redoubtOutpostTexture() -> SKTexture {
+        if let redoubtOutpostTex { return redoubtOutpostTex }
+        let W = 90, H = 130
+        let tex = render(w: W, h: H) { cg in
+            cg.setShouldAntialias(false)
+            let stone = UIColor(red: 0.27, green: 0.23, blue: 0.26, alpha: 1)
+            let stoneLit = UIColor(red: 0.40, green: 0.35, blue: 0.35, alpha: 1)
+            let stoneDk = UIColor(red: 0.16, green: 0.12, blue: 0.16, alpha: 1)
+            let rock = UIColor(red: 0.31, green: 0.25, blue: 0.29, alpha: 1)
+            let rockLit = UIColor(red: 0.44, green: 0.36, blue: 0.36, alpha: 1)
+            let window = UIColor(red: 1.0, green: 0.68, blue: 0.30, alpha: 1)
+            let cloth = UIColor(red: 0.52, green: 0.11, blue: 0.10, alpha: 1)
+            let clothLit = UIColor(red: 0.74, green: 0.22, blue: 0.16, alpha: 1)
+
+            // Knoll.
+            for x in 0..<W {
+                let t = CGFloat(x) / CGFloat(W)
+                let shoulder = abs(t - 0.5) * 2
+                let wobble = CGFloat(hash(x, 9, 733) % 7) - 3
+                let row = Int(78 + shoulder * 16 + wobble)
+                fill(cg, x, row, 1, H - row, rock)
+                fill(cg, x, row, 1, 2, rockLit)
+            }
+
+            // Drum tower.
+            fill(cg, 26, 30, 38, 52, stone)
+            fill(cg, 26, 30, 38, 2, stoneLit)
+            fill(cg, 26, 76, 38, 6, stoneDk)
+            for i in 0..<20 {
+                let roofW = 38 - i * 2
+                if roofW <= 0 { break }
+                fill(cg, 26 + i, 12 + i, roofW, 2, stoneDk)
+            }
+            fill(cg, 42, 46, 5, 12, window)
+
+            // Banner.
+            fill(cg, 44, 0, 3, 14, stoneDk)
+            fill(cg, 47, 2, 20, 10, cloth)
+            fill(cg, 47, 2, 20, 2, clothLit)
+        }
+        tex.filteringMode = .nearest
+        redoubtOutpostTex = tex
+        return tex
     }
 
     static func updateMidParallax(in layer: SKNode, camX: CGFloat) {

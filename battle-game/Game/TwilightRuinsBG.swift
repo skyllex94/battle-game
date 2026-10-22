@@ -449,7 +449,11 @@ enum TwilightRuinsBG {
         let travel = Balance.levelWidth * Balance.parallaxFar
         let panoW: CGFloat = sceneSize.width + travel + 500
         // Low-res canvas -> chunky pixels when stretched with .nearest.
-        let PW = 800, PH = 190
+        // Granite Reach gets a taller sheet: its range runs further down so
+        // the rocky foot slides behind the mid crags instead of stopping in
+        // mid-air with a bare band under it.
+        let alpine = Balance.alpinePass
+        let PW = 800, PH = alpine ? 230 : 190
         let tex = render(w: PW, h: PH) { cg in
             cg.clear(CGRect(x: 0, y: 0, width: PW, height: PH))
             // Oasis theme: bright warm range + green oases, ruin arches
@@ -457,7 +461,11 @@ enum TwilightRuinsBG {
             if Balance.active.theme == .oasis {
                 drawOasisRange(cg, PW: PW, PH: PH)
             } else if Balance.active.theme == .sunrise {
-                drawSunriseRange(cg, PW: PW, PH: PH, alpine: Balance.alpinePass)
+                if Balance.alpinePass {
+                    drawAlpineRange(cg, PW: PW, PH: PH)
+                } else {
+                    drawSunriseRange(cg, PW: PW, PH: PH)
+                }
             } else if Balance.active.theme == .duskdesert {
                 drawDuskRange(cg, PW: PW, PH: PH)
             } else if Balance.active.theme == .nightdesert {
@@ -609,8 +617,12 @@ enum TwilightRuinsBG {
         }
         let pano = SKSpriteNode(texture: tex)
         pano.anchorPoint = CGPoint(x: 0, y: 0.5)
-        pano.size = CGSize(width: panoW, height: sceneSize.height * 0.62)
-        pano.position = CGPoint(x: -sceneSize.width * 0.6, y: 0)
+        // Granite Reach's sheet is taller and sits lower: its base runs
+        // under the ground line so the range never ends on a visible cut.
+        let panoH = sceneSize.height * (alpine ? 0.78 : 0.62)
+        let panoY = alpine ? -sceneSize.height * 0.07 : 0
+        pano.size = CGSize(width: panoW, height: panoH)
+        pano.position = CGPoint(x: -sceneSize.width * 0.6, y: panoY)
         pano.alpha = 0.92 // dimmed into the dusk
         layer.addChild(pano)
 
@@ -645,7 +657,7 @@ enum TwilightRuinsBG {
             : theme0 == .sandhold
             ? SKColor(red: 0.10, green: 0.06, blue: 0.08, alpha: 0.30)
             : SKColor(red: 0.05, green: 0.06, blue: 0.16, alpha: 0.38),
-                                size: CGSize(width: panoW, height: sceneSize.height * 0.62))
+                                size: CGSize(width: panoW, height: panoH))
         veil.anchorPoint = CGPoint(x: 0, y: 0.5)
         veil.position = pano.position
         veil.zPosition = 2
@@ -1053,11 +1065,8 @@ enum TwilightRuinsBG {
 
     /// Stonewatch sunrise far sheet: layered mountain ranges waking up in
     /// warm morning light, a low pass between the front peaks, and hazy
-    /// sand dunes running out toward the range. `alpine` keeps the same
-    /// peaks + sunrise but swaps the dune foot for rocky foothills and
-    /// pine stands (Granite Reach).
-    private static func drawSunriseRange(_ cg: CGContext, PW: Int, PH: Int,
-                                         alpine: Bool = false) {
+    /// sand dunes running out toward the range.
+    private static func drawSunriseRange(_ cg: CGContext, PW: Int, PH: Int) {
         let backRock = UIColor(red: 0.56, green: 0.42, blue: 0.50, alpha: 1)
         let backRim = UIColor(red: 1.0, green: 0.78, blue: 0.52, alpha: 1)
         let frontRock = UIColor(red: 0.29, green: 0.21, blue: 0.27, alpha: 1)
@@ -1108,40 +1117,170 @@ enum TwilightRuinsBG {
             }
         }
 
-        if alpine {
-            // Granite foothills: same sunrise range, rocky foot, pine stands.
-            let foot = UIColor(red: 0.40, green: 0.34, blue: 0.34, alpha: 1)
-            let footLit = UIColor(red: 0.62, green: 0.50, blue: 0.45, alpha: 1)
-            let pine = UIColor(red: 0.16, green: 0.15, blue: 0.17, alpha: 1)
-            for px in 0..<PW {
-                let jag = hash(px, 8, 108) < 26 ? 4 : 0
-                let top = 148 + Int(8.0 * sin(Double(px) * 0.022 + 0.8)
-                                    + 4.0 * sin(Double(px) * 0.071 + 2.3)) + jag
-                fill(cg, px, top, 1, PH - top, foot)
-                if hash(px, 9, 109) < 55 { fill(cg, px, top, 1, 1, footLit.withAlpha(0.8)) }
-            }
-            // Low pine teeth along the foothill line.
-            for tx in stride(from: 22, to: PW - 16, by: 39) {
-                let h = 9 + hash(tx, 10, 110) % 14
-                fill(cg, tx, PH - 18 - h, 3, h, pine)
-                fill(cg, tx - 5, PH - 18 - h + 5, 8, 2, pine)
-                fill(cg, tx - 3, PH - 18 - h + 9, 9, 2, pine)
-            }
-        } else {
-            // Dune line running out to the range: warm sand with lit crests.
-            for px in 0..<PW {
-                let top = 150 + Int(9.0 * sin(Double(px) * 0.018 + 0.4)
-                                    + 5.0 * sin(Double(px) * 0.051 + 2.0))
-                fill(cg, px, top, 1, PH - top, sand)
-                if hash(px, 6, 106) < 60 { fill(cg, px, top, 1, 1, sandHi.withAlpha(0.75)) }
-            }
+        // Dune line running out to the range: warm sand with lit crests.
+        for px in 0..<PW {
+            let top = 150 + Int(9.0 * sin(Double(px) * 0.018 + 0.4)
+                                + 5.0 * sin(Double(px) * 0.051 + 2.0))
+            fill(cg, px, top, 1, PH - top, sand)
+            if hash(px, 6, 106) < 60 { fill(cg, px, top, 1, 1, sandHi.withAlpha(0.75)) }
+        }
 
-            // Dead scrub dotted along the sand line.
-            for tx in stride(from: 28, to: PW - 20, by: 67) {
-                let h = 12 + hash(tx, 7, 107) % 12
-                fill(cg, tx, PH - 16 - h, 2, h, scrub)
-                fill(cg, tx - 4, PH - 16 - h + 4, 6, 2, scrub)
-                fill(cg, tx + 2, PH - 16 - h + 8, 5, 2, scrub)
+        // Dead scrub dotted along the sand line.
+        for tx in stride(from: 28, to: PW - 20, by: 67) {
+            let h = 12 + hash(tx, 7, 107) % 12
+            fill(cg, tx, PH - 16 - h, 2, h, scrub)
+            fill(cg, tx - 4, PH - 16 - h + 4, 6, 2, scrub)
+            fill(cg, tx + 2, PH - 16 - h + 8, 5, 2, scrub)
+        }
+    }
+
+    /// Granite Reach far sheet (Level 14): the same sunrise range as
+    /// Stonewatch — hazy back peaks, dark front crags — but drawn on a
+    /// taller sheet whose rocky foot keeps going down past the mid crags.
+    /// The foot is a humped, strata-cut skyline with boulders, scree and
+    /// pine stands, so the range never ends on a flat cut-off band.
+    private static func drawAlpineRange(_ cg: CGContext, PW: Int, PH: Int) {
+        let backRock = UIColor(red: 0.56, green: 0.42, blue: 0.50, alpha: 1)
+        let backRim = UIColor(red: 1.0, green: 0.78, blue: 0.52, alpha: 1)
+        let frontRock = UIColor(red: 0.29, green: 0.21, blue: 0.27, alpha: 1)
+        let frontRim = UIColor(red: 1.0, green: 0.66, blue: 0.38, alpha: 1)
+        let foot = UIColor(red: 0.40, green: 0.34, blue: 0.34, alpha: 1)
+        let footLit = UIColor(red: 0.62, green: 0.50, blue: 0.45, alpha: 1)
+        let footDk = UIColor(red: 0.26, green: 0.22, blue: 0.23, alpha: 1)
+        let footDeep = UIColor(red: 0.17, green: 0.15, blue: 0.17, alpha: 1)
+        let pine = UIColor(red: 0.16, green: 0.15, blue: 0.17, alpha: 1)
+        let frost = UIColor(red: 0.86, green: 0.89, blue: 0.88, alpha: 0.75)
+
+        // Morning haze: ramps in from the top of the sheet so the range
+        // melts into the sky instead of starting on a hard horizon line.
+        for y in 0..<PH {
+            let t = CGFloat(y) / CGFloat(max(1, PH - 120))
+            let a = min(1, CGFloat(y) / 60) * 0.85
+            let c = UIColor(red: 0.90 - 0.06 * t, green: 0.70 - 0.05 * t,
+                            blue: 0.62 - 0.14 * t, alpha: a)
+            fill(cg, 0, y, PW, 1, c)
+        }
+
+        // Back range: wide hazy peaks (apex rows 40-60).
+        let back: [(x: Int, apex: Int, half: Int, base: Int)] = [
+            (58, 44, 124, 106), (210, 58, 132, 112), (362, 40, 120, 108),
+            (500, 60, 136, 114), (644, 46, 122, 106), (762, 56, 100, 110),
+        ]
+        for b in back {
+            for px in (b.x - b.half)..<(b.x + b.half) {
+                guard px >= 0 && px < PW else { continue }
+                let k = 1 - abs(CGFloat(px - b.x)) / CGFloat(b.half)
+                let jag = hash(px, 1, 101) < 22 ? 2 : 0
+                let top = b.apex + Int((1 - k) * CGFloat(b.base - b.apex)) + jag
+                fill(cg, px, top, 1, PH - top, backRock)
+                if hash(px, 2, 102) < 34 {
+                    fill(cg, px, top, 1, 2, backRim.withAlphaComponent(0.85))
+                }
+            }
+        }
+
+        // Front range: darker crags with a pass notch left of centre.
+        let front: [(x: Int, apex: Int, half: Int, base: Int)] = [
+            (26, 76, 74, 124), (122, 98, 66, 130), (216, 80, 80, 122),
+            (320, 102, 62, 128), (468, 84, 74, 120), (580, 70, 86, 126),
+            (690, 100, 64, 122), (782, 78, 62, 128),
+        ]
+        // A wavy ridge line between the crags, so the range never rests on
+        // a straight baseline.
+        func frontBaseline(_ px: Int) -> Int {
+            let t = Double(px)
+            return 124 + Int(6.0 * sin(t * 0.043 + 1.7) + 4.0 * sin(t * 0.113 + 0.3))
+        }
+        for px in 0..<PW {
+            var top = Int.max
+            for f in front {
+                let d = abs(CGFloat(px - f.x))
+                if d < CGFloat(f.half) {
+                    let k = 1 - d / CGFloat(f.half)
+                    let t = f.apex + Int((1 - k) * CGFloat(f.base - f.apex))
+                    if t < top { top = t }
+                }
+            }
+            if top == Int.max { top = frontBaseline(px) }
+            let jag = hash(px, 3, 103) < 18 ? 3 : 0
+            top += jag
+            fill(cg, px, top, 1, PH - top, frontRock)
+            if hash(px, 4, 104) < 26 { fill(cg, px, top, 1, 1, frontRim.withAlphaComponent(0.9)) }
+            // Erosion notches down the face.
+            if hash(px, 5, 105) < 8 { fill(cg, px, top + 6, 1, 5, frontRock.withAlphaComponent(0.7)) }
+        }
+
+        // Rocky foot: a humped skyline (no flat slab) that runs all the way
+        // to the bottom of the sheet, so its base slides behind the mid
+        // crags instead of stopping in mid-air. It also swallows the front
+        // range's flat baseline, so no straight seam is left behind.
+        var footTop = [Int](repeating: 0, count: PW)
+        for px in 0..<PW {
+            let t = Double(px)
+            var y = 132.0
+            y += 9.0 * sin(t * 0.019 + 0.8)
+            y += 6.0 * sin(t * 0.055 + 2.3)
+            y += 3.0 * sin(t * 0.127 + 0.4)
+            // Rocky buttes breaking the skyline.
+            y -= 12.0 * exp(-pow((t - 264) / 46, 2))
+            y -= 10.0 * exp(-pow((t - 604) / 40, 2))
+            y -= 9.0 * exp(-pow((t - 96) / 30, 2))
+            y -= 8.0 * exp(-pow((t - 452) / 34, 2))
+            let jag = hash(px, 8, 108) < 30 ? 3 : 0
+            // Sits under the front crags' skyline so the dark range still
+            // reads as its own layer.
+            footTop[px] = max(102, min(152, Int(y.rounded()) + jag))
+        }
+        for px in 0..<PW {
+            let top = footTop[px]
+            fill(cg, px, top, 1, PH - top, foot)
+            if hash(px, 9, 109) < 55 { fill(cg, px, top, 1, 1, footLit.withAlphaComponent(0.8)) }
+            // Strata seams that follow the skyline down the face.
+            let seam = top + 11 + hash(px, 12, 120) % 7
+            if seam < PH { fill(cg, px, seam, 1, 2, footDk.withAlphaComponent(0.5)) }
+            let seam2 = top + 33 + hash(px, 13, 121) % 11
+            if seam2 < PH {
+                fill(cg, px, seam2, 1, 3, footDk.withAlphaComponent(0.45))
+                fill(cg, px, seam2 + 4, 1, 1, footLit.withAlphaComponent(0.3))
+            }
+            // Frost catching the first light on the crest.
+            if hash(px, 14, 122) < 12 { fill(cg, px, top, 1, 2, frost) }
+        }
+
+        // Boulders tumbled on the slopes: flat slabs with a lit top edge.
+        var rng = SeededRNG(seed: 47014)
+        for _ in 0..<26 {
+            let bx = rng.int(in: 12...(PW - 12))
+            let by = footTop[bx] + rng.int(in: 14...60)
+            guard by < PH - 5 else { continue }
+            let w = rng.int(in: 9...19)
+            let h = rng.int(in: 3...6)
+            for r in 0..<h {
+                let inset = r == 0 ? 1 : 0
+                fill(cg, bx - w / 2 + inset, by + r, w - inset * 2, 1, footDk)
+            }
+            fill(cg, bx - w / 2 + 2, by, max(2, w - 4), 1, footLit.withAlphaComponent(0.55))
+        }
+
+        // Scree grains over the rock face.
+        for _ in 0..<320 {
+            let sx = rng.int(in: 0...(PW - 1))
+            let sy = footTop[sx] + rng.int(in: 2...86)
+            guard sy < PH else { continue }
+            let c = rng.int(in: 0...1) == 0 ? footLit.withAlphaComponent(0.45) : footDeep
+            fill(cg, sx, sy, 1, 1, c)
+        }
+
+        // Conifer stands along the foot skyline: a wide skirt at the base
+        // tapering to the tip. Denser stands on the pine-heavy levels.
+        let pineStep = max(8, Int((23 / max(0.2, Balance.pineDensity)).rounded()))
+        for tx in stride(from: 14, to: PW - 10, by: pineStep) {
+            let h = 7 + hash(tx, 10, 110) % 9
+            let base = footTop[min(PW - 1, tx)]
+            for j in 0..<3 {
+                let w = 7 - j * 2
+                let y = base - h + (2 - j) * (h / 3)
+                fill(cg, tx - w / 2, y, w, h / 3 + 2, pine)
             }
         }
     }
@@ -2096,34 +2235,39 @@ enum TwilightRuinsBG {
 
     private static let alpineRidgeW = 1600
     private static let alpineRidgeH = 120
+    /// Rock bands of the mid crags, graded from sunlit crest to cold base.
+    /// Same plum-brown family as the far range so both layers read as one
+    /// continuous massif.
     private static let alpineRockBands: [UIColor] = [
-        UIColor(red: 0.58, green: 0.52, blue: 0.48, alpha: 1),
-        UIColor(red: 0.48, green: 0.43, blue: 0.41, alpha: 1),
-        UIColor(red: 0.39, green: 0.35, blue: 0.35, alpha: 1),
-        UIColor(red: 0.31, green: 0.28, blue: 0.29, alpha: 1),
-        UIColor(red: 0.24, green: 0.22, blue: 0.24, alpha: 1),
-        UIColor(red: 0.18, green: 0.17, blue: 0.20, alpha: 1),
+        UIColor(red: 0.62, green: 0.52, blue: 0.51, alpha: 1),
+        UIColor(red: 0.52, green: 0.43, blue: 0.44, alpha: 1),
+        UIColor(red: 0.43, green: 0.34, blue: 0.37, alpha: 1),
+        UIColor(red: 0.34, green: 0.26, blue: 0.30, alpha: 1),
+        UIColor(red: 0.26, green: 0.19, blue: 0.24, alpha: 1),
+        UIColor(red: 0.19, green: 0.14, blue: 0.19, alpha: 1),
     ]
     private static let alpineBandEdges = [0, 4, 10, 20, 34, 52, 120]
+    /// Peak sets mirror the far sunrise range: wide triangles on a shared
+    /// base line, so the mid crags share the far mountains' silhouette.
     private static let alpinePeakSets: [[(Double, Double, Double)]] = [
-        [(0.04, 10, 0.03), (0.10, 22, 0.08), (0.16, 14, 0.03),
-         (0.25, 32, 0.10), (0.33, 12, 0.025), (0.42, 18, 0.07),
-         (0.50, 15, 0.03), (0.58, 36, 0.11), (0.66, 12, 0.025),
-         (0.76, 24, 0.09), (0.84, 16, 0.03), (0.90, 30, 0.08)],
-        [(0.07, 28, 0.06), (0.13, 16, 0.03), (0.18, 36, 0.07),
-         (0.26, 12, 0.025), (0.33, 22, 0.05), (0.40, 16, 0.03),
-         (0.47, 36, 0.08), (0.56, 14, 0.025), (0.63, 26, 0.06),
-         (0.71, 18, 0.03), (0.80, 34, 0.07), (0.87, 12, 0.025),
-         (0.94, 20, 0.05)],
-        [(0.05, 12, 0.03), (0.12, 20, 0.09), (0.21, 16, 0.03),
-         (0.30, 28, 0.08), (0.39, 12, 0.025), (0.50, 16, 0.10),
-         (0.59, 18, 0.03), (0.68, 26, 0.09), (0.77, 14, 0.025),
-         (0.86, 18, 0.07)],
+        [(0.06, 44, 0.075), (0.17, 32, 0.055), (0.29, 50, 0.085),
+         (0.41, 28, 0.050), (0.53, 42, 0.070), (0.65, 34, 0.060),
+         (0.77, 48, 0.080), (0.90, 30, 0.050)],
+        [(0.09, 38, 0.065), (0.21, 48, 0.080), (0.34, 30, 0.050),
+         (0.45, 42, 0.070), (0.58, 34, 0.055), (0.70, 46, 0.075),
+         (0.83, 30, 0.050), (0.94, 38, 0.060)],
+        [(0.05, 34, 0.060), (0.16, 44, 0.075), (0.28, 28, 0.050),
+         (0.39, 40, 0.065), (0.51, 30, 0.050), (0.63, 46, 0.080),
+         (0.76, 32, 0.055), (0.88, 42, 0.070)],
     ]
+    /// Shared base line of each crag band (row) — the lower the band, the
+    /// closer the ridge sits.
+    private static let alpineBaseRows = [88, 94, 100]
 
-    /// Wide pixel-art alpine crag panorama: banded rock faces, hard pixel
-    /// facets, warm crest rims and snow caps. Drawn at a low resolution and
-    /// stretched with nearest filtering so it matches the rest of the art.
+    /// Wide pixel-art alpine crag panorama: the far range's peaks one step
+    /// closer, with banded rock faces, hard pixel facets and warm crest
+    /// rims. Drawn at a low resolution and stretched with nearest filtering
+    /// so it matches the rest of the art.
     static func alpineRidgeTexture(variant: Int) -> SKTexture {
         let v = ((variant % 3) + 3) % 3
         while alpineRidgeCache.count <= v {
@@ -2148,23 +2292,24 @@ enum TwilightRuinsBG {
         let H = alpineRidgeH
         let phase = [0.0, 1.9, 3.7][variant]
         let peaks = alpinePeakSets[variant]
+        let base = Double(alpineBaseRows[variant])
         var top = [Int](repeating: H, count: W)
         for x in 0..<W {
             let t = Double(x) / Double(W)
-            let waveA = 7.5 * sin(t * .pi * 2 * 1.15 + phase)
-            let waveB = 4.0 * sin(t * .pi * 2 * 2.70 + phase * 1.7)
-            let serrationA = 2.2 * sin(t * .pi * 2 * 29.0 + phase * 1.4)
-            let serrationB = 1.1 * sin(t * .pi * 2 * 57.0 + phase * 2.6)
-            let teeth = 2.4 * abs(sin(t * .pi * 2 * 13.0 + phase * 0.7))
-            var y = 58.0 + waveA + waveB - teeth + serrationA + serrationB
+            // Slow swell under the peaks: the range breathes instead of
+            // sitting on a flat baseline.
+            var y = base + 3.0 * sin(t * .pi * 2 * 1.25 + phase)
             for peak in peaks {
                 let d = abs(t - peak.0)
                 if d < peak.2 {
-                    y -= peak.1 * (1 - d / peak.2)
+                    // Rounded, oval summit: a smooth bell instead of a
+                    // sharp spike, so the crags read as worn rock.
+                    let bell = cos((d / peak.2) * .pi * 0.5)
+                    y -= peak.1 * pow(bell, 1.35)
                 }
             }
-            let grain = Double(hash(x, 17, 380 + variant) - 50) / 100 * 1.4
-            top[x] = min(H - 6, max(7, Int((y + grain).rounded())))
+            let grain = Double(hash(x, 17, 380 + variant) - 50) / 100 * 1.6
+            top[x] = min(H - 4, max(6, Int((y + grain).rounded())))
         }
         return top
     }
@@ -2202,16 +2347,6 @@ enum TwilightRuinsBG {
                 }
                 if y >= H { break }
             }
-            if hash(x, 30, 400 + variant) < 20 {
-                let y0 = crest + 3 + hash(x, 31, 401 + variant) % 13
-                let h = 3 + hash(x, 32, 402 + variant) % 9
-                if y0 + h < H { fill(cg, x, y0, 1, h, bands[0]) }
-            }
-            if hash(x, 33, 403 + variant) < 10 {
-                let y0 = crest + 6 + hash(x, 34, 404 + variant) % 18
-                let h = 4 + hash(x, 35, 405 + variant) % 12
-                if y0 + h < H { fill(cg, x, y0, 1, h, bands[4]) }
-            }
         }
 
         let body = CGMutablePath()
@@ -2224,19 +2359,21 @@ enum TwilightRuinsBG {
         body.closeSubpath()
 
         var rng = SeededRNG(seed: UInt64(1210 + variant * 131))
-        let lit = UIColor(red: 0.62, green: 0.56, blue: 0.51, alpha: 0.55)
-        let dark = UIColor(red: 0.16, green: 0.15, blue: 0.18, alpha: 0.55)
+        let lit = UIColor(red: 0.66, green: 0.56, blue: 0.50, alpha: 0.40)
+        let dark = UIColor(red: 0.16, green: 0.13, blue: 0.18, alpha: 0.40)
 
         cg.saveGState()
         cg.addPath(body)
         cg.clip()
-        for i in 0..<72 {
+        // Scree fans under the crest: short slanted runs of rock, not
+        // vertical drips.
+        for i in 0..<46 {
             let x = rng.int(in: 0...(W - 1))
-            let y0 = top[x] + rng.int(in: 3...44)
+            let y0 = top[x] + rng.int(in: 4...26)
             guard y0 < H - 1 else { continue }
-            let len = rng.int(in: 3...13)
+            let len = rng.int(in: 4...11)
             let y1 = min(H - 1, y0 + len)
-            let x1 = max(0, min(W - 1, x + rng.int(in: -4...4)))
+            let x1 = max(0, min(W - 1, x + rng.int(in: -3...3)))
             pixelLine(cg, x0: x, y0: y0, x1: x1, y1: y1,
                       color: i % 3 == 0 ? lit : dark)
         }
@@ -2262,20 +2399,15 @@ enum TwilightRuinsBG {
         }
         cg.restoreGState()
 
-        let snowLine = [46, 40, 32][variant]
-        let snow = UIColor(red: 0.94, green: 0.94, blue: 0.92, alpha: 1)
-        let snowShade = UIColor(red: 0.72, green: 0.75, blue: 0.78, alpha: 1)
-        for x in 0..<W where top[x] < snowLine {
-            let depth = 1 + hash(x, 21, 390 + variant) % 3
-            fill(cg, x, top[x], 1, depth, snow)
-            if depth > 1 && top[x] + depth < H {
-                fill(cg, x, top[x] + depth, 1, 1, snowShade)
-            }
-        }
-
-        let rim = UIColor(red: 1.0, green: 0.78, blue: 0.50, alpha: 1)
+        // Sunrise rim: the same hot edge the far range carries, a bright
+        // line on the crest with a softer second row under it.
+        let rim = UIColor(red: 1.0, green: 0.74, blue: 0.44, alpha: 1)
+        let rimSoft = UIColor(red: 1.0, green: 0.60, blue: 0.34, alpha: 0.5)
         for x in 0..<W {
             fill(cg, x, top[x], 1, 1, rim)
+            if top[x] + 1 < H && hash(x, 40, 420 + variant) < 35 {
+                fill(cg, x, top[x] + 1, 1, 1, rimSoft)
+            }
         }
     }
 
@@ -2317,17 +2449,19 @@ enum TwilightRuinsBG {
         return tex
     }
 
-    /// Mid-layer for Granite Reach: stacked crags in warm haze, with thin
-    /// morning mist sliding between the teeth. Same sunrise light as L13.
+    /// Mid-layer for Granite Reach: the far range's peaks one step closer,
+    /// stacked in warm haze with thin morning mist sliding between them.
+    /// Same sunrise light as L13, and tall enough to cover the base of the
+    /// far sheet so the two layers read as one continuous massif.
     static func buildAlpineRidges(in layer: SKNode, sceneSize: CGSize) {
         let travel = Balance.levelWidth * Balance.parallaxMid
         let panoW: CGFloat = sceneSize.width + travel + 500
-        let panoH = sceneSize.height * 0.32
-        let baseY = -sceneSize.height * 0.22
+        let panoH = sceneSize.height * 0.38
+        let baseY = -sceneSize.height * 0.20
         let grades: [(lift: CGFloat, tint: UIColor, blend: CGFloat)] = [
-            (34, UIColor(red: 1.0, green: 0.76, blue: 0.52, alpha: 1), 0.38),
-            (12, UIColor(red: 0.62, green: 0.51, blue: 0.45, alpha: 1), 0.42),
-            (-12, UIColor(red: 0.24, green: 0.24, blue: 0.26, alpha: 1), 0.52),
+            (36, UIColor(red: 1.0, green: 0.76, blue: 0.52, alpha: 1), 0.34),
+            (12, UIColor(red: 0.66, green: 0.52, blue: 0.46, alpha: 1), 0.40),
+            (-12, UIColor(red: 0.30, green: 0.24, blue: 0.27, alpha: 1), 0.48),
         ]
         let baseX = -sceneSize.width * 0.6
         let ridgeFactors: [CGFloat] = [Balance.parallaxMid - 0.04,
@@ -2453,7 +2587,8 @@ enum TwilightRuinsBG {
         guard !bakes.isEmpty else { return }
 
         var rng = SeededRNG(seed: 747471)
-        for _ in 0..<22 {
+        let pineCount = max(4, Int((22 * Balance.pineDensity).rounded()))
+        for _ in 0..<pineCount {
             let x = rng.cgFloat(in: 0...span)
             let baked = bakes[rng.int(in: 0...(bakes.count - 1))]
             let pine = SceneryBake.addAtRoot(baked, to: layer,

@@ -236,11 +236,6 @@ struct GameView: View {
                         showMenu = false
                         popToMap()
                     }
-                    Text("TAP OUTSIDE TO RESUME")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .tracking(2)
-                        .foregroundStyle(.white.opacity(0.4))
-                        .padding(.top, 2)
                 }
                 .padding(.horizontal, 26)
                 .padding(.vertical, 24)
@@ -512,10 +507,6 @@ struct GameView: View {
                         SoundEngine.shared.uiTap()
                         closeUnitIntro()
                     }
-                    Text("TAP OUTSIDE TO RESUME")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .tracking(2)
-                        .foregroundStyle(.white.opacity(0.4))
                 }
                 .padding(.horizontal, 26)
                 .padding(.vertical, 22)
@@ -979,10 +970,6 @@ struct GameView: View {
                 UnitStatChip(label: "TOWER HP", value: "\(Int(Balance.enemyTowerHealth(forLevel: level.id)))")
                 UnitStatChip(label: "RANGE", value: "\(Int(Balance.towerRange))")
             }
-            Text("TAP OUTSIDE TO RESUME")
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .tracking(2)
-                .foregroundStyle(.white.opacity(0.4))
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 16)

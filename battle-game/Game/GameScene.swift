@@ -925,8 +925,8 @@ final class GameScene: SKScene {
         tower.node.muzzlePosition()
     }
 
-    /// Three blasts from the tower muzzle, fanned around the target
-    /// direction exactly like the main HQ. Bolt team matches the firing
+    /// Tower volley: one bolt on the early levels, a 3-bolt fan from Level
+    /// 10 on (per-level `towerFanCount`). Bolt team matches the firing
     /// tower so hits land on the right side.
     private func fireTowerBolt(from tower: Tower, to target: CGPoint) {
         let muzzle = towerMuzzle(for: tower)
@@ -935,7 +935,7 @@ final class GameScene: SKScene {
         baseDir = CGVector(dx: baseDir.dx / len, dy: baseDir.dy / len)
         SoundEngine.shared.towerFire(at: muzzle.x)
         let baseAngle = atan2(baseDir.dy, baseDir.dx)
-        let count = Balance.baseFanCount
+        let count = Balance.towerFanCount
         for k in 0..<count {
             // Symmetric fan: e.g. 3 bolts at -spread, 0, +spread.
             let offset = (CGFloat(k) - CGFloat(count - 1) / 2) * Balance.baseFanSpread
@@ -1059,6 +1059,13 @@ final class GameScene: SKScene {
                     if Balance.extraBruteSummons.contains(summonCount),
                        enemies.count < Balance.maxEnemies {
                         summonEnemy(from: bases[i], slot: slot, kind: .brute)
+                        slot += 1
+                    }
+                    // Level-specific bonus: an extra Mech walker rolls out
+                    // on top of this wave's normal batch.
+                    if Balance.extraMechSummons.contains(summonCount),
+                       enemies.count < Balance.maxEnemies {
+                        summonEnemy(from: bases[i], slot: slot, kind: .mech)
                         slot += 1
                     }
                     batch -= 1

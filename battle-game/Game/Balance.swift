@@ -106,6 +106,16 @@ enum Balance {
         /// Summon numbers (1-based) that get an EXTRA Brute on top of the
         /// normal gate batch. Empty = no bonus Brutes.
         var extraBruteSummons: [Int] = []
+        /// Summon numbers (1-based) that get an EXTRA Mech walker on top of
+        /// the normal gate batch. Empty = no bonus Mechs.
+        var extraMechSummons: [Int] = []
+        /// Pine density for the alpine levels: 1 = the standard stands
+        /// (far-range conifers, foreground pines, ground scrub), higher
+        /// values thicken the treeline.
+        var pineDensity: CGFloat = 1.0
+        /// Bolts per tower volley: 1 = single shot, 3 = the fanned volley
+        /// the towers switched to in Level 10.
+        var towerFanCount: Int = 1
 
         /// The enemy kinds this level can actually summon, in roster order.
         /// Briefings use this instead of campaign unlock levels, so a level
@@ -121,443 +131,6 @@ enum Balance {
             return kinds
         }
     }
-
-    /// Level 1: the original 5200pt Twilight lane, 2 towers per side.
-    private static let layout1 = LevelLayout(
-        width: 5200,
-        playerBaseX: 220,
-        playerTowerXs: [800, 1450],
-        enemyTowerXs: [3750, 4400],
-        enemyBaseX: 4980,
-        heroSpawnX: 420,
-        platforms: [],
-        theme: .twilight,
-        flags: false,
-        alienBirds: false,
-        lushFlora: false,
-        summonInterval: 8.0,
-        doubleChance: 0.0,
-        maxEnemies: 20,
-        bruteEvery: 0,
-        reaverEvery: 0,
-        skitterEvery: 0,
-        jetEvery: 0,
-        mechEvery: 0,
-        towerHP: 200,
-        baseHP: 500,
-        enemyHPScale: 1.0
-    )
-
-    /// Level 2 Rootwall Thicket: bigger 6800pt overgrown map, 3 towers per
-    /// side guarding each base, extra mid platforms, full dressing pack.
-    private static let layout2 = LevelLayout(
-        width: 6800,
-        playerBaseX: 220,
-        playerTowerXs: [800, 1500, 2200],
-        enemyTowerXs: [4600, 5300, 6000],
-        enemyBaseX: 6580,
-        heroSpawnX: 420,
-        platforms: [],
-        theme: .overgrown,
-        flags: true,
-        alienBirds: true,
-        lushFlora: true,
-        summonInterval: 7.0,
-        doubleChance: 0.45,
-        maxEnemies: 20,
-        bruteEvery: 0,
-        reaverEvery: 0,
-        skitterEvery: 0,
-        jetEvery: 0,
-        mechEvery: 0,
-        towerHP: 220,
-        baseHP: 550,
-        enemyHPScale: 1.0
-    )
-
-    /// Level 3 Thornwood Bastion: longest lane yet (7200pt), 3 towers per
-    /// side like Level 2 but shifted inward. Open fields, no platforms.
-    /// Timber-ember grade.
-    /// Easy-to-medium flow: steady raiders, occasional pairs, and every
-    /// 4th summon a Brute (first one ~25s in — easy start, medium punch).
-    private static let layout3 = LevelLayout(
-        width: 7200,
-        playerBaseX: 220,
-        playerTowerXs: [750, 1450, 2150],
-        enemyTowerXs: [5050, 5750, 6450],
-        enemyBaseX: 6980,
-        heroSpawnX: 420,
-        platforms: [],
-        theme: .bastion,
-        flags: true,
-        alienBirds: true,
-        lushFlora: true,
-        summonInterval: 6.0,
-        doubleChance: 0.35,
-        maxEnemies: 20,
-        bruteEvery: 4,
-        reaverEvery: 0,
-        skitterEvery: 0,
-        jetEvery: 0,
-        mechEvery: 0,
-        towerHP: 250,
-        baseHP: 600,
-        enemyHPScale: 1.0
-    )
-
-    /// Level 4 Dune Atoll: open 7400pt white-sand crossing, 3 towers per
-    /// side pushed wider apart. Open fields, no platforms.
-    /// Dawn grade (see .dawn). Hotter flow: raiders every 5.5s with frequent
-    /// pairs, a Reaver axe-rush every 3rd summon, and a Brute every 6th
-    /// (Brutes win the 6th-summon tie) — plus the Scatter unlock in hand.
-    private static let layout4 = LevelLayout(
-        width: 7400,
-        playerBaseX: 220,
-        playerTowerXs: [700, 1400, 2100],
-        enemyTowerXs: [5200, 5900, 6600],
-        enemyBaseX: 7180,
-        heroSpawnX: 420,
-        platforms: [],
-        theme: .dawn,
-        flags: true,
-        alienBirds: true,
-        lushFlora: false,
-        summonInterval: 5.5,
-        doubleChance: 0.40,
-        maxEnemies: 20,
-        bruteEvery: 6,
-        reaverEvery: 3,
-        skitterEvery: 0,
-        jetEvery: 0,
-        mechEvery: 0,
-        towerHP: 260,
-        baseHP: 650,
-        enemyHPScale: 1.0
-    )
-
-    /// Level 5 Sunscorch Expanse: longest lane yet (8000pt), 3 towers per
-    /// side spread wide, ZERO jumping platforms — open rolling fields with
-    /// very small dips and a gentle ascent mid-lane (visual swells only,
-    /// gameplay stays flat). High-noon grade: brightest sky so far.
-    /// Flow untouched for now (same summon line as Level 4); units + game
-    /// tuning lands next. Structure HP matches the LevelDef dossier.
-    private static let layout5 = LevelLayout(
-        width: 8000,
-        playerBaseX: 220,
-        playerTowerXs: [700, 1450, 2200],
-        enemyTowerXs: [5600, 6350, 7100],
-        enemyBaseX: 7780,
-        heroSpawnX: 420,
-        platforms: [],
-        theme: .sunscorch,
-        flags: true,
-        alienBirds: false,
-        lushFlora: false,
-        summonInterval: 5.5,
-        doubleChance: 0.40,
-        maxEnemies: 20,
-        bruteEvery: 6,
-        reaverEvery: 3,
-        skitterEvery: 0,
-        jetEvery: 0,
-        mechEvery: 0,
-        towerHP: 300,
-        baseHP: 700,
-        enemyHPScale: 1.05
-    )
-
-    /// Level 6 Sandhold Citadel: 8400pt desert-keep siege lane, 3 towers
-    /// per side. Open fields, no platforms. Burnt-orange
-    /// keep-dusk grade with shadow flyers circling far. Hotter flow:
-    /// pairs often, Reavers every 3rd, Skitter zerg-rush every 2nd, Brute
-    /// every 6th (Brutes then Reavers win ties). Enemy HP ×1.1025 (+5%
-    /// over Level 5, compounding). Structure HP matches the dossier.
-    private static let layout6 = LevelLayout(
-        width: 8400,
-        playerBaseX: 220,
-        playerTowerXs: [700, 1450, 2200],
-        enemyTowerXs: [6000, 6750, 7500],
-        enemyBaseX: 8180,
-        heroSpawnX: 420,
-        platforms: [],
-        theme: .sandhold,
-        flags: true,
-        alienBirds: false,
-        lushFlora: false,
-        summonInterval: 5.0,
-        doubleChance: 0.45,
-        maxEnemies: 20,
-        bruteEvery: 6,
-        reaverEvery: 3,
-        skitterEvery: 2,
-        jetEvery: 0,
-        mechEvery: 0,
-        towerHP: 320,
-        baseHP: 800,
-        enemyHPScale: 1.1025
-    )
-
-    /// Level 7 Sirocco Dunes: 8800pt desert siege lane, 3 towers
-    /// per side. Straight sand field like the other lanes; the dunes
-    /// live in the background art. Golden desert-day grade
-    /// with pixel ridge lines + drifting sand. Hotter flow: pairs often,
-    /// Reavers every 3rd, Skitters every 2nd, Brute every 6th (Brutes then
-    /// Reavers win ties). Enemy HP ×1.1576 (+5% over Level 6,
-    /// compounding). Structure HP matches the dossier.
-    private static let layout7 = LevelLayout(
-        width: 8800,
-        playerBaseX: 220,
-        playerTowerXs: [750, 1500, 2250],
-        enemyTowerXs: [6350, 7100, 7850],
-        enemyBaseX: 8580,
-        heroSpawnX: 420,
-        platforms: [],
-        theme: .dunesea,
-        flags: false,
-        alienBirds: false,
-        lushFlora: false,
-        summonInterval: 5.0,
-        doubleChance: 0.45,
-        maxEnemies: 20,
-        bruteEvery: 6,
-        reaverEvery: 3,
-        skitterEvery: 2,
-        jetEvery: 5,
-        mechEvery: 0,
-        towerHP: 350,
-        baseHP: 900,
-        enemyHPScale: 1.1576
-    )
-
-    /// Level 8 Oasis Waste: 9200pt desert-oasis siege lane, 3 towers
-    /// per side. Desert again but greener + ornamented: palm oases,
-    /// ruin arches and bone fields in the distance, crawling sand
-    /// creatures stalking the ridges. Straight sand field. Hotter flow:
-    /// pairs often, Reavers every 3rd, Jets every 5th, Skitters every
-    /// 2nd, Brute every 6th. Enemy HP ×1.2155 (+5% over Level 7,
-    /// compounding). Structure HP matches the dossier.
-    private static let layout8 = LevelLayout(
-        width: 9200,
-        playerBaseX: 220,
-        playerTowerXs: [750, 1500, 2250],
-        enemyTowerXs: [6650, 7400, 8150],
-        enemyBaseX: 8980,
-        heroSpawnX: 420,
-        platforms: [],
-        theme: .oasis,
-        flags: true,
-        alienBirds: false,
-        lushFlora: false,
-        summonInterval: 4.5,
-        doubleChance: 0.45,
-        maxEnemies: 20,
-        bruteEvery: 6,
-        reaverEvery: 3,
-        skitterEvery: 2,
-        jetEvery: 5,
-        mechEvery: 0,
-        towerHP: 400,
-        baseHP: 1000,
-        enemyHPScale: 1.2155
-    )
-
-    /// Level 9 Duskfall Flats: 9600pt desert at sundown, 3 towers per
-    /// side. The sun is going down — indigo sky, stars out, ember-lit
-    /// mesas, colder sand. Straight field. The heavy Mech walker
-    /// debuts here (every 4th summon: Brutes/Reavers win ties, then
-    /// the Mech, then Skitters/Jets). Enemy HP ×1.2763 (+5% over
-    /// Level 8, compounding). Structure HP matches the dossier.
-    private static let layout9 = LevelLayout(
-        width: 9600,
-        playerBaseX: 220,
-        playerTowerXs: [780, 1550, 2320],
-        enemyTowerXs: [7000, 7750, 8500],
-        enemyBaseX: 9380,
-        heroSpawnX: 420,
-        platforms: [],
-        theme: .duskdesert,
-        flags: true,
-        alienBirds: false,
-        lushFlora: false,
-        summonInterval: 4.5,
-        doubleChance: 0.45,
-        maxEnemies: 20,
-        bruteEvery: 6,
-        reaverEvery: 3,
-        skitterEvery: 2,
-        jetEvery: 5,
-        mechEvery: 4,
-        towerHP: 440,
-        baseHP: 1100,
-        enemyHPScale: 1.2763
-    )
-
-    /// Level 10 Moonveil Dunes: 10000pt desert under a cold moon, 3 towers
-    /// per side. Same straight sand field as the other dune lanes; the
-    /// night lives in the sky, ridge silhouettes and moonlit warm ground.
-    /// Flow holds Level 9's pressure, Mech walkers still every 4th
-    /// summon — but they now arrive as a pair, one beat apart, instead of
-    /// one at a time. Enemy HP ×1.3401 (+5% over Level 9, compounding).
-    /// Structure HP matches the dossier.
-    private static let layout10 = LevelLayout(
-        width: 10000,
-        playerBaseX: 220,
-        playerTowerXs: [820, 1620, 2420],
-        enemyTowerXs: [7350, 8150, 8950],
-        enemyBaseX: 9780,
-        heroSpawnX: 420,
-        platforms: [],
-        theme: .nightdesert,
-        flags: true,
-        alienBirds: false,
-        lushFlora: false,
-        summonInterval: 4.5,
-        doubleChance: 0.45,
-        maxEnemies: 20,
-        bruteEvery: 6,
-        reaverEvery: 3,
-        skitterEvery: 2,
-        jetEvery: 5,
-        mechEvery: 4,
-        mechPairSize: 2,
-        towerHP: 460,
-        baseHP: 1150,
-        enemyHPScale: 1.3401
-    )
-
-    /// Level 11 Sunforge Redoubt: 11600pt — the widest lane yet — and the
-    /// first with a 4th tower per side. Still the moonlit desert, but a
-    /// distant foundry burns on the horizon: warm chimney smoke, ember
-    /// drift and iron-slag dressing over the same sand. Flow steps up from
-    /// Level 10 (slightly faster summons, cap 22); Mech pairs continue.
-    /// Enemy HP ×1.4071 (+5% over Level 10, compounding).
-    /// Structure HP matches the dossier.
-    private static let layout11 = LevelLayout(
-        width: 11600,
-        playerBaseX: 220,
-        playerTowerXs: [820, 1620, 2420, 3220],
-        enemyTowerXs: [8150, 8950, 9750, 10550],
-        enemyBaseX: 11380,
-        heroSpawnX: 420,
-        platforms: [],
-        theme: .nightdesert,
-        flags: true,
-        alienBirds: false,
-        lushFlora: false,
-        summonInterval: 4.3,
-        doubleChance: 0.46,
-        maxEnemies: 22,
-        bruteEvery: 6,
-        reaverEvery: 3,
-        skitterEvery: 2,
-        jetEvery: 5,
-        mechEvery: 4,
-        mechPairSize: 2,
-        towerHP: 400,
-        baseHP: 1000,
-        enemyHPScale: 1.4071,
-        forgeNight: true
-    )
-
-    /// Level 12 Sirocco Canyon: 12200pt night desert — the widest lane so
-    /// far — with the same 4-tower line per side. The open dunes narrow
-    /// into a moonlit canyon: tall buttes and layered rock walls replace
-    /// the low ridgelines, and tumbled boulders litter the sand. Summons
-    /// are a touch hotter than Level 11 (cap 24); Mech pairs continue.
-    /// Enemy HP ×1.4775 (+5% over Level 11, compounding).
-    /// Structure HP matches the dossier.
-    private static let layout12 = LevelLayout(
-        width: 12200,
-        playerBaseX: 220,
-        playerTowerXs: [820, 1620, 2420, 3220],
-        enemyTowerXs: [8750, 9550, 10350, 11150],
-        enemyBaseX: 11980,
-        heroSpawnX: 420,
-        platforms: [],
-        theme: .nightdesert,
-        flags: true,
-        alienBirds: false,
-        lushFlora: false,
-        summonInterval: 4.1,
-        doubleChance: 0.48,
-        maxEnemies: 24,
-        bruteEvery: 6,
-        reaverEvery: 3,
-        skitterEvery: 2,
-        jetEvery: 5,
-        mechEvery: 4,
-        mechPairSize: 2,
-        towerHP: 420,
-        baseHP: 1060,
-        enemyHPScale: 1.4775,
-        canyonNight: true,
-        extraBruteSummons: [7, 13]
-    )
-
-    /// Level 13 Stonewatch Pass: 12600pt desert sunrise lane, 4 towers per
-    /// side. The dunes run east into a distant mountain wall; the sun is
-    /// just lifting over the range, washing the sand in warm morning light.
-    /// Unit roster leans on Brutes and Heli Gunships: no Reavers, a hot
-    /// Brute cadence, and Gunship flights every 5th summon.
-    private static let layout13 = LevelLayout(
-        width: 12600,
-        playerBaseX: 220,
-        playerTowerXs: [840, 1640, 2440, 3240],
-        enemyTowerXs: [8950, 9750, 10550, 11350],
-        enemyBaseX: 12380,
-        heroSpawnX: 420,
-        platforms: [],
-        theme: .sunrise,
-        flags: true,
-        alienBirds: false,
-        lushFlora: false,
-        summonInterval: 4.1,
-        doubleChance: 0.48,
-        maxEnemies: 24,
-        bruteEvery: 3,
-        reaverEvery: 0,
-        skitterEvery: 2,
-        jetEvery: 7,
-        mechEvery: 8,
-        heliEvery: 5,
-        mechPairSize: 2,
-        towerHP: 440,
-        baseHP: 1080,
-        enemyHPScale: 1.4775
-    )
-
-    /// Level 14 Granite Reach: 13200pt high-plateau lane, 4 towers per side.
-    /// Same warm sunrise and same distant range as Stonewatch, but the field
-    /// is bare rock: granite shelves, scree, alpine scrub and pine stands.
-    /// Brutes/Heli Gunships keep the pressure; Mech pairs continue and the
-    /// summon cadence is a touch hotter. Enemy HP ×1.5514 (+5% over L13).
-    private static let layout14 = LevelLayout(
-        width: 13200,
-        playerBaseX: 220,
-        playerTowerXs: [840, 1640, 2440, 3240],
-        enemyTowerXs: [9050, 9850, 10650, 11450],
-        enemyBaseX: 12980,
-        heroSpawnX: 420,
-        platforms: [],
-        theme: .sunrise,
-        flags: true,
-        alienBirds: false,
-        lushFlora: false,
-        summonInterval: 4.0,
-        doubleChance: 0.49,
-        maxEnemies: 24,
-        bruteEvery: 3,
-        reaverEvery: 0,
-        skitterEvery: 2,
-        jetEvery: 6,
-        mechEvery: 8,
-        heliEvery: 5,
-        mechPairSize: 2,
-        towerHP: 460,
-        baseHP: 1180,
-        enemyHPScale: 1.5514,
-        alpinePass: true
-    )
 
     /// Active battlefield. GameScene sets this from the level id before
     /// building (init + didMove). Defaults to Level 1 (menu previews etc.).
@@ -617,6 +190,7 @@ enum Balance {
         case 12: return layout12
         case 13: return layout13
         case 14: return layout14
+        case 15: return layout15
         default: return layout1
         }
     }
@@ -731,6 +305,11 @@ enum Balance {
     static var mechPairSize: Int { active.mechPairSize }
     static var mechPairDelay: Double { active.mechPairDelay }
     static var extraBruteSummons: [Int] { active.extraBruteSummons }
+    static var extraMechSummons: [Int] { active.extraMechSummons }
+    /// Multiplier for the alpine treeline (pines + scrub).
+    static var pineDensity: CGFloat { active.pineDensity }
+    /// Bolts per tower volley (1 early, 3 from Level 10 on).
+    static var towerFanCount: Int { active.towerFanCount }
     static let firstSummonDelay: Double = 5.0
     /// Raider (the classic marcher — Levels 1+). Base 40; Level 5+ scales
     /// via the layout's enemyHPScale (L5 = ×1.05, L6 = ×1.1025).
@@ -849,7 +428,7 @@ enum Balance {
     // MARK: - Player army (summoned from cards, marches toward the enemy base)
     // Army cap: the player can field this many units at once. The card
     // says FULL and the deploy toast explains it — never a silent no-op.
-    static let maxAllies: Int = 15
+    static let maxAllies: Int = 20
     static let trooperCost: Int = 100
     static let trooperHP: CGFloat = 60
     static let trooperSpeed: CGFloat = 150

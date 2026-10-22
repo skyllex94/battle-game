@@ -1306,8 +1306,9 @@ enum LevelDressing {
 
         var rng = DressingRNG(seed: 141416)
         var placed = 0
+        let scrubCount = max(8, Int((24 * Balance.pineDensity).rounded()))
         var guard_ = 0
-        while placed < 24, guard_ < 300 {
+        while placed < scrubCount, guard_ < 300 {
             guard_ += 1
             let x = rng.cgFloat(in: 50...(width - 50))
             guard isClear(x) else { continue }

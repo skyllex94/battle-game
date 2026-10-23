@@ -901,37 +901,6 @@ enum ProjectileFactory {
         }
     }
 
-    /// Immortal phase-disruptor round: a burning twin-layered orb — hot
-    /// pink core inside a wispy crimson shell, haloed and pulsing. Slow
-    /// but devastating: the scene detonates it on anything it touches.
-    static func makePhaseOrb() -> SKShapeNode {
-        return acquireShape("fx.pool.phaseOrb") {
-            let orb = SKShapeNode(circleOfRadius: 13)
-            orb.fillColor = SKColor(red: 1.0, green: 0.28, blue: 0.38, alpha: 0.28)
-            orb.strokeColor = SKColor(red: 1.0, green: 0.45, blue: 0.55, alpha: 0.85)
-            orb.lineWidth = 2
-            orb.zPosition = 15
-            // Halo: bigger, fainter, breathing behind the core.
-            let halo = SKShapeNode(circleOfRadius: 19)
-            halo.fillColor = SKColor(red: 1.0, green: 0.30, blue: 0.40, alpha: 0.14)
-            halo.strokeColor = SKColor(red: 1.0, green: 0.35, blue: 0.45, alpha: 0.40)
-            halo.lineWidth = 1.5
-            orb.addChild(halo)
-            halo.run(.repeatForever(.sequence([
-                .group([.scale(to: 1.25, duration: 0.30),
-                        .fadeIn(withDuration: 0.30)]),
-                .group([.scale(to: 1.0, duration: 0.30),
-                        .fadeOut(withDuration: 0.30)]),
-            ])))
-            // Hot core.
-            let core = SKShapeNode(circleOfRadius: 5.5)
-            core.fillColor = SKColor(red: 1.0, green: 0.65, blue: 0.75, alpha: 1)
-            core.strokeColor = .clear
-            orb.addChild(core)
-            return orb
-        }
-    }
-
     /// Immortal kill: a crimson phase flare — shockwave ring, twin plasma
     /// blooms, dark smoke, rising embers and heavy carapace debris.
     /// Self-removes (~1.8s).

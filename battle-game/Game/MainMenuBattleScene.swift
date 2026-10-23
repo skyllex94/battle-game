@@ -1,4 +1,5 @@
 import SpriteKit
+import UIKit
 
 /// Main-menu battlefield: a living pixel-art diorama behind the menu UI.
 ///
@@ -108,11 +109,15 @@ final class MainMenuBattleScene: SKScene {
         let tileH: CGFloat = 104 // 125x26 @4x
         let groundY = -size.height * 0.22
         // Desert levels dress the diorama lane in sand, not moss turf.
-        // Granite Reach uses its own alpine rock tile.
-        let sand = Balance.dunes
-        let sunrise = Balance.active.theme == .sunrise
-        let alpine = Balance.alpinePass
-        let lipColor = alpine
+        // Granite Reach uses its own alpine rock tile; the frozen approach
+        // uses the snow-lane tile with an icy lip.
+        let frost = Balance.iceField
+        let sand = !frost && Balance.dunes
+        let sunrise = !frost && Balance.active.theme == .sunrise
+        let alpine = !frost && Balance.alpinePass
+        let lipColor = frost
+            ? SKColor(red: 0.84, green: 0.95, blue: 1.0, alpha: 0.85)
+            : alpine
             ? SKColor(red: 1.0, green: 0.84, blue: 0.60, alpha: 0.8)
             : sunrise
             ? SKColor(red: 1.0, green: 0.84, blue: 0.56, alpha: 0.8)
@@ -122,7 +127,9 @@ final class MainMenuBattleScene: SKScene {
         var x: CGFloat = -laneW / 2
         var i = 0
         while x < laneW / 2 {
-            let tile = SKSpriteNode(texture: alpine
+            let tile = SKSpriteNode(texture: frost
+                ? FrostbiteBG.snowLaneTileTexture()
+                : alpine
                 ? TwilightRuinsBG.alpineTileTexture()
                 : sunrise
                 ? TwilightRuinsBG.sunriseSandTileTexture()
@@ -162,13 +169,39 @@ final class MainMenuBattleScene: SKScene {
         washR.position = CGPoint(x: 0, y: groundY)
         washR.zPosition = 2
         world.addChild(washR)
-        // Dark falloff below the lane.
-        let shade = SKSpriteNode(color: SKColor(white: 0, alpha: 0.5),
-                                 size: CGSize(width: laneW, height: 260))
-        shade.anchorPoint = CGPoint(x: 0.5, y: 1)
-        shade.position = CGPoint(x: 0, y: groundY - tileH)
-        shade.zPosition = 1
-        world.addChild(shade)
+        // Soft falloff below the lane: a gradient instead of a flat dark bar
+        // so bright themes (the frost levels especially) don't end in a hard
+        // black band under the diorama's snowfield.
+        let falloff = SKSpriteNode(texture: Self.falloffTexture())
+        falloff.anchorPoint = CGPoint(x: 0.5, y: 1)
+        falloff.position = CGPoint(x: 0, y: groundY - tileH + 1)
+        falloff.size = CGSize(width: laneW, height: size.height)
+        falloff.zPosition = 1
+        world.addChild(falloff)
+    }
+
+    /// Cached 2x128 vertical gradient: translucent at the lane's base,
+    /// deepening toward the bottom of the frame.
+    private static var falloffTexCache: SKTexture?
+    private static func falloffTexture() -> SKTexture {
+        if let falloffTexCache { return falloffTexCache }
+        let h = 128
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        let img = UIGraphicsImageRenderer(size: CGSize(width: 2, height: h), format: format)
+            .image { ctx in
+                let cg = ctx.cgContext
+                for y in 0..<h {
+                    let t = CGFloat(y) / CGFloat(h - 1)
+                    cg.setFillColor(UIColor(white: 0, alpha: 0.42 + t * 0.5).cgColor)
+                    cg.fill(CGRect(x: 0, y: y, width: 2, height: 1))
+                }
+            }
+        let tex = SKTexture(image: img)
+        tex.filteringMode = .linear
+        falloffTexCache = tex
+        return tex
     }
 
     // MARK: - Towers (the battlefield anchors)
@@ -393,6 +426,9 @@ final class MainMenuBattleScene: SKScene {
         let pan = sin(panTime * 0.12) * panAmplitude
         world.position.x = -pan
         midLayer.position.x = -pan * 0.35
+        // Let the mid sheets drift against each other (frost pastures /
+        // alpine ridges expose their own per-sheet factors).
+        TwilightRuinsBG.updateMidParallax(in: midLayer, camX: -pan)
         farLayer.position.x = -pan * 0.15
         foregroundLayer.position.x = -size.width * 0.7 - pan * 1.28
     }

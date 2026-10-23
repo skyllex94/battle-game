@@ -17,6 +17,17 @@ struct LevelDef: Identifiable, Codable {
 }
 
 struct CampaignData {
+    /// DEV playground pseudo-level (PLAYGROUND button on the briefing
+    /// screen). Never part of `levels`: no stars, no unlocks, no rewards.
+    static let playgroundDef = LevelDef(
+        id: 999,
+        name: "Playground",
+        subtitle: "Unit inspection range",
+        briefing: "DEV ONLY. A tiny range with one tower on each side; the gate releases one unit of the kind under inspection per wave. Remove when done.",
+        mapArtName: "MapBG",
+        enemyWaves: 0,
+        towerHP: 200,
+        baseHP: 200)
     /// The 35-region takeback of Emra, west → east: verdant woods (1-6),
     /// white sands and dune seas (7-12), mountain passes (13-20), ice
     /// (21-27), then the dark core (28-35). Castles punctuate the major
@@ -131,14 +142,34 @@ struct CampaignData {
 
     private static let unlockedKey = "campaign.unlockedLevel"
     private static let starsKeyPrefix = "campaign.stars.level."
+    private static let mapPanFracKey = "campaign.mapPanFraction"
+
+    /// DEBUG: unlock all campaign levels for testing.
+    static let debugUnlockAllLevels = true
 
     /// Highest level id the player may enter. Starts at 1.
     static var unlockedLevel: Int {
-        get { max(1, UserDefaults.standard.integer(forKey: unlockedKey) == 0 ? 1 : UserDefaults.standard.integer(forKey: unlockedKey)) }
+        get {
+            if debugUnlockAllLevels { return levels.count }
+            return max(1, UserDefaults.standard.integer(forKey: unlockedKey) == 0 ? 1 : UserDefaults.standard.integer(forKey: unlockedKey))
+        }
         set { UserDefaults.standard.set(min(newValue, levels.count), forKey: unlockedKey) }
     }
 
     static func isUnlocked(_ level: LevelDef) -> Bool { level.id <= unlockedLevel }
+
+    /// Last free-pan position of the campaign map, as a fraction of one
+    /// screen width (0 = west edge). nil = never browsed the map yet.
+    static var lastMapPanFraction: Double? {
+        get { UserDefaults.standard.object(forKey: mapPanFracKey) as? Double }
+        set {
+            if let v = newValue {
+                UserDefaults.standard.set(v, forKey: mapPanFracKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: mapPanFracKey)
+            }
+        }
+    }
 
     static func stars(for levelId: Int) -> Int {
         UserDefaults.standard.integer(forKey: starsKeyPrefix + String(levelId))
@@ -156,6 +187,7 @@ struct CampaignData {
         for level in levels {
             UserDefaults.standard.removeObject(forKey: starsKeyPrefix + String(level.id))
         }
+        lastMapPanFraction = nil
     }
 }
 

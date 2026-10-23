@@ -8,8 +8,11 @@ import SpriteKit
 /// bombs with splash damage.
 /// .tank = main-battle tank debuting in Level 17 — tracked, top-turret
 /// missile fired in a straight line.
+/// .gunship = dual-rotor attack helicopter debuting in Level 22 — the
+/// first flying army unit, larger tandem-rotor frame firing 3-round bursts.
 /// The Ranger is introduced in Level 2, the Heavy in Level 3,
-/// the Truck in Level 6, the Bombard in Level 11, the Tank in Level 17.
+/// the Truck in Level 6, the Bombard in Level 11, the Tank in Level 17,
+/// the Gunship in Level 22.
 enum ArmyKind: Int, CaseIterable, Identifiable {
     case trooper
     case heavy
@@ -17,14 +20,28 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
     case truck
     case bombard
     case tank
+    case gunship
 
     var id: Int { rawValue }
+
+    /// Flyers cruise at `flightHeight` above the ground instead of marching on it.
+    var isFlying: Bool { self == .gunship }
+
+    /// Cruise height above the ground surface for flying units (0 for marchers).
+    var flightHeight: CGFloat {
+        switch self {
+        case .gunship: return Balance.gunshipHoverHeight
+        default: return 0
+        }
+    }
 
     /// Campaign level that fields this unit (trooper from the start,
     /// ranger from Level 2's Rootwall Thicket briefing onward,
     /// heavy from Level 3's Thornwood Bastion briefing onward,
     /// truck from Level 6's Sandhold Citadel briefing onward,
-    /// bombard from Level 11's Sunforge Redoubt briefing onward).
+    /// bombard from Level 11's Sunforge Redoubt briefing onward,
+    /// tank from Level 17's Highridge Redoubt briefing onward,
+    /// gunship from Level 22's Whiteout Redoubt briefing onward).
     var unlockLevel: Int {
         switch self {
         case .trooper: return 1
@@ -33,6 +50,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .truck: return 6
         case .bombard: return 11
         case .tank: return 17
+        case .gunship: return 22
         }
     }
 
@@ -50,6 +68,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .truck: return "Truck"
         case .bombard: return "Bombard"
         case .tank: return "Tank"
+        case .gunship: return "Gunship"
         }
     }
 
@@ -61,6 +80,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .truck: return Balance.truckCost
         case .bombard: return Balance.bombardCost
         case .tank: return Balance.tankCost
+        case .gunship: return Balance.gunshipCost
         }
     }
 
@@ -73,6 +93,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .truck: return 10
         case .bombard: return 13
         case .tank: return 14
+        case .gunship: return 15
         }
     }
 
@@ -84,6 +105,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .truck: return Balance.truckHP
         case .bombard: return Balance.bombardHP
         case .tank: return Balance.tankHP
+        case .gunship: return Balance.gunshipHP
         }
     }
 
@@ -95,6 +117,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .truck: return Balance.truckSpeed
         case .bombard: return Balance.bombardSpeed
         case .tank: return Balance.tankSpeed
+        case .gunship: return Balance.gunshipSpeed
         }
     }
 
@@ -106,6 +129,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .truck: return Balance.truckDamage
         case .bombard: return Balance.bombardDamage
         case .tank: return Balance.tankDamage
+        case .gunship: return Balance.gunshipDamage
         }
     }
 
@@ -117,6 +141,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .truck: return Balance.truckFireCooldown
         case .bombard: return Balance.bombardFireCooldown
         case .tank: return Balance.tankFireCooldown
+        case .gunship: return Balance.gunshipFireCooldown
         }
     }
 
@@ -128,6 +153,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .truck: return Balance.truckRange
         case .bombard: return Balance.bombardRange
         case .tank: return Balance.tankRange
+        case .gunship: return Balance.gunshipRange
         }
     }
 
@@ -139,6 +165,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .truck: return Balance.truckSightRange
         case .bombard: return Balance.bombardSightRange
         case .tank: return Balance.tankSightRange
+        case .gunship: return Balance.gunshipSightRange
         }
     }
 
@@ -151,6 +178,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .truck: return "SIEGE"
         case .bombard: return "ARTILLERY"
         case .tank: return "ARMOR"
+        case .gunship: return "AIRBORNE"
         }
     }
 
@@ -158,6 +186,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
     /// vehicles, so a tank never hides the riflemen fighting beside it.
     var zTier: CGFloat {
         switch self {
+        case .gunship: return 9.8
         case .trooper, .ranger: return 9.6
         case .heavy, .truck, .bombard, .tank: return 8.2
         }
@@ -172,6 +201,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .truck: return "Olive gun-truck. Big wheels, long cannon."
         case .bombard: return "Mortar carrier. Slow, long lob, splash blast."
         case .tank: return "Battle tank. Tracked, straight-flying missile."
+        case .gunship: return "Dual-rotor gunship. High hover, 3-round gun bursts."
         }
     }
 
@@ -184,6 +214,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .truck: return "truck.box.fill"
         case .bombard: return "scope"
         case .tank: return "engine.combustion.fill"
+        case .gunship: return "airplane"
         }
     }
 
@@ -196,6 +227,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .truck: return .truck
         case .bombard: return .bombard
         case .tank: return .tank
+        case .gunship: return .gunship
         }
     }
 }
@@ -231,6 +263,8 @@ final class AllyNode: SKSpriteNode {
     var yBob: CGFloat = 0
     /// Driving-dust timer (trucks kick up dust while rolling).
     var dustTimer: TimeInterval = 0
+    /// Helicopter rotor-wash loop timer (seconds until next blade-slap phrase).
+    var rotorSoundTimer: TimeInterval = 0
     var facing: CGFloat { xScale >= 0 ? 1 : -1 }
     /// Set when the unit marches off-view after the enemy HQ falls.
     var marchedOff = false
@@ -247,6 +281,7 @@ final class AllyNode: SKSpriteNode {
         case .truck: size = CGSize(width: 132, height: 88)
         case .bombard: size = CGSize(width: 132, height: 88)
         case .tank: size = CGSize(width: 132, height: 88)
+        case .gunship: size = CGSize(width: 152, height: 80)
         }
         super.init(texture: nil, color: .clear, size: size)
         name = "ally"
@@ -311,10 +346,10 @@ final class AllyNode: SKSpriteNode {
         addChild(body)
 
         // Aimable gun-arm on the shoulder; the scene steers it via aimAt(_).
-        // Pixels match the body (same 32px-tall canvas scale).
+        // Pixels match the body's canvas scale.
         let armTex = UnitPixelArt.armTexture(for: kind.pixelKind)
         armTex.filteringMode = .nearest
-        let s = size.height / 32
+        let s = size.height / (frames.first?.size().height ?? 32)
         let arm = UnitPixelArt.armMetrics(for: kind.pixelKind)
         armSprite = SKSpriteNode(texture: armTex)
         armSprite.setScale(s)
@@ -324,6 +359,7 @@ final class AllyNode: SKSpriteNode {
             : kind == .bombard ? CGPoint(x: 0, y: 30)
             : kind == .truck ? CGPoint(x: 0, y: 29)
             : kind == .tank ? CGPoint(x: 3, y: 24)
+            : kind == .gunship ? CGPoint(x: 34, y: -22)
             : CGPoint(x: 6, y: 8)
         armPivot.addChild(armSprite)
         gunTip.position = CGPoint(x: CGFloat(arm.tipX - arm.gripX) * s,
@@ -347,20 +383,32 @@ final class AllyNode: SKSpriteNode {
 
     /// March cycle: swaps the 4 pixel stride frames + bob while advancing,
     /// and eases the gun-arm toward its target (levels out when idle).
-    /// Trucks barely rock (wheels sell the roll); walkers bob normally.
+    /// Trucks barely rock (wheels sell the roll); walkers bob normally;
+    /// the dual-rotor gunship spins its twin rotors continuously and pitches
+    /// its nose down into forward flight.
     /// Called by the scene.
     func animateMarch(dt: TimeInterval, advancing: Bool) {
-        if advancing {
-            marchPhase += dt * 10
+        if kind == .gunship {
+            marchPhase += dt * 20
             if frames.count == 4 {
                 bodySprite.texture = frames[Int(marchPhase) % 4]
             }
-        } else if frames.count == 4 {
-            bodySprite.texture = frames[0]
+            yBob = 0
+            let targetTilt: CGFloat = advancing ? -0.09 : 0
+            body.zRotation += (targetTilt - body.zRotation) * min(1, 8 * CGFloat(dt))
+        } else {
+            if advancing {
+                marchPhase += dt * 10
+                if frames.count == 4 {
+                    bodySprite.texture = frames[Int(marchPhase) % 4]
+                }
+            } else if frames.count == 4 {
+                bodySprite.texture = frames[0]
+            }
+            let wheeled = kind == .truck || kind == .bombard || kind == .tank
+            yBob = advancing ? sin(marchPhase) * (wheeled ? 0.8 : 2.5) : 0
+            body.zRotation = advancing ? sin(marchPhase) * (wheeled ? 0.008 : 0.03) : 0
         }
-        let wheeled = kind == .truck || kind == .bombard || kind == .tank
-        yBob = advancing ? sin(marchPhase) * (wheeled ? 0.8 : 2.5) : 0
-        body.zRotation = advancing ? sin(marchPhase) * (wheeled ? 0.008 : 0.03) : 0
         let target = desiredAim ?? 0
         aimAngle += (target - aimAngle) * min(1, 12 * dt)
         armPivot.zRotation = aimAngle
@@ -383,7 +431,7 @@ final class AllyNode: SKSpriteNode {
         // dark padded BG + thin light border + left-anchored fill that
         // drains from the right side only. Wide rides get a wider bar.
         let barW: CGFloat = kind == .heavy ? 52
-            : (kind == .truck || kind == .bombard || kind == .tank) ? 64 : 44
+            : (kind == .truck || kind == .bombard || kind == .tank || kind == .gunship) ? 64 : 44
         let barH: CGFloat = 7
         // Soft + sunk: more transparent than the structure bars, and pinned
         // deep behind so the hero always covers it when passing by units.

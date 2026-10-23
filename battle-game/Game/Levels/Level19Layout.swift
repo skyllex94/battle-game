@@ -30,7 +30,9 @@ extension Balance {
         maxEnemies: 32,
         bruteEvery: 3,
         reaverEvery: 0,
-        skitterEvery: 2,
+        /// No claw rushers on the summit: those gate slots now march out
+        /// rank-and-file raiders instead.
+        skitterEvery: 0,
         jetEvery: 11,
         mechEvery: 5,
         heliEvery: 4,

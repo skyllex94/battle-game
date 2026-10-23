@@ -15,6 +15,9 @@ struct LevelMapView: View {
     @State private var fullW: CGFloat = 800
     @State private var fullH: CGFloat = 400
     @State private var refresh = false // flips on appear: re-reads stars/unlocks
+    /// Set once: re-appear must never re-snap the camera (briefing back-outs
+    /// keep exactly where the player was browsing).
+    @State private var didSnapCamera = false
 
     /// Nearest page to the current pan (drives zone chip + dots).
     private var currentPage: Int {
@@ -30,6 +33,13 @@ struct LevelMapView: View {
         withAnimation(.easeInOut(duration: 0.45)) {
             panX = clampPan(CGFloat(min(EmraMap.pages - 1, max(0, p))) * fullW)
         }
+    }
+
+    /// Persist the camera spot (fraction of one screen width, so it
+    /// survives orientation changes and app relaunches).
+    private func savePan() {
+        guard fullW > 0 else { return }
+        CampaignData.lastMapPanFraction = Double(panX / fullW)
     }
 
     var body: some View {
@@ -65,16 +75,26 @@ struct LevelMapView: View {
                 .onAppear {
                     fullW = full.size.width
                     fullH = full.size.height
-                    // Open on the page holding the current objective.
-                    let page = min(EmraMap.pages - 1,
-                                   max(0, (CampaignData.unlockedLevel - 1) / 5))
-                    panX = clampPan(CGFloat(page) * fullW)
+                    // Land where the player last browsed — persisted across
+                    // sessions. First visit ever: the objective's page.
+                    if !didSnapCamera {
+                        didSnapCamera = true
+                        if let frac = CampaignData.lastMapPanFraction {
+                            panX = clampPan(CGFloat(frac) * fullW)
+                        } else {
+                            let page = min(EmraMap.pages - 1,
+                                           max(0, (CampaignData.unlockedLevel - 1) / 5))
+                            panX = clampPan(CGFloat(page) * fullW)
+                        }
+                    }
                 }
                 .onChange(of: full.size) { newSize in
                     fullW = newSize.width
                     fullH = newSize.height
                     panX = clampPan(panX)
+                    savePan()
                 }
+                .onChange(of: panX) { _ in savePan() }
             }
             .ignoresSafeArea(edges: .all)
 

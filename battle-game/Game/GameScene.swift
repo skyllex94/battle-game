@@ -324,6 +324,9 @@ final class GameScene: SKScene {
         if layout.lushFlora { LevelDressing.buildGlowFlora(in: world) }
         if Balance.alpinePass { LevelDressing.buildAlpinePass(in: world) }
         if Balance.ridgeRedoubt { LevelDressing.buildRidgeRedoubt(in: world) }
+        if Balance.whiteoutRedoubt { LevelDressing.buildWhiteoutRedoubt(in: world) }
+        if Balance.howlingCauseway { LevelDressing.buildHowlingCauseway(in: world) }
+        if Balance.rimewatchCrag { LevelDressing.buildRimewatchCrag(in: world) }
         if Balance.active.theme == .dawn { LevelDressing.buildDuneWash(in: world) }
         if Balance.active.theme == .sunscorch { LevelDressing.buildSunscorchField(in: world) }
         if Balance.active.theme == .sandhold { LevelDressing.buildSandholdKeep(in: world) }
@@ -400,8 +403,12 @@ final class GameScene: SKScene {
 
     /// Pixel-art HQ (see BaseNode): spawn gate + roof cannon + wide HP bar.
     /// Enemy muzzle is the cannon tip; fan shots originate there.
+    /// From Level 20 (`Balance.upgradedBaseLevel`) on, both teams field the
+    /// bigger Mk-II citadel HQ with a quad-missile rooftop battery.
     private func addBase(at x: CGFloat, team: Team) {
-        let base = BaseNode(team: team)
+        let base = BaseNode(team: team,
+                            upgraded: levelId != Balance.playgroundLevelId
+                                && levelId >= Balance.upgradedBaseLevel)
         base.position = CGPoint(x: x, y: Balance.groundY(at: x))
         world.addChild(base)
         let hp = Balance.baseHealth(for: team, levelId: levelId)
@@ -417,8 +424,11 @@ final class GameScene: SKScene {
     /// Pixel-art tower + turning turret head (see TowerNode).
     /// Muzzle is the barrel tip; shots originate there.
     private func addTower(at x: CGFloat, team: Team) {
-        // Mk-II tower shells from the refit roster tier on (both teams).
-        let tower = TowerNode(team: team, upgraded: levelId >= Balance.upgradedTowerLevel)
+        // Mk-II tower shells from the refit roster tier on (both teams);
+        // the DEV playground keeps the classic Mk-I turret.
+        let tower = TowerNode(team: team,
+                              upgraded: levelId != Balance.playgroundLevelId
+                                  && levelId >= Balance.upgradedTowerLevel)
         tower.position = CGPoint(x: x, y: Balance.groundY(at: x))
         world.addChild(tower)
         // Stagger first shots round-robin so the line doesn't volley
@@ -952,7 +962,7 @@ final class GameScene: SKScene {
         let len = max(1, hypot(baseDir.dx, baseDir.dy))
         baseDir = CGVector(dx: baseDir.dx / len, dy: baseDir.dy / len)
         let baseAngle = atan2(baseDir.dy, baseDir.dx)
-        if levelId >= Balance.upgradedTowerLevel {
+        if levelId != Balance.playgroundLevelId, levelId >= Balance.upgradedTowerLevel {
             SoundEngine.shared.missileLaunch(at: muzzle.x)
             let damage = tower.team == .enemy
                 ? Balance.towerDamage
@@ -1042,13 +1052,21 @@ final class GameScene: SKScene {
             // Summon marchers toward the player base, capped. Levels with a
             // doubleChance sometimes pop a PAIR out of the gate together.
             // Priority order on a shared summon number: Heli Gunship (heliEvery),
-            // then Brute (bruteEvery), Reaver (reaverEvery), Mech (mechEvery,
+            // then Shardwing divers (shardwingEvery, Level 24+), then Brute
+            // (bruteEvery), Reaver (reaverEvery), Mech (mechEvery,
             // only while none is alive), Skitter (skitterEvery), Jet (jetEvery).
             // The Immortal (immortalEvery, Level 19+) is a singleton like
             // the mech: it marches only while the last one stays dead.
             bases[i].summonTimer -= dt
             if bases[i].summonTimer <= 0 {
                 bases[i].summonTimer = Balance.summonInterval
+                // DEV playground: exactly one spawn of the unit under
+                // inspection per tick — no pairs, no elite cadence.
+                if Balance.playgroundMode {
+                    guard enemies.count < Balance.maxEnemies else { continue }
+                    summonEnemy(from: bases[i], slot: 0, kind: Balance.playgroundUnit)
+                    continue
+                }
                 var batch = 1
                 if Double.random(in: 0..<1) < Balance.summonDoubleChance { batch = 2 }
                 var slot = 0
@@ -1067,6 +1085,8 @@ final class GameScene: SKScene {
                         kind = .immortal
                     } else if Balance.heliEvery > 0, summonCount % Balance.heliEvery == 0 {
                         kind = .heli
+                    } else if Balance.shardwingEvery > 0, summonCount % Balance.shardwingEvery == 0 {
+                        kind = .shardwing
                     } else if Balance.bruteEvery > 0, summonCount % Balance.bruteEvery == 0 {
                         kind = .brute
                     } else if Balance.reaverEvery > 0, summonCount % Balance.reaverEvery == 0 {
@@ -1187,13 +1207,46 @@ final class GameScene: SKScene {
 
     /// 3 blasts from the same muzzle, spread out around the target direction.
     /// Bolt team matches the firing HQ so hits land on the right side.
+    /// Mk-II HQs (Level 20+ both teams) fire a 4-missile volley instead:
+    /// each missile rides a slight angle fan and weaves, like the Level 18
+    /// Mk-II tower refit.
     private func fireBaseFan(from base: Base, at target: CGPoint) {
         let muzzle = baseMuzzle(for: base)
         var baseDir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
         let len = max(1, hypot(baseDir.dx, baseDir.dy))
         baseDir = CGVector(dx: baseDir.dx / len, dy: baseDir.dy / len)
-        SoundEngine.shared.baseFire(at: muzzle.x)
         let baseAngle = atan2(baseDir.dy, baseDir.dx)
+        if levelId != Balance.playgroundLevelId, levelId >= Balance.upgradedBaseLevel {
+            SoundEngine.shared.missileLaunch(at: muzzle.x)
+            for k in 0..<Balance.baseMissileCount {
+                let a = baseAngle
+                    + (CGFloat(k) - CGFloat(Balance.baseMissileCount - 1) / 2)
+                    * Balance.baseMissileSpread
+                let dir = CGVector(dx: cos(a), dy: sin(a))
+                let missile = ProjectileFactory.makeMissile(team: base.team)
+                missile.position = muzzle
+                missile.zRotation = a
+                world.addChild(missile)
+                projectiles.append(Projectile(node: missile, dir: dir,
+                                              life: Balance.baseMissileLife,
+                                              speed: Balance.baseMissileSpeed,
+                                              damage: Balance.baseBoltDamage,
+                                              team: base.team,
+                                              weaveAmp: Balance.baseMissileWeaveAmp,
+                                              weaveFreq: Balance.baseMissileWeaveFreq,
+                                              weavePhase: Double(k) * 1.2,
+                                              weaveSteers: true,
+                                              contactBlast: 34,
+                                              trail: .smoke))
+            }
+            let flash = ProjectileFactory.makeMuzzleFlash()
+            flash.setScale(1.2)
+            flash.position = muzzle
+            world.addChild(flash)
+            base.node.fireFlash()
+            return
+        }
+        SoundEngine.shared.baseFire(at: muzzle.x)
         let count = Balance.baseFanCount
         for k in 0..<count {
             // Symmetric fan: e.g. 3 bolts at -spread, 0, +spread.
@@ -1243,12 +1296,12 @@ final class GameScene: SKScene {
 
     // MARK: - Summoned enemies: advance, stop at range, shoot bolts
     /// Rest height for a marcher: deck level for walkers, per-kind cruise
-    /// altitude (+ dodge-juke offset + hover sway) for flyers.
+    /// altitude (+ dodge-juke offset + dive offset + hover sway) for flyers.
     private func enemyRestY(_ e: EnemyNode) -> CGFloat {
         let deck = Balance.groundY(at: e.position.x)
         guard e.kind.isFlying else { return deck + e.size.height / 2 }
         let sway = 4 * sin(sceneTime * 2.5 + e.position.x * 0.05)
-        return deck + e.kind.flightHeight + e.jukeOffset + sway
+        return deck + e.kind.flightHeight + e.jukeOffset + e.diveOffset + sway
     }
 
     /// Jet dodge AI: counts incoming player/hero shots; every 5th bullet
@@ -1327,6 +1380,7 @@ final class GameScene: SKScene {
                 }
             }
             for a in allies where a.alive {
+                if e.kind.isMelee && a.kind.isFlying { continue }
                 let d = hypot(a.position.x - e.position.x, a.position.y - e.position.y)
                 if d < bestDist {
                     bestDist = d
@@ -1349,6 +1403,11 @@ final class GameScene: SKScene {
                 // until out of the camera view, then leave the field.
                 if playerBase?.alive == false {
                     e.face(-1)
+                    if e.kind == .shardwing {
+                        // No victory dives: abort the run, drift back to cruise.
+                        e.diving = false
+                        e.diveOffset += (0 - e.diveOffset) * min(1, 3 * CGFloat(dt))
+                    }
                     e.position.x = max(40, e.position.x - e.moveSpeed * CGFloat(dt))
                     e.animateMarch(dt: dt, advancing: true)
                     e.position.y = enemyRestY(e) + e.yBob
@@ -1360,6 +1419,11 @@ final class GameScene: SKScene {
                     continue
                 }
                 e.animateMarch(dt: dt, advancing: false)
+                if e.kind == .shardwing {
+                    // Nothing to dive at: abort the run, drift back to cruise.
+                    e.diving = false
+                    e.diveOffset += (0 - e.diveOffset) * min(1, 3 * CGFloat(dt))
+                }
                 e.position.y = enemyRestY(e)
                 continue
             }
@@ -1367,6 +1431,12 @@ final class GameScene: SKScene {
             let dist = hypot(aim.x - e.position.x, aim.y - e.position.y)
             e.face(aim.x - e.position.x)
             e.aimAt(CGVector(dx: aim.x - e.position.x, dy: aim.y - e.position.y))
+            // Shardwings never stop-and-shoot: they strafe (see below).
+            if e.kind == .shardwing {
+                updateShardwing(e, dt: dt, target: aim, dist: dist)
+                e.position.y = enemyRestY(e) + e.yBob
+                continue
+            }
             // Melee fighters range on the ground line (horizontal gap): their
             // tower/HQ aim points float 100pt up, and the diagonal would let
             // them push inside structures without ever swinging. Shooters
@@ -1417,7 +1487,7 @@ final class GameScene: SKScene {
                     } else if e.kind == .missileTruck {
                         fireMissile(from: e, to: aim)
                     } else if e.kind == .immortal {
-                        fireImmortalOrbs(from: e, to: aim)
+                        fireImmortalShellRound(from: e, to: aim)
                     } else {
                         fireEnemyBolt(from: e, to: aim)
                     }
@@ -1531,36 +1601,27 @@ final class GameScene: SKScene {
         world.addChild(flash)
     }
 
-    /// Immortal twin-disruptor salvo: one orb leaves the rail cannon,
-    /// then a second follows it down the same line a beat later — the
-    /// walker uses its two arm guns back to back instead of bursting at
-    /// once. Slow, devastating rounds; dodge between them.
-    private func fireImmortalOrbs(from e: EnemyNode, to target: CGPoint) {
-        fireImmortalOrbRound(from: e, to: target)
-        DispatchQueue.main.asyncAfter(deadline: .now() + Balance.immortalBurstGap) {
-            [weak self] in
-            guard let self, e.alive else { return }
-            self.fireImmortalOrbRound(from: e, to: target)
-        }
-    }
-
-    /// One disruptor round from the walker's arm guns.
-    private func fireImmortalOrbRound(from e: EnemyNode, to target: CGPoint) {
+    /// Immortal cannon: a Bombard mortar shell fired flat and fast. Unlike
+    /// the Bombard's lobbed round it flies dead straight, then blasts like
+    /// a mortar on impact.
+    private func fireImmortalShellRound(from e: EnemyNode, to target: CGPoint) {
         let muzzle = e.muzzle()
         var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
         let len = max(1, hypot(dir.dx, dir.dy))
         dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
         SoundEngine.shared.missileLaunch(at: muzzle.x)
         SoundEngine.shared.enemyFire(at: muzzle.x)
-        let orb = ProjectileFactory.makePhaseOrb()
-        orb.position = muzzle
-        world.addChild(orb)
-        projectiles.append(Projectile(node: orb, dir: dir,
-                                      life: Balance.immortalOrbLife,
-                                      speed: Balance.immortalOrbSpeed,
+        let shell = ProjectileFactory.makeMortarBomb()
+        shell.position = muzzle
+        shell.zRotation = atan2(dir.dy, dir.dx)
+        shell.setScale(1.05)
+        world.addChild(shell)
+        projectiles.append(Projectile(node: shell, dir: dir,
+                                      life: Balance.immortalShellLife,
+                                      speed: Balance.immortalShellSpeed,
                                       damage: e.boltDamage, team: .enemy,
-                                      contactBlast: Balance.immortalOrbBlast,
-                                      trail: .ember))
+                                      contactBlast: Balance.immortalShellBlast,
+                                      trail: .smoke))
         let flash = ProjectileFactory.makeMuzzleFlash()
         flash.setScale(1.4)
         flash.position = muzzle
@@ -1666,6 +1727,82 @@ final class GameScene: SKScene {
         world.addChild(flash)
     }
 
+    /// Shardwing strafe runs: the ice dart cruises high and fast, then —
+    /// once a victim is inside dive range and the dive timer has reset —
+    /// drops screaming to the deck, rushes the line at dive speed, and
+    /// unloads a twin-bolt burst the moment it is low and inside its
+    /// short reach. Then it climbs straight back to cruise. A pass that
+    /// overshoots its mark with no shot aborts and resets on a short
+    /// timer instead of circling forever.
+    private func updateShardwing(_ e: EnemyNode, dt: TimeInterval, target: CGPoint, dist: CGFloat) {
+        e.diveCooldown = max(0, e.diveCooldown - dt)
+        let drop = Balance.shardwingCruiseHeight - Balance.shardwingDiveHeight
+        let dir: CGFloat = target.x > e.position.x ? 1 : -1
+        if e.diving {
+            let pace = e.moveSpeed * Balance.shardwingDiveSpeed
+            e.position.x = max(40, e.position.x + dir * pace * CGFloat(dt))
+            e.diveOffset += (-drop - e.diveOffset) * min(1, 5 * CGFloat(dt))
+            e.animateMarch(dt: dt, advancing: true)
+            // Low + inside the short reach: loose the twin burst, climb out.
+            if e.diveOffset <= -drop * 0.85, dist <= e.shootRange, e.fireCooldown <= 0 {
+                e.fireCooldown = e.fireInterval
+                fireShardwingBurst(from: e, to: target)
+                e.diving = false
+                e.diveCooldown = Balance.shardwingDiveCooldown
+            } else if (dir < 0 && e.position.x < target.x - 160)
+                        || (dir > 0 && e.position.x > target.x + 160) {
+                // Overshot the mark with no shot: abort the pass.
+                e.diving = false
+                e.diveCooldown = 2.0
+            }
+        } else {
+            e.position.x = max(40, e.position.x + dir * e.moveSpeed * CGFloat(dt))
+            e.diveOffset += (0 - e.diveOffset) * min(1, 3 * CGFloat(dt))
+            e.animateMarch(dt: dt, advancing: true)
+            if dist < Balance.shardwingDiveRange, e.diveCooldown <= 0 {
+                e.diving = true
+            }
+        }
+    }
+
+    /// Shardwing attack run: a twin-bolt snap-shot from the shard lance,
+    /// loosed only at the bottom of a dive. Fast tracers, so the pass
+    /// punishes a static line but gives a moving hero a dodge window.
+    private func fireShardwingBurst(from e: EnemyNode, to target: CGPoint) {
+        for r in 0..<Balance.shardwingBurstCount {
+            let delay = Double(r) * Balance.shardwingBurstGap
+            if delay == 0 {
+                fireShardwingRound(from: e, to: target)
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    guard let self, e.alive else { return }
+                    self.fireShardwingRound(from: e, to: target)
+                }
+            }
+        }
+    }
+
+    /// One dive-round: a slim high-velocity ice tracer + muzzle flash.
+    private func fireShardwingRound(from e: EnemyNode, to target: CGPoint) {
+        let muzzle = e.muzzle()
+        var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
+        let len = max(1, hypot(dir.dx, dir.dy))
+        dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
+        SoundEngine.shared.enemyFire(at: muzzle.x)
+        let bolt = ProjectileFactory.makeTowerBolt(team: .enemy)
+        bolt.setScale(0.85)
+        bolt.position = muzzle
+        bolt.zRotation = atan2(dir.dy, dir.dx)
+        world.addChild(bolt)
+        projectiles.append(Projectile(node: bolt, dir: dir, life: Balance.enemyBoltLife,
+                                      speed: Balance.shardwingBoltSpeed, damage: e.boltDamage,
+                                      team: .enemy))
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.setScale(0.75)
+        flash.position = muzzle
+        world.addChild(flash)
+    }
+
     // MARK: - Player army: summon + march toward the enemy base
     /// Called by the SwiftUI cards. Returns false when broke, capped,
     /// or the unit isn't fielded on this level yet (Ranger = Level 2+,
@@ -1685,8 +1822,10 @@ final class GameScene: SKScene {
         // slots (no army cap) so a big deployment spreads out of the gate.
         let offset = CGFloat(allies.count % 6) * 50
         let ax = Balance.playerBaseX + 120 + offset
-        a.position = CGPoint(x: ax,
-                             y: Balance.groundY(at: ax) + a.size.height / 2)
+        let restY = kind.isFlying
+            ? Balance.groundY(at: ax) + kind.flightHeight
+            : Balance.groundY(at: ax) + a.size.height / 2
+        a.position = CGPoint(x: ax, y: restY)
         world.addChild(a)
         allies.append(a)
         homeBase.node.spawnPulse()
@@ -1697,10 +1836,31 @@ final class GameScene: SKScene {
         return true
     }
 
+    /// Rest height for a player unit: deck level for ground units, cruise
+    /// altitude (+ gentle hover sway) for the dual-rotor gunship.
+    private func allyRestY(_ a: AllyNode) -> CGFloat {
+        let deck = Balance.groundY(at: a.position.x)
+        guard a.kind.isFlying else { return deck + a.size.height / 2 }
+        let sway = 4 * sin(sceneTime * 2.5 + a.position.x * 0.05)
+        return deck + a.kind.flightHeight + sway
+    }
+
+    /// Friendly gunship rotor wash: retriggers the positional blade-slap loop.
+    private func updateAllyHeliFlight(_ a: AllyNode, dt: TimeInterval) {
+        a.rotorSoundTimer -= dt
+        if a.rotorSoundTimer <= 0 {
+            a.rotorSoundTimer = 2.25
+            SoundEngine.shared.heliRotor(at: a.position.x)
+        }
+    }
+
     private func updateAllies(dt: TimeInterval) {        let enemyBase = bases.first(where: { $0.team == .enemy })
         for a in allies {
             guard a.alive else { continue }
             a.fireCooldown -= dt
+            if a.kind == .gunship {
+                updateAllyHeliFlight(a, dt: dt)
+            }
 
             // Target priority: nearest enemy marcher in sight > enemy tower
             // > enemy base. Marches right toward the enemy base.
@@ -1731,7 +1891,7 @@ final class GameScene: SKScene {
                                        a.position.x + a.kind.speed * CGFloat(dt))
                     a.animateMarch(dt: dt, advancing: true)
                     truckDust(a, dt: dt)
-                    a.position.y = Balance.groundY(at: a.position.x) + a.size.height / 2 + a.yBob
+                    a.position.y = allyRestY(a) + a.yBob
                     if !cameraSpan(margin: 80).contains(a.position.x)
                         || a.position.x >= Balance.levelWidth - 50 {
                         a.marchedOff = true
@@ -1740,7 +1900,7 @@ final class GameScene: SKScene {
                     continue
                 }
                 a.animateMarch(dt: dt, advancing: false)
-                a.position.y = Balance.groundY(at: a.position.x) + a.size.height / 2
+                a.position.y = allyRestY(a)
                 continue
             }
 
@@ -1761,6 +1921,8 @@ final class GameScene: SKScene {
                         fireAllyBomb(from: a, to: aim)
                     } else if a.kind == .tank {
                         fireAllyTankMissile(from: a, to: aim)
+                    } else if a.kind == .gunship {
+                        fireAllyGunshipBurst(from: a, to: aim)
                     } else {
                         fireAllyBolt(from: a, to: aim)
                         if a.kind == .truck {
@@ -1773,7 +1935,7 @@ final class GameScene: SKScene {
                     }
                 }
             }
-            a.position.y = Balance.groundY(at: a.position.x) + a.size.height / 2 + a.yBob
+            a.position.y = allyRestY(a) + a.yBob
         }
         allies.removeAll { !$0.alive || $0.marchedOff }
     }
@@ -1877,6 +2039,43 @@ final class GameScene: SKScene {
         world.addChild(flash)
     }
 
+    /// Dual-rotor gunship burst: a tight three-round chatter from the chin
+    /// rotary cannon aimed at the enemy target.
+    private func fireAllyGunshipBurst(from a: AllyNode, to target: CGPoint) {
+        for r in 0..<Balance.gunshipBurstCount {
+            let delay = Double(r) * Balance.gunshipBurstGap
+            if delay == 0 {
+                fireAllyGunshipRound(from: a, to: target)
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    guard let self, a.alive else { return }
+                    self.fireAllyGunshipRound(from: a, to: target)
+                }
+            }
+        }
+    }
+
+    /// One friendly gunship round: a high-velocity blue tracer + muzzle flash.
+    private func fireAllyGunshipRound(from a: AllyNode, to target: CGPoint) {
+        let muzzle = a.muzzle()
+        var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
+        let len = max(1, hypot(dir.dx, dir.dy))
+        dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
+        SoundEngine.shared.allyFire(at: muzzle.x)
+        let bolt = ProjectileFactory.makeTowerBolt(team: .player)
+        bolt.setScale(0.95)
+        bolt.position = muzzle
+        bolt.zRotation = atan2(dir.dy, dir.dx)
+        world.addChild(bolt)
+        projectiles.append(Projectile(node: bolt, dir: dir, life: Balance.enemyBoltLife,
+                                      speed: Balance.gunshipBoltSpeed, damage: a.kind.damage,
+                                      team: .player))
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.setScale(0.85)
+        flash.position = muzzle
+        world.addChild(flash)
+    }
+
     /// Enemy-bolt vs player army. Returns true when it struck an ally.
     private func hitAlly(at pt: CGPoint, amount: CGFloat) -> Bool {
         for a in allies where a.alive {
@@ -1896,7 +2095,12 @@ final class GameScene: SKScene {
         a.hp = max(0, a.hp - amount)
         a.refreshHPBar()
         if !a.alive {
-            if a.kind == .truck || a.kind == .bombard || a.kind == .tank {
+            if a.kind.isFlying {
+                // Aircraft down: mid-air fireball + falling wreck.
+                let boom = ProjectileFactory.makeJetExplosion()
+                boom.position = a.position
+                world.addChild(boom)
+            } else if a.kind == .truck || a.kind == .bombard || a.kind == .tank {
                 // Armor kill: full vehicle explosion (flash + fire + smoke
                 // + debris + sparks) instead of the trooper puff.
                 let boom = ProjectileFactory.makeTruckExplosion()
@@ -1939,12 +2143,15 @@ final class GameScene: SKScene {
         }
     }
 
-    /// Point-in-base test for one team's alive bases. HQ is ~267 wide, 210 tall.
+    /// Point-in-base test for one team's alive bases. HQ is ~267 wide, 210 tall
+    /// (Mk-II HQ at Level 20+ is ~325 wide, 258 tall).
     private func baseIndex(at pt: CGPoint, team: Team) -> Int? {
         for (i, b) in bases.enumerated() where b.team == team && b.alive {
+            let halfW: CGFloat = b.node.upgraded ? 160 : 130
+            let topH: CGFloat = b.node.upgraded ? 265 : 220
             let dx = abs(pt.x - b.node.position.x)
-            let inX = dx < 130
-            let inY = pt.y >= Balance.groundTopY && pt.y <= Balance.groundTopY + 220
+            let inX = dx < halfW
+            let inY = pt.y >= Balance.groundTopY && pt.y <= Balance.groundTopY + topH
             if inX && inY { return i }
         }
         return nil

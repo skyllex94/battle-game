@@ -1767,4 +1767,644 @@ enum LevelDressing {
         cloth.addChild(pip)
         return root
     }
+
+    // MARK: - Whiteout Redoubt (Level 22): the fort's frozen siege ground
+
+    /// Small pixel-art whispers frozen into the snow field: half-buried
+    /// supply crates + barrels with white caps, wind-carved drifts lying
+    /// along the lane, glinting rime-shard clusters, and the garrison's
+    /// wind-sheltered braziers burning against the whiteout. Sparse by
+    /// design — the lane stays readable for the fight.
+    static func buildWhiteoutRedoubt(in world: SKNode) {
+        let gy = Balance.groundTopY
+        let width = Balance.levelWidth
+        var rng = DressingRNG(seed: 222_022)
+
+        // Wind-carved drifts: long soft mounds lying along the lane,
+        // lit along the windward top, shaded on the lee side. Static.
+        var placed = 0, guard_ = 0
+        while placed < 9, guard_ < 200 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 90...(width - 90))
+            guard isClear(x, margin: 150) else { continue }
+            let w = rng.cgFloat(in: 120...240)
+            let h = rng.cgFloat(in: 9...18)
+            let drift = SKShapeNode(ellipseOf: CGSize(width: w, height: h * 2))
+            drift.fillColor = SKColor(red: 0.93, green: 0.96, blue: 1.0, alpha: 0.9)
+            drift.strokeColor = SKColor(red: 0.72, green: 0.84, blue: 0.97, alpha: 0.6)
+            drift.lineWidth = 1
+            drift.position = CGPoint(x: x, y: gy + 2)
+            drift.zPosition = 1
+            world.addChild(drift)
+            // Windward crest highlight.
+            let crest = SKSpriteNode(
+                color: SKColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 0.85),
+                size: CGSize(width: w * 0.7, height: 3))
+            crest.position = CGPoint(x: x - w * 0.1, y: gy + h * 0.6)
+            crest.zPosition = 2
+            world.addChild(crest)
+            // Contact shadow on the lee side.
+            let lee = SKSpriteNode(
+                color: SKColor(red: 0.55, green: 0.68, blue: 0.85, alpha: 0.35),
+                size: CGSize(width: w * 0.8, height: 2))
+            lee.position = CGPoint(x: x + w * 0.08, y: gy + 3)
+            lee.zPosition = 2
+            world.addChild(lee)
+            placed += 1
+        }
+
+        // Supply crate stacks: tidy pyramids — 2 on the bottom, 1 on top.
+        // No tilt, no random sizes: clean pixel boxes with snow caps.
+        placed = 0; guard_ = 0
+        while placed < 4, guard_ < 200 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 140...(width - 140))
+            guard isClear(x, margin: 190) else { continue }
+            let pile = SKNode()
+            pile.position = CGPoint(x: x, y: gy)
+            pile.zPosition = 3
+            world.addChild(pile)
+            // Soft contact shadow grounding the stack.
+            let shadow = SKShapeNode(ellipseOf: CGSize(width: 84, height: 10))
+            shadow.fillColor = SKColor(white: 0, alpha: 0.25)
+            shadow.strokeColor = .clear
+            shadow.position = CGPoint(x: 0, y: 2)
+            pile.addChild(shadow)
+
+            let cw: CGFloat = 26
+            let ch: CGFloat = 20
+            addWhiteoutCrate(to: pile, size: CGSize(width: cw, height: ch),
+                             at: CGPoint(x: -cw / 2, y: 0))
+            addWhiteoutCrate(to: pile, size: CGSize(width: cw, height: ch),
+                             at: CGPoint(x: cw / 2, y: 0))
+            addWhiteoutCrate(to: pile, size: CGSize(width: cw, height: ch),
+                             at: CGPoint(x: 0, y: ch))
+            placed += 1
+        }
+
+        // Rime-shard clusters: thin ice blades with twinkling glints.
+        placed = 0; guard_ = 0
+        while placed < 6, guard_ < 200 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 70...(width - 70))
+            guard isClear(x) else { continue }
+            let cluster = SKNode()
+            cluster.position = CGPoint(x: x, y: gy + 2)
+            cluster.zPosition = 3
+            world.addChild(cluster)
+            let shards = rng.int(in: 3...5)
+            for s in 0..<shards {
+                let h = rng.cgFloat(in: 10...26)
+                let path = CGMutablePath()
+                path.move(to: CGPoint(x: -3, y: 0))
+                path.addLine(to: CGPoint(x: -1, y: h))
+                path.addLine(to: CGPoint(x: 1, y: h))
+                path.addLine(to: CGPoint(x: 3, y: 0))
+                path.closeSubpath()
+                let shard = SKShapeNode(path: path)
+                shard.fillColor = SKColor(red: 0.62, green: 0.80, blue: 0.96, alpha: 0.85)
+                shard.strokeColor = SKColor(red: 0.92, green: 0.97, blue: 1.0, alpha: 0.8)
+                shard.lineWidth = 1
+                shard.position = CGPoint(x: CGFloat(s) * 7 - CGFloat(shards) * 3.5, y: 0)
+                shard.zRotation = rng.cgFloat(in: -0.3...0.3)
+                cluster.addChild(shard)
+            }
+            // One twinkling glint at the tallest shard's tip.
+            let glint = SKSpriteNode(color: SKColor(red: 1, green: 1, blue: 1, alpha: 0.95),
+                                     size: CGSize(width: 3, height: 3))
+            glint.position = CGPoint(x: CGFloat(shards) * 7 - CGFloat(shards) * 3.5 - 3.5 + rng.cgFloat(in: -2...2),
+                                     y: 24)
+            cluster.addChild(glint)
+            glint.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.15, duration: rng.double(in: 1.0...2.0)),
+                .fadeAlpha(to: 0.95, duration: rng.double(in: 1.0...2.0)),
+            ])))
+            placed += 1
+        }
+
+        // Garrison braziers: iron bowls with a live ember, snow apron
+        // melted around the base — the fort's fight against the whiteout.
+        placed = 0; guard_ = 0
+        while placed < 3, guard_ < 160 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 150...(width - 150))
+            guard isClear(x, margin: 200) else { continue }
+            let brazier = SKNode()
+            brazier.position = CGPoint(x: x, y: gy)
+            brazier.zPosition = 3
+            world.addChild(brazier)
+            // Melted snow apron underfoot.
+            let apron = SKShapeNode(ellipseOf: CGSize(width: 46, height: 10))
+            apron.fillColor = SKColor(red: 0.55, green: 0.70, blue: 0.88, alpha: 0.5)
+            apron.strokeColor = .clear
+            apron.position = CGPoint(x: 0, y: 1)
+            brazier.addChild(apron)
+            let iron = SKColor(red: 0.18, green: 0.15, blue: 0.15, alpha: 1)
+            for leg in 0..<3 {
+                let a = CGFloat(leg) * 2.1
+                let legNode = SKSpriteNode(color: iron, size: CGSize(width: 4, height: 32))
+                legNode.anchorPoint = CGPoint(x: 0.5, y: 0)
+                legNode.position = CGPoint(x: cos(a) * 7, y: 0)
+                legNode.zRotation = -sin(a) * 0.18
+                brazier.addChild(legNode)
+            }
+            let bowl = SKSpriteNode(color: iron, size: CGSize(width: 24, height: 10))
+            bowl.position = CGPoint(x: 0, y: 32)
+            brazier.addChild(bowl)
+            let fire = SKShapeNode(circleOfRadius: 8)
+            fire.fillColor = SKColor(red: 1.0, green: 0.52, blue: 0.16, alpha: 0.95)
+            fire.strokeColor = .clear
+            fire.position = CGPoint(x: 0, y: 39)
+            brazier.addChild(fire)
+            let halo = SKShapeNode(ellipseOf: CGSize(width: 60, height: 34))
+            halo.fillColor = SKColor(red: 1.0, green: 0.48, blue: 0.14, alpha: 0.15)
+            halo.strokeColor = .clear
+            halo.position = fire.position
+            brazier.addChild(halo)
+            halo.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.4, duration: 0.9), .fadeAlpha(to: 1.0, duration: 0.9),
+            ])))
+            fire.run(.repeatForever(.sequence([
+                .scale(to: 1.18, duration: 0.42), .scale(to: 1.0, duration: 0.42),
+            ])))
+            placed += 1
+        }
+    }
+
+    /// One crisp supply crate: wood body, dark plank frame, center strap
+    /// with nail dots, and a clean snow cap riding the top edge.
+    private static func addWhiteoutCrate(to parent: SKNode, size: CGSize, at pos: CGPoint) {
+        let crate = SKNode()
+        crate.position = pos
+        parent.addChild(crate)
+
+        let wood = SKColor(red: 0.42, green: 0.31, blue: 0.18, alpha: 1)
+        let woodDk = SKColor(red: 0.27, green: 0.19, blue: 0.10, alpha: 1)
+        let woodLt = SKColor(red: 0.58, green: 0.44, blue: 0.26, alpha: 1)
+        let nail = SKColor(red: 0.20, green: 0.20, blue: 0.22, alpha: 1)
+        let snow = SKColor(red: 0.96, green: 0.98, blue: 1.0, alpha: 1)
+        let snowShade = SKColor(red: 0.78, green: 0.87, blue: 0.96, alpha: 1)
+
+        // Body.
+        let body = SKSpriteNode(color: wood, size: size)
+        body.anchorPoint = CGPoint(x: 0.5, y: 0)
+        crate.addChild(body)
+        // Frame: dark edges all around so the box reads crisp.
+        let top = SKSpriteNode(color: woodDk, size: CGSize(width: size.width, height: 2))
+        top.position = CGPoint(x: 0, y: size.height - 1)
+        crate.addChild(top)
+        let bottom = SKSpriteNode(color: woodDk, size: CGSize(width: size.width, height: 2))
+        bottom.position = CGPoint(x: 0, y: 1)
+        crate.addChild(bottom)
+        let left = SKSpriteNode(color: woodDk, size: CGSize(width: 2, height: size.height))
+        left.position = CGPoint(x: -size.width / 2 + 1, y: size.height / 2)
+        crate.addChild(left)
+        let right = SKSpriteNode(color: woodDk, size: CGSize(width: 2, height: size.height))
+        right.position = CGPoint(x: size.width / 2 - 1, y: size.height / 2)
+        crate.addChild(right)
+        // Plank seams + top highlight.
+        let seam = SKSpriteNode(color: woodDk, size: CGSize(width: size.width - 4, height: 1))
+        seam.position = CGPoint(x: 0, y: size.height * 0.5)
+        seam.alpha = 0.7
+        crate.addChild(seam)
+        let hi = SKSpriteNode(color: woodLt, size: CGSize(width: size.width - 4, height: 1))
+        hi.position = CGPoint(x: 0, y: size.height - 3)
+        hi.alpha = 0.9
+        crate.addChild(hi)
+        // Center strap + nail dots.
+        let strap = SKSpriteNode(color: woodDk, size: CGSize(width: 4, height: size.height - 2))
+        strap.position = CGPoint(x: 0, y: size.height / 2)
+        crate.addChild(strap)
+        for ny in [4.0, size.height - 4.0] as [CGFloat] {
+            let dot = SKSpriteNode(color: nail, size: CGSize(width: 2, height: 2))
+            dot.position = CGPoint(x: 0, y: ny)
+            crate.addChild(dot)
+        }
+        // Snow cap: sits flat on the top edge, slight overhang.
+        let cap = SKSpriteNode(color: snow,
+                               size: CGSize(width: size.width + 2, height: 5))
+        cap.anchorPoint = CGPoint(x: 0.5, y: 0)
+        cap.position = CGPoint(x: 0, y: size.height - 1)
+        cap.zPosition = 2
+        crate.addChild(cap)
+        let capShade = SKSpriteNode(color: snowShade,
+                                    size: CGSize(width: size.width + 2, height: 1))
+        capShade.position = CGPoint(x: 0, y: 0)
+        cap.addChild(capShade)
+    }
+
+    // MARK: - Howling Causeway (Level 23): the abyss span's bridge ground
+
+    /// Small pixel-art whispers frozen into the same snow lane: lantern
+    /// marker posts left by the span-keepers, glinting rime-shard clumps,
+    /// wind-carved drifts, and old span stones cracked and half-buried
+    /// where the bridge edge crumbled. Sparse by design — the lane stays
+    /// readable for the fight.
+    static func buildHowlingCauseway(in world: SKNode) {
+        let gy = Balance.groundTopY
+        let width = Balance.levelWidth
+        var rng = DressingRNG(seed: 223_023)
+
+        // Wind-carved drifts: long soft mounds lying along the lane,
+        // lit along the windward top, shaded on the lee side. Static.
+        var placed = 0, guard_ = 0
+        while placed < 9, guard_ < 200 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 90...(width - 90))
+            guard isClear(x, margin: 150) else { continue }
+            let w = rng.cgFloat(in: 120...240)
+            let h = rng.cgFloat(in: 9...18)
+            let drift = SKShapeNode(ellipseOf: CGSize(width: w, height: h * 2))
+            drift.fillColor = SKColor(red: 0.93, green: 0.96, blue: 1.0, alpha: 0.9)
+            drift.strokeColor = SKColor(red: 0.72, green: 0.84, blue: 0.97, alpha: 0.6)
+            drift.lineWidth = 1
+            drift.position = CGPoint(x: x, y: gy + 2)
+            drift.zPosition = 1
+            world.addChild(drift)
+            // Windward crest highlight.
+            let crest = SKSpriteNode(
+                color: SKColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 0.85),
+                size: CGSize(width: w * 0.7, height: 3))
+            crest.position = CGPoint(x: x - w * 0.1, y: gy + h * 0.6)
+            crest.zPosition = 2
+            world.addChild(crest)
+            // Contact shadow on the lee side.
+            let lee = SKSpriteNode(
+                color: SKColor(red: 0.55, green: 0.68, blue: 0.85, alpha: 0.35),
+                size: CGSize(width: w * 0.8, height: 2))
+            lee.position = CGPoint(x: x + w * 0.08, y: gy + 3)
+            lee.zPosition = 2
+            world.addChild(lee)
+            placed += 1
+        }
+
+        // Span-keeper marker posts: hand-cut stone pillars with a snow
+        // cap and a lantern-crystal burning cold blue at the top — the
+        // way-home lights for anyone caught out in the whiteout.
+        placed = 0; guard_ = 0
+        while placed < 5, guard_ < 200 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 130...(width - 130))
+            guard isClear(x, margin: 200) else { continue }
+            let post = SKNode()
+            post.position = CGPoint(x: x, y: gy)
+            post.zPosition = 3
+            world.addChild(post)
+            let h = rng.cgFloat(in: 34...46)
+            let w = rng.cgFloat(in: 8...11)
+            let stone = SKSpriteNode(
+                color: SKColor(red: 0.30, green: 0.33, blue: 0.38, alpha: 1),
+                size: CGSize(width: w, height: h))
+            stone.anchorPoint = CGPoint(x: 0.5, y: 0)
+            stone.position = CGPoint(x: 0, y: 2)
+            post.addChild(stone)
+            // Weathered cap slab, slightly wider, tilted against the wind.
+            let slab = SKSpriteNode(
+                color: SKColor(red: 0.40, green: 0.44, blue: 0.50, alpha: 1),
+                size: CGSize(width: w + 4, height: 5))
+            stone.addChild(slab)
+            slab.position = CGPoint(x: 0, y: h / 2)
+            slab.zRotation = rng.cgFloat(in: -0.05...0.05)
+            // Snow bank frozen around the foot.
+            let bank = SKShapeNode(ellipseOf: CGSize(width: w + 14, height: 8))
+            bank.fillColor = SKColor(red: 0.96, green: 0.98, blue: 1.0, alpha: 0.85)
+            bank.strokeColor = .clear
+            bank.position = CGPoint(x: 0, y: 2)
+            post.addChild(bank)
+            // Lantern crystal: cold-blue ember with a pulsing halo.
+            let crystal = SKShapeNode(circleOfRadius: 4)
+            crystal.fillColor = SKColor(red: 0.45, green: 0.75, blue: 1.0, alpha: 0.95)
+            crystal.strokeColor = SKColor(red: 0.85, green: 0.95, blue: 1.0, alpha: 0.9)
+            crystal.lineWidth = 1
+            crystal.position = CGPoint(x: 0, y: h - 12)
+            post.addChild(crystal)
+            let halo = SKShapeNode(ellipseOf: CGSize(width: 26, height: 16))
+            halo.fillColor = SKColor(red: 0.45, green: 0.75, blue: 1.0, alpha: 0.14)
+            halo.strokeColor = .clear
+            halo.position = crystal.position
+            post.addChild(halo)
+            halo.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.35, duration: rng.double(in: 1.0...1.8)),
+                .fadeAlpha(to: 1.0, duration: rng.double(in: 1.0...1.8)),
+            ])))
+            crystal.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.6, duration: 0.9), .fadeAlpha(to: 0.95, duration: 0.9),
+            ])))
+            placed += 1
+        }
+
+        // Rime-shard clusters: thin ice blades with twinkling glints.
+        placed = 0; guard_ = 0
+        while placed < 6, guard_ < 200 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 70...(width - 70))
+            guard isClear(x) else { continue }
+            let cluster = SKNode()
+            cluster.position = CGPoint(x: x, y: gy + 2)
+            cluster.zPosition = 3
+            world.addChild(cluster)
+            let shards = rng.int(in: 3...5)
+            for s in 0..<shards {
+                let h = rng.cgFloat(in: 10...26)
+                let path = CGMutablePath()
+                path.move(to: CGPoint(x: -3, y: 0))
+                path.addLine(to: CGPoint(x: -1, y: h))
+                path.addLine(to: CGPoint(x: 1, y: h))
+                path.addLine(to: CGPoint(x: 3, y: 0))
+                path.closeSubpath()
+                let shard = SKShapeNode(path: path)
+                shard.fillColor = SKColor(red: 0.62, green: 0.80, blue: 0.96, alpha: 0.85)
+                shard.strokeColor = SKColor(red: 0.92, green: 0.97, blue: 1.0, alpha: 0.8)
+                shard.lineWidth = 1
+                shard.position = CGPoint(x: CGFloat(s) * 7 - CGFloat(shards) * 3.5, y: 0)
+                shard.zRotation = rng.cgFloat(in: -0.3...0.3)
+                cluster.addChild(shard)
+            }
+            // One twinkling glint at the tallest shard's tip.
+            let glint = SKSpriteNode(color: SKColor(red: 1, green: 1, blue: 1, alpha: 0.95),
+                                     size: CGSize(width: 3, height: 3))
+            glint.position = CGPoint(x: CGFloat(shards) * 7 - CGFloat(shards) * 3.5 - 3.5 + rng.cgFloat(in: -2...2),
+                                     y: 24)
+            cluster.addChild(glint)
+            glint.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.15, duration: rng.double(in: 1.0...2.0)),
+                .fadeAlpha(to: 0.95, duration: rng.double(in: 1.0...2.0)),
+            ])))
+            placed += 1
+        }
+
+        // Broken span stones: old bridge slabs cracked off the edge long
+        // ago, tipped and half-sunk, with freeze-crack lines and snow
+        // packed into the break. Presence of the abyss that claims them.
+        placed = 0; guard_ = 0
+        while placed < 4, guard_ < 200 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 120...(width - 120))
+            guard isClear(x, margin: 180) else { continue }
+            let pile = SKNode()
+            pile.position = CGPoint(x: x, y: gy)
+            pile.zPosition = 3
+            world.addChild(pile)
+            let sw = rng.cgFloat(in: 26...36)
+            let sh = rng.cgFloat(in: 10...14)
+            let slab = SKSpriteNode(
+                color: SKColor(red: 0.36, green: 0.40, blue: 0.46, alpha: 1),
+                size: CGSize(width: sw, height: sh))
+            slab.anchorPoint = CGPoint(x: 0.5, y: 0)
+            slab.position = CGPoint(x: 0, y: 2)
+            slab.zRotation = rng.cgFloat(in: -0.12...0.12)
+            pile.addChild(slab)
+            // Freeze-crack seam: dark hairline splitting the slab.
+            let crack = SKSpriteNode(
+                color: SKColor(red: 0.16, green: 0.19, blue: 0.24, alpha: 0.9),
+                size: CGSize(width: 2, height: sh))
+            crack.position = CGPoint(x: rng.cgFloat(in: -sw * 0.3...sw * 0.3), y: sh / 2)
+            slab.addChild(crack)
+            // Snow packed into the break + pillowed on the top face.
+            let cap = SKSpriteNode(
+                color: SKColor(red: 0.96, green: 0.98, blue: 1.0, alpha: 0.92),
+                size: CGSize(width: sw * 0.8, height: 4))
+            cap.anchorPoint = CGPoint(x: 0.5, y: 0)
+            cap.position = CGPoint(x: -1, y: sh - 1)
+            cap.zRotation = slab.zRotation
+            pile.addChild(cap)
+            // Spill of ice rubble at the tipped end.
+            let count = rng.int(in: 2...3)
+            for r in 0..<count {
+                let pebble = SKShapeNode(circleOfRadius: rng.cgFloat(in: 2...4))
+                pebble.fillColor = SKColor(red: 0.62, green: 0.80, blue: 0.96, alpha: 0.85)
+                pebble.strokeColor = .clear
+                pebble.position = CGPoint(
+                    x: sw * 0.5 + CGFloat(r) * rng.cgFloat(in: 5...9),
+                    y: rng.cgFloat(in: 2...5))
+                pile.addChild(pebble)
+            }
+            placed += 1
+        }
+    }
+
+    // MARK: - Rimewatch Crag (Level 24): the frozen watch's spire ground
+
+    /// Small pixel-art whispers frozen into the same snow lane: leaning
+    /// blue-ice crag teeth rising out of the drifts, sundered watch-cairn
+    /// rubble (dark stacked stone capped with ice, one cold-blue crystal
+    /// still burning), familiar rime-shard clusters, and wind-carved
+    /// drifts. Sparse by design — the lane stays readable for the fight.
+    static func buildRimewatchCrag(in world: SKNode) {
+        let gy = Balance.groundTopY
+        let width = Balance.levelWidth
+        var rng = DressingRNG(seed: 224_024)
+
+        // Wind-carved drifts: long soft mounds lying along the lane,
+        // lit along the windward top, shaded on the lee side. Static.
+        var placed = 0, guard_ = 0
+        while placed < 8, guard_ < 200 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 90...(width - 90))
+            guard isClear(x, margin: 150) else { continue }
+            let w = rng.cgFloat(in: 120...240)
+            let h = rng.cgFloat(in: 9...18)
+            let drift = SKShapeNode(ellipseOf: CGSize(width: w, height: h * 2))
+            drift.fillColor = SKColor(red: 0.93, green: 0.96, blue: 1.0, alpha: 0.9)
+            drift.strokeColor = SKColor(red: 0.72, green: 0.84, blue: 0.97, alpha: 0.6)
+            drift.lineWidth = 1
+            drift.position = CGPoint(x: x, y: gy + 2)
+            drift.zPosition = 1
+            world.addChild(drift)
+            let crest = SKSpriteNode(
+                color: SKColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 0.85),
+                size: CGSize(width: w * 0.7, height: 3))
+            crest.position = CGPoint(x: x - w * 0.1, y: gy + h * 0.6)
+            crest.zPosition = 2
+            world.addChild(crest)
+            let lee = SKSpriteNode(
+                color: SKColor(red: 0.55, green: 0.68, blue: 0.85, alpha: 0.35),
+                size: CGSize(width: w * 0.8, height: 2))
+            lee.position = CGPoint(x: x + w * 0.08, y: gy + 3)
+            lee.zPosition = 2
+            world.addChild(lee)
+            placed += 1
+        }
+
+        // Crag teeth: tall leaning blue-ice blades with a deep core, a
+        // pale windward rim, and one twinkling glint near the tip. The
+        // silhouette that makes the Crag read as a climb, not a plain.
+        placed = 0; guard_ = 0
+        while placed < 6, guard_ < 220 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 110...(width - 110))
+            guard isClear(x, margin: 190) else { continue }
+            let tooth = SKNode()
+            tooth.position = CGPoint(x: x, y: gy + 2)
+            tooth.zPosition = 3
+            world.addChild(tooth)
+            let h = rng.cgFloat(in: 42...92)
+            let w = rng.cgFloat(in: 10...16)
+            let lean = rng.cgFloat(in: -0.22...0.22)
+            // Deep blue core.
+            let corePath = CGMutablePath()
+            corePath.move(to: CGPoint(x: -w / 2, y: 0))
+            corePath.addLine(to: CGPoint(x: -w * 0.18, y: h * 0.72))
+            corePath.addLine(to: CGPoint(x: 0, y: h))
+            corePath.addLine(to: CGPoint(x: w * 0.18, y: h * 0.72))
+            corePath.addLine(to: CGPoint(x: w / 2, y: 0))
+            corePath.closeSubpath()
+            let core = SKShapeNode(path: corePath)
+            core.fillColor = SKColor(red: 0.30, green: 0.52, blue: 0.82, alpha: 0.92)
+            core.strokeColor = SKColor(red: 0.85, green: 0.93, blue: 1.0, alpha: 0.85)
+            core.lineWidth = 1
+            core.zRotation = lean
+            tooth.addChild(core)
+            // Pale windward rim catching the light.
+            let rim = SKSpriteNode(
+                color: SKColor(red: 0.88, green: 0.95, blue: 1.0, alpha: 0.8),
+                size: CGSize(width: 2, height: h * 0.8))
+            rim.position = CGPoint(x: -w * 0.28, y: h * 0.42)
+            rim.zRotation = lean
+            tooth.addChild(rim)
+            // Snow collar banked around the foot.
+            let collar = SKShapeNode(ellipseOf: CGSize(width: w + 18, height: 9))
+            collar.fillColor = SKColor(red: 0.96, green: 0.98, blue: 1.0, alpha: 0.88)
+            collar.strokeColor = .clear
+            collar.position = CGPoint(x: 0, y: 1)
+            tooth.addChild(collar)
+            // One twinkling glint near the tip.
+            let glint = SKSpriteNode(color: SKColor(red: 1, green: 1, blue: 1, alpha: 0.95),
+                                     size: CGSize(width: 3, height: 3))
+            glint.position = CGPoint(x: lean * -h * 0.5, y: h * 0.82)
+            tooth.addChild(glint)
+            glint.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.15, duration: rng.double(in: 1.0...2.0)),
+                .fadeAlpha(to: 0.95, duration: rng.double(in: 1.0...2.0)),
+            ])))
+            placed += 1
+        }
+
+        // Sundered watch-cairns: tumbled dark-stone stacks capped with
+        // ice, one cold-blue crystal still burning on top — all that is
+        // left of Rimewatch's spire guard.
+        placed = 0; guard_ = 0
+        while placed < 4, guard_ < 200 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 130...(width - 130))
+            guard isClear(x, margin: 200) else { continue }
+            let cairn = SKNode()
+            cairn.position = CGPoint(x: x, y: gy)
+            cairn.zPosition = 3
+            world.addChild(cairn)
+            let stones = rng.int(in: 3...4)
+            var yy: CGFloat = 0
+            for s in 0..<stones {
+                let sw = rng.cgFloat(in: 18...26) - CGFloat(s) * 2.4
+                let sh = rng.cgFloat(in: 5...7)
+                let stone = SKShapeNode(rectOf: CGSize(width: sw, height: sh), cornerRadius: 1)
+                stone.fillColor = s % 2 == 0
+                    ? SKColor(red: 0.26, green: 0.29, blue: 0.34, alpha: 1)
+                    : SKColor(red: 0.18, green: 0.20, blue: 0.25, alpha: 1)
+                stone.strokeColor = .clear
+                stone.position = CGPoint(x: rng.cgFloat(in: -3...3), y: yy + sh / 2)
+                stone.zRotation = rng.cgFloat(in: -0.09...0.09)
+                cairn.addChild(stone)
+                yy += sh - 1
+            }
+            // Ice cap slab tipped on the stack.
+            let cap = SKSpriteNode(
+                color: SKColor(red: 0.96, green: 0.98, blue: 1.0, alpha: 0.92),
+                size: CGSize(width: 22, height: 4))
+            cap.position = CGPoint(x: 1, y: yy + 1)
+            cap.zRotation = rng.cgFloat(in: -0.08...0.08)
+            cairn.addChild(cap)
+            // One fallen block beside the stack.
+            let fallen = SKSpriteNode(
+                color: SKColor(red: 0.26, green: 0.29, blue: 0.34, alpha: 1),
+                size: CGSize(width: 12, height: 7))
+            fallen.position = CGPoint(x: rng.cgFloat(in: 14...20), y: 3)
+            fallen.zRotation = rng.cgFloat(in: -0.4...0.4)
+            cairn.addChild(fallen)
+            // Cold-blue crystal still burning on the cap.
+            let crystal = SKShapeNode(circleOfRadius: 4)
+            crystal.fillColor = SKColor(red: 0.45, green: 0.75, blue: 1.0, alpha: 0.95)
+            crystal.strokeColor = SKColor(red: 0.85, green: 0.95, blue: 1.0, alpha: 0.9)
+            crystal.lineWidth = 1
+            crystal.position = CGPoint(x: -2, y: yy + 8)
+            cairn.addChild(crystal)
+            let halo = SKShapeNode(ellipseOf: CGSize(width: 26, height: 16))
+            halo.fillColor = SKColor(red: 0.45, green: 0.75, blue: 1.0, alpha: 0.14)
+            halo.strokeColor = .clear
+            halo.position = crystal.position
+            cairn.addChild(halo)
+            halo.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.35, duration: rng.double(in: 1.0...1.8)),
+                .fadeAlpha(to: 1.0, duration: rng.double(in: 1.0...1.8)),
+            ])))
+            crystal.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.6, duration: 0.9), .fadeAlpha(to: 0.95, duration: 0.9),
+            ])))
+            placed += 1
+        }
+
+        // Rime-shard clusters: thin ice blades with twinkling glints,
+        // carried over from the Causeway so the region still reads whole.
+        placed = 0; guard_ = 0
+        while placed < 5, guard_ < 200 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 70...(width - 70))
+            guard isClear(x) else { continue }
+            let cluster = SKNode()
+            cluster.position = CGPoint(x: x, y: gy + 2)
+            cluster.zPosition = 3
+            world.addChild(cluster)
+            let shards = rng.int(in: 3...5)
+            for s in 0..<shards {
+                let h = rng.cgFloat(in: 10...24)
+                let path = CGMutablePath()
+                path.move(to: CGPoint(x: -3, y: 0))
+                path.addLine(to: CGPoint(x: -1, y: h))
+                path.addLine(to: CGPoint(x: 1, y: h))
+                path.addLine(to: CGPoint(x: 3, y: 0))
+                path.closeSubpath()
+                let shard = SKShapeNode(path: path)
+                shard.fillColor = SKColor(red: 0.62, green: 0.80, blue: 0.96, alpha: 0.85)
+                shard.strokeColor = SKColor(red: 0.92, green: 0.97, blue: 1.0, alpha: 0.8)
+                shard.lineWidth = 1
+                shard.position = CGPoint(x: CGFloat(s) * 7 - CGFloat(shards) * 3.5, y: 0)
+                shard.zRotation = rng.cgFloat(in: -0.3...0.3)
+                cluster.addChild(shard)
+            }
+            let glint = SKSpriteNode(color: SKColor(red: 1, green: 1, blue: 1, alpha: 0.95),
+                                     size: CGSize(width: 3, height: 3))
+            glint.position = CGPoint(x: rng.cgFloat(in: -4...4), y: 22)
+            cluster.addChild(glint)
+            glint.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.15, duration: rng.double(in: 1.0...2.0)),
+                .fadeAlpha(to: 0.95, duration: rng.double(in: 1.0...2.0)),
+            ])))
+            placed += 1
+        }
+
+        // Wind-blown ice dust: pale blue-white grains streaking sideways,
+        // hugging the deck — the Crag's small motion whisper.
+        for i in 0..<18 {
+            let grain = SKSpriteNode(color: SKColor(red: 0.88, green: 0.94, blue: 1.0, alpha: 0.8),
+                                     size: CGSize(width: rng.cgFloat(in: 3...6), height: 2))
+            let homeX = rng.cgFloat(in: 0...width)
+            let homeY = gy + rng.cgFloat(in: 4...36)
+            grain.position = CGPoint(x: homeX, y: homeY)
+            grain.zPosition = 3
+            world.addChild(grain)
+            let streak = SKAction.moveBy(x: rng.cgFloat(in: 120...260),
+                                         y: rng.cgFloat(in: -8...8),
+                                         duration: rng.double(in: 1.6...3.0))
+            let vanish = SKAction.sequence([
+                SKAction.wait(forDuration: 1.0),
+                SKAction.fadeOut(withDuration: 1.0),
+            ])
+            grain.run(.repeatForever(.sequence([
+                SKAction.wait(forDuration: Double(i) * 0.12),
+                SKAction.group([streak, vanish]),
+                SKAction.run { grain.position = CGPoint(x: homeX, y: gy + 4) },
+                SKAction.fadeIn(withDuration: 0.4),
+            ])))
+        }
+    }
 }

@@ -142,8 +142,10 @@ struct MainMenuView: View {
                     BattlePrepView(level: CampaignData.levels.first(where: { $0.id == id })
                         ?? CampaignData.levels[0], path: $path)
                 case .game(let lid, let hid):
-                    GameView(level: CampaignData.levels.first(where: { $0.id == lid })
-                        ?? CampaignData.levels[0],
+                    GameView(level: lid == Balance.playgroundLevelId
+                        ? CampaignData.playgroundDef
+                        : CampaignData.levels.first(where: { $0.id == lid })
+                            ?? CampaignData.levels[0],
                              hero: HeroRoster.heroes.first(where: { $0.id == hid })
                         ?? HeroRoster.selectedHero, path: $path)
                 }

@@ -12,9 +12,12 @@ import SpriteKit
 /// 5th incoming shot.
 /// .heli is the Heli Gunship debuting in Level 13 — a futuristic attack
 /// helicopter that cruises above the jets and fires 3-round bursts.
-/// .immortal is the phase-disruptor walker debuting in Level 19 — bigger
-/// than the Brute, a non-regenerating shield drinks damage before its
-/// shell, and its twin disruptors lob slow phase orbs that detonate.
+/// .immortal is the white-armored tracked walker debuting in Level 19 —
+/// bigger than the Brute, a non-regenerating shield drinks damage before
+/// its shell, and its cannon fires straight-flying mortar shells.
+/// .shardwing is the ice-dart dive-drone debuting in Level 24 — the
+/// fastest flyer in the sky, cruising above the gunships, diving to the
+/// deck for a twin-bolt burst before climbing back out.
 enum EnemyKind: Int, CaseIterable {
     case raider
     case brute
@@ -25,11 +28,13 @@ enum EnemyKind: Int, CaseIterable {
     case heli
     case missileTruck
     case immortal
+    case shardwing
 
     /// True for claw/axe fighters (swing + direct damage); false for shooters.
     var isMelee: Bool { self == .reaver || self == .skitter }
-    /// True for airborne units (hover cruise; jets also dodge-juke).
-    var isFlying: Bool { self == .jet || self == .heli }
+    /// True for airborne units (hover cruise; jets also dodge-juke,
+    /// shardwings dive-strafe).
+    var isFlying: Bool { self == .jet || self == .heli || self == .shardwing }
     /// True for the heavy mech walker (huge, slow, burst-firing).
     var isMech: Bool { self == .mech }
     /// True for the high-altitude attack helicopter.
@@ -41,6 +46,7 @@ enum EnemyKind: Int, CaseIterable {
     var zTier: CGFloat {
         switch self {
         case .heli: return 9.8
+        case .shardwing: return 9.9
         case .raider, .skitter: return 9.6
         case .reaver, .jet: return 9.2
         case .brute, .mech, .missileTruck, .immortal: return 8.0
@@ -52,6 +58,7 @@ enum EnemyKind: Int, CaseIterable {
         switch self {
         case .jet: return Balance.jetHoverHeight
         case .heli: return Balance.heliHoverHeight
+        case .shardwing: return Balance.shardwingCruiseHeight
         default: return 0
         }
     }
@@ -66,6 +73,7 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return "Jetpack Droid"
         case .mech: return "Mech Walker"
         case .heli: return "Heli Gunship"
+        case .shardwing: return "Shardwing"
         case .missileTruck: return "Missile Truck"
         case .immortal: return "Immortal"
         }
@@ -82,6 +90,7 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return 7
         case .mech: return 9
         case .heli: return 13
+        case .shardwing: return 24
         case .missileTruck: return 15
         case .immortal: return 19
         }
@@ -97,8 +106,9 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return "Flying droid. Hovers and jukes around your fire."
         case .mech: return "Walking gun platform. Heavy armor, burst fire."
         case .heli: return "Attack helicopter. High hover, 3-round gun bursts."
+        case .shardwing: return "Ice-dart drone. Dives low for twin-bolt bursts."
         case .missileTruck: return "Missile launcher truck. Short range, weaving missiles."
-        case .immortal: return "Crimson battle walker. Fast, huge cannons, twin disruptor rounds."
+        case .immortal: return "White-armored tracked platform. Straight mortar shells."
         }
     }
 
@@ -111,6 +121,7 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return Balance.jetHP
         case .mech: return Balance.mechHP
         case .heli: return Balance.heliHP
+        case .shardwing: return Balance.shardwingHP
         case .missileTruck: return Balance.missileTruckHP
         case .immortal: return Balance.immortalHP
         }
@@ -125,6 +136,7 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return Balance.jetSpeed
         case .mech: return Balance.mechSpeed
         case .heli: return Balance.heliSpeed
+        case .shardwing: return Balance.shardwingSpeed
         case .missileTruck: return Balance.missileTruckSpeed
         case .immortal: return Balance.immortalSpeed
         }
@@ -139,6 +151,7 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return Balance.jetSightRange
         case .mech: return Balance.mechSightRange
         case .heli: return Balance.heliSightRange
+        case .shardwing: return Balance.shardwingSightRange
         case .missileTruck: return Balance.missileTruckSightRange
         case .immortal: return Balance.immortalSightRange
         }
@@ -154,6 +167,7 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return Balance.jetShootRange
         case .mech: return Balance.mechShootRange
         case .heli: return Balance.heliShootRange
+        case .shardwing: return Balance.shardwingShootRange
         case .missileTruck: return Balance.missileTruckShootRange
         case .immortal: return Balance.immortalShootRange
         }
@@ -168,6 +182,7 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return Balance.jetFireCooldown
         case .mech: return Balance.mechFireCooldown
         case .heli: return Balance.heliFireCooldown
+        case .shardwing: return Balance.shardwingFireCooldown
         case .missileTruck: return Balance.missileTruckFireCooldown
         case .immortal: return Balance.immortalFireCooldown
         }
@@ -182,8 +197,9 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return Balance.jetBoltDamage
         case .mech: return Balance.mechBoltDamage
         case .heli: return Balance.heliBoltDamage
+        case .shardwing: return Balance.shardwingBoltDamage
         case .missileTruck: return Balance.missileTruckMissileDamage
-        case .immortal: return Balance.immortalOrbDamage
+        case .immortal: return Balance.immortalShellDamage
         }
     }
 
@@ -192,7 +208,7 @@ enum EnemyKind: Int, CaseIterable {
         switch self {
         case .reaver: return Balance.reaverMeleeDamage
         case .skitter: return Balance.skitterMeleeDamage
-        case .raider, .brute, .jet, .mech, .heli, .missileTruck, .immortal: return 0
+        case .raider, .brute, .jet, .mech, .heli, .missileTruck, .immortal, .shardwing: return 0
         }
     }
 
@@ -207,6 +223,7 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: base = Balance.jetReward
         case .mech: base = Balance.mechReward
         case .heli: base = Balance.heliReward
+        case .shardwing: base = Balance.shardwingReward
         case .missileTruck: base = Balance.missileTruckReward
         case .immortal: base = Balance.immortalReward
         }
@@ -226,6 +243,7 @@ enum EnemyKind: Int, CaseIterable {
         case .heli: return .heli
         case .missileTruck: return .missileTruck
         case .immortal: return .immortal
+        case .shardwing: return .shardwing
         }
     }
 
@@ -239,6 +257,7 @@ enum EnemyKind: Int, CaseIterable {
         case .jet: return "FLYER"
         case .mech: return "HEAVY"
         case .heli: return "GUNSHIP"
+        case .shardwing: return "DIVER"
         case .missileTruck: return "LAUNCHER"
         case .immortal: return "PHASE"
         }
@@ -286,6 +305,12 @@ final class EnemyNode: SKSpriteNode {
     var jukeCooldown: TimeInterval = 0
     var jukeOffset: CGFloat = 0   // current dodge displacement (eases to 0)
     var jukeTarget: CGFloat = 0   // dodge peak the offset chases, then clears
+    /// Dive-strafe state (shardwings): altitude dropped below cruise while
+    /// diving (0 at cruise, negative on the attack run; the scene drives
+    /// it like the jet's juke offset).
+    var diveOffset: CGFloat = 0
+    var diving: Bool = false
+    var diveCooldown: TimeInterval = 0
     /// Thruster-exhaust timer (jets puff exhaust while flying).
     var jetExhaustTimer: TimeInterval = 0
     /// Rotor-wash sound timer (heli): retriggers the looping blade slap.
@@ -338,6 +363,7 @@ final class EnemyNode: SKSpriteNode {
             case .heli: return .heli
             case .missileTruck: return .missileTruck
             case .immortal: return .immortal
+            case .shardwing: return .shardwing
             }
         }())
         let size: CGSize
@@ -349,6 +375,7 @@ final class EnemyNode: SKSpriteNode {
         case .jet: size = CGSize(width: 84, height: 60)
         case .mech: size = CGSize(width: 112, height: 104)
         case .heli: size = CGSize(width: 120, height: 64)
+        case .shardwing: size = CGSize(width: 96, height: 56)
         case .missileTruck: size = CGSize(width: 128, height: 80)
         case .immortal: size = CGSize(width: 128, height: 114)
         }
@@ -429,6 +456,7 @@ final class EnemyNode: SKSpriteNode {
             case .heli: return .heli
             case .missileTruck: return .missileTruck
             case .immortal: return .immortal
+            case .shardwing: return .shardwing
             }
         }()
         let armTex = UnitPixelArt.armTexture(for: armKind)
@@ -446,14 +474,15 @@ final class EnemyNode: SKSpriteNode {
             case .skitter: return CGPoint(x: 5, y: 6)
             case .raider: return CGPoint(x: 6, y: 8)
             case .jet: return CGPoint(x: 13, y: 0)
+            case .shardwing: return CGPoint(x: 9, y: -9)
             case .mech: return CGPoint(x: 41, y: 19)
             case .heli: return CGPoint(x: 21, y: -20)
             // Launcher cradle in the mantlet at the very nose: the rail
             // (and every missile it fires) clears the hull in front.
             case .missileTruck: return CGPoint(x: 54, y: 19)
-            // Cannon grip sits at the front shoulder joint, up where the
-            // huge rail mounts on the walker's flank.
-            case .immortal: return CGPoint(x: 10, y: 22)
+            // Cannon grip sits at the front chest joint, under the helmet,
+            // where the long rail is cradled across the walker's torso.
+            case .immortal: return CGPoint(x: 10, y: 12.5)
             }
         }()
         armPivot.addChild(spikeSprite)
@@ -526,7 +555,7 @@ final class EnemyNode: SKSpriteNode {
         // dark padded BG + thin light border + left-anchored fill that
         // drains from the right side only. Brutes wear a wider bar.
         let barW: CGFloat = kind == .brute ? 56
-            : (kind.isMech || kind == .missileTruck || kind == .immortal ? 64 : 44)
+            : (kind.isMech || kind == .missileTruck || kind == .immortal || kind == .shardwing ? 64 : 44)
         let barH: CGFloat = 7
         // Soft + sunk: more transparent than the structure bars, and pinned
         // deep behind so the hero always covers it when passing by units.

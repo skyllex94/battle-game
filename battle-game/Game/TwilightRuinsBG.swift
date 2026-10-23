@@ -83,6 +83,10 @@ enum TwilightRuinsBG {
     /// The sandhold theme (Level 6) is desert-keep dusk: burnt-orange
     /// ember grade, fortress silhouette, shadow flyers circling far.
     static func buildSky(in layer: SKNode, sceneSize: CGSize) {
+        if Balance.iceField {
+            FrostbiteBG.buildSky(in: layer, sceneSize: sceneSize)
+            return
+        }
         let theme = Balance.active.theme
         let overgrown = theme == .overgrown
         let bastion = theme == .bastion
@@ -509,6 +513,10 @@ enum TwilightRuinsBG {
     /// front, broken temple ruin parked on the far right (like the sheet),
     /// pine spires far left. Rendered once at low res for chunky pixels.
     static func buildFar(in layer: SKNode, sceneSize: CGSize) {
+        if Balance.iceField {
+            FrostbiteBG.buildFar(in: layer, sceneSize: sceneSize)
+            return
+        }
         let travel = Balance.levelWidth * Balance.parallaxFar
         let panoW: CGFloat = sceneSize.width + travel + 500
         // Low-res canvas -> chunky pixels when stretched with .nearest.
@@ -810,6 +818,11 @@ enum TwilightRuinsBG {
     /// Sandhold theme: desert-keep dusk — broken sandstone wall chunks in
     /// the scrub line, dead brush, rising ember sparks.
     static func buildMid(in layer: SKNode, sceneSize: CGSize) {
+        // Frozen approach (Level 21+): the whole mid ground is snow drifts.
+        if Balance.iceField {
+            FrostbiteBG.buildMid(in: layer, sceneSize: sceneSize)
+            return
+        }
         // Duskfall theme: dark sand ridges under a burning sky.
         if Balance.active.theme == .duskdesert {
             buildDuskRidges(in: layer, sceneSize: sceneSize)
@@ -2801,7 +2814,7 @@ enum TwilightRuinsBG {
     }
 
     static func updateMidParallax(in layer: SKNode, camX: CGFloat) {
-        guard Balance.alpinePass else { return }
+        guard Balance.alpinePass || Balance.iceField else { return }
         for child in layer.children {
             guard let p = child as? MidParallaxNode else { continue }
             p.position.x = p.baseX
@@ -3278,6 +3291,10 @@ enum TwilightRuinsBG {
     /// contact AO + washes + unique scatter (stones, vines, shroom glows, pollen).
     /// Dune levels branch to the rolling dune-sea renderer instead.
     static func buildGround(in world: SKNode) {
+        if Balance.iceField {
+            FrostbiteBG.buildGround(in: world)
+            return
+        }
         if Balance.alpinePass {
             buildAlpineGround(in: world)
             return
@@ -3587,6 +3604,10 @@ enum TwilightRuinsBG {
     /// swaying) -> near silhouettes (large, dark, bottom-anchored rocks and
     /// out-of-focus bokeh spores drifting on their own).
     static func buildForeground(in layer: SKNode) {
+        if Balance.iceField {
+            FrostbiteBG.buildForeground(in: layer)
+            return
+        }
         if Balance.alpinePass {
             buildAlpineForeground(in: layer)
             return
@@ -3749,7 +3770,9 @@ private extension UIColor {
     }
 }
 
-private final class MidParallaxNode: SKNode {
+/// Mid-layer node that drifts independently inside its layer. `cameraFactor`
+/// is the node's effective parallax rate (0 = screen-locked, 0.35 = mid).
+final class MidParallaxNode: SKNode {
     var baseX: CGFloat = 0
     var cameraFactor: CGFloat = 0
 }

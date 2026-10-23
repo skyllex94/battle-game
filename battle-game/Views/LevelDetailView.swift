@@ -60,8 +60,8 @@ struct LevelDetailView: View {
                     // the screen stays clear for the level backdrop.
                     HStack(alignment: .top, spacing: 0) {
                         briefingPanel(tight: tight)
-                            .frame(maxWidth: min(briefPanelWidth(tight: tight),
-                                                 geo.size.width - 24),
+                            .frame(maxWidth: max(0, min(briefPanelWidth(tight: tight),
+                                                        geo.size.width - 24)),
                                    alignment: .leading)
                         Spacer(minLength: 0)
                     }
@@ -200,8 +200,11 @@ struct LevelDetailView: View {
 
             Spacer(minLength: 2)
 
-            continueButton(tight: tight)
-                .frame(maxWidth: tight ? 260 : 300)
+            HStack(alignment: .bottom, spacing: 8) {
+                playgroundButton(tight: tight)
+                    .frame(width: tight ? 132 : 150)
+                continueButton(tight: tight)
+            }
         }
         .frame(maxHeight: .infinity, alignment: .top)
     }
@@ -258,6 +261,32 @@ struct LevelDetailView: View {
             .background(.black.opacity(0.4))
             .overlay(Rectangle().stroke(.white.opacity(0.15), lineWidth: 1))
         }
+    }
+
+    /// DEV: tosses the selected loadout hero straight into the tiny
+    /// playground arena (one tower per side, one inspected unit per wave).
+    /// Temporary — remove the button with snowFX dev pass done.
+    private func playgroundButton(tight: Bool) -> some View {
+        Button {
+            SoundEngine.shared.uiTap()
+            path.append(Route.game(levelId: Balance.playgroundLevelId,
+                                   heroId: HeroRoster.selectedHero.id))
+        } label: {
+            HStack(spacing: 7) {
+                DetailPixelIcon(glyph: .target, color: .cyan, size: tight ? 13 : 15)
+                Text("PLAYGROUND")
+                    .font(.system(size: tight ? 10 : 11, weight: .black, design: .monospaced))
+                    .tracking(1)
+                    .minimumScaleFactor(0.75)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, minHeight: tight ? 44 : 50)
+            .foregroundStyle(.cyan)
+            .background(.black.opacity(0.75))
+            .clipShape(ShopPixelShape(cut: 8))
+            .overlay(ShopPixelShape(cut: 8).stroke(.cyan.opacity(0.7), lineWidth: 3))
+        }
+        .buttonStyle(.plain)
     }
 
     private func continueButton(tight: Bool) -> some View {

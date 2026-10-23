@@ -37,7 +37,7 @@ enum Balance {
     /// the lane itself is bare alpine rock — no sand, no dunes.
     /// Riven Pass (Level 18): the same alpine shelf at evening, just before
     /// sunset — deep evening blue above, amber-gold horizon, low warm sun.
-    enum BGTheme { case twilight, overgrown, bastion, dawn, sunscorch, sandhold, dunesea, oasis, duskdesert, nightdesert, sunrise, dusk }
+    enum BGTheme { case twilight, overgrown, bastion, dawn, sunscorch, sandhold, dunesea, oasis, duskdesert, nightdesert, sunrise, dusk, frost }
 
     // MARK: - Per-level battlefield layout
     struct LevelLayout {
@@ -140,6 +140,37 @@ enum Balance {
         /// walker is a singleton: the next one only marches once the
         /// previous falls.
         var immortalEvery: Int = 0
+        /// Every Nth summon screams in a Shardwing dive-drone (0 = never
+        /// shows). Strafers: they cruise high, dive low for a twin-bolt
+        /// burst, then climb back out (Level 24+).
+        var shardwingEvery: Int = 0
+        /// DEV playground (Level 999): tiny arena, one tower per side, and
+        /// the enemy gate releases only the unit under inspection. The
+        /// PLAYGROUND button on the briefing screen is the only entry.
+        var playground: Bool = false
+
+        /// The lane is wind-glazed ice (Level 21+): ground sparkle texture,
+        /// subtle slide on landing, and breath plumes on units.
+        var iceField: Bool = false
+
+        /// Whiteout Redoubt siege ground (Level 22): small pixel-art
+        /// whispers frozen into the snow field — half-buried supply
+        /// crates, wind-carved drifts, rime shards and wind-sheltered
+        /// braziers (see LevelDressing.buildWhiteoutRedoubt).
+        var whiteoutRedoubt: Bool = false
+
+        /// Howling Causeway bridge ground (Level 23): small pixel-art
+        /// whispers frozen into the snow field — lantern-lit marker
+        /// posts, rime shards, wind-carved drifts and broken span stones
+        /// (see LevelDressing.buildHowlingCauseway).
+        var howlingCauseway: Bool = false
+
+        /// Rimewatch Crag watch ground (Level 24): small pixel-art
+        /// whispers frozen into the snow field — leaning blue-ice crag
+        /// teeth, sundered watch-cairn rubble with cold-blue crystals,
+        /// rime shards and wind-carved drifts
+        /// (see LevelDressing.buildRimewatchCrag).
+        var rimewatchCrag: Bool = false
 
         /// The enemy kinds this level can actually summon, in roster order.
         /// Briefings use this instead of campaign unlock levels, so a level
@@ -152,6 +183,7 @@ enum Balance {
             if jetEvery > 0 { kinds.append(.jet) }
             if mechEvery > 0 { kinds.append(.mech) }
             if heliEvery > 0 { kinds.append(.heli) }
+            if shardwingEvery > 0 { kinds.append(.shardwing) }
             if truckEvery > 0 { kinds.append(.missileTruck) }
             if immortalEvery > 0 { kinds.append(.immortal) }
             return kinds
@@ -169,6 +201,13 @@ enum Balance {
     /// battlefield mid-fight).
     static var battleOwnsLayout = false
 
+    /// DEV playground level id (see the PLAYGROUND button on the briefing
+    /// screen). Special-cased everywhere campaign scaling applies.
+    static let playgroundLevelId = 999
+    /// The unit the playground gate releases, one per wave. Swap this to
+    /// inspect any unit; the Shardwing is the newest roster member.
+    static var playgroundUnit: EnemyKind = .shardwing
+
     /// Enemy structure durability at Level 1. Every campaign level after
     /// that adds 10%, compounding (L2 ×1.10, L3 ×1.21 …).
     static let startingTowerHP: CGFloat = 200
@@ -176,6 +215,8 @@ enum Balance {
     static let enemyStructureHPPerLevel: CGFloat = 0.10
 
     static func enemyStructureHPMultiplier(for levelId: Int) -> CGFloat {
+        // Playground fields Level-1-grade structures (raw stat checks).
+        guard levelId != playgroundLevelId else { return 1 }
         let steps = CGFloat(max(0, levelId - 1))
         return CGFloat(pow(Double(1 + enemyStructureHPPerLevel), Double(steps)))
     }
@@ -186,7 +227,9 @@ enum Balance {
     /// the enemy shells carry a ONE-TIME +400 HP boost (not compounding).
     static func enemyTowerHealth(forLevel levelId: Int) -> CGFloat {
         var hp = startingTowerHP * enemyStructureHPMultiplier(for: levelId)
-        if levelId >= upgradedTowerLevel { hp += upgradedTowerHPBonus }
+        if levelId >= upgradedTowerLevel, levelId != playgroundLevelId {
+            hp += upgradedTowerHPBonus
+        }
         return hp
     }
 
@@ -206,6 +249,7 @@ enum Balance {
     }
 
     static func layout(for levelId: Int) -> LevelLayout {
+        if levelId == playgroundLevelId { return layoutPlayground }
         switch levelId {
         case 2: return layout2
         case 3: return layout3
@@ -226,6 +270,10 @@ enum Balance {
         case 18: return layout18
         case 19: return layout19
         case 20: return layout20
+        case 21: return layout21
+        case 22: return layout22
+        case 23: return layout23
+        case 24: return layout24
         default: return layout1
         }
     }
@@ -241,6 +289,17 @@ enum Balance {
     static var stormSummit: Bool { active.stormSummit }
     /// Looping snowfall over a snowy battlefield (Level 20).
     static var snowfall: Bool { active.snowfall }
+    /// DEV playground: the active layout is the tiny unit-test arena.
+    static var playgroundMode: Bool { active.playground }
+    /// Wind-glazed ice lane (Level 21+): ground sparkle, slide, breath plumes.
+    static var iceField: Bool { active.iceField }
+    /// Whiteout Redoubt siege ground (Level 22): frozen field whispers.
+    static var whiteoutRedoubt: Bool { active.whiteoutRedoubt }
+    /// Howling Causeway bridge ground (Level 23): the abyss span's field.
+    static var howlingCauseway: Bool { active.howlingCauseway }
+    /// Rimewatch Crag watch ground (Level 24): blue-ice spire teeth +
+    /// sundered watch-cairn rubble frozen into the field.
+    static var rimewatchCrag: Bool { active.rimewatchCrag }
     static var groundTopY: CGFloat = 120        // y of the walkable surface
     /// True on desert themes (dune sand + sand dressing; Levels 7-13).
     static var dunes: Bool {
@@ -347,6 +406,20 @@ enum Balance {
     static let baseBoltDamage: CGFloat = 10
     static let baseMuzzleHeight: CGFloat = 140
     static let baseMuzzleForward: CGFloat = 60 // muzzle sits toward the enemy side
+    /// From this roster level on, main HQs on BOTH teams render the heavy
+    /// Mk-II design (bigger fortified keep + quad rooftop missile pods) —
+    /// see BaseNode.
+    static let upgradedBaseLevel = 20
+    /// Mk-II HQ rooftop battery (Level 20+): a 4-missile volley replaces
+    /// the 3-bolt fan on BOTH teams. Each missile rides a slight angle
+    /// fan + weave, like the Level 18 tower refit, and lands at the same
+    /// base-bolt payload (four homers at one base = a heavier HQ punch).
+    static let baseMissileCount = 4
+    static let baseMissileSpeed: CGFloat = 520
+    static let baseMissileLife: Double = 2.0
+    static let baseMissileSpread: CGFloat = 0.11
+    static let baseMissileWeaveAmp: CGFloat = 36
+    static let baseMissileWeaveFreq: Double = 6.0
 
     // MARK: - Summoned enemies (march on the enemy base's side toward your base)
     // Per-level via the layout table (L1: single every 8s, cap 6 — untouched).
@@ -373,6 +446,8 @@ enum Balance {
     static var truckCount: Int { active.truckCount }
     /// Every Nth summon is the Immortal walker (0 = never). Singleton.
     static var immortalEvery: Int { active.immortalEvery }
+    /// Every Nth summon is a Shardwing dive-drone (0 = never).
+    static var shardwingEvery: Int { active.shardwingEvery }
     static let firstSummonDelay: Double = 5.0
     /// Raider (the classic marcher — Levels 1+). Base 40; Level 5+ scales
     /// via the layout's enemyHPScale (L5 = ×1.05, L6 = ×1.1025).
@@ -486,24 +561,48 @@ enum Balance {
     /// Missile weave: lateral snake perpendicular to the flight line.
     static let missileTruckWeaveAmp: CGFloat = 42
     static let missileTruckWeaveFreq: Double = 7.0
-    /// Immortal (crimson battle walker — Level 19+): a fast armored
-    /// battle machine bigger than the Brute — huge rail cannon on the
-    /// arm, missile pods crowding the shoulders, hot pink-red glow trim.
-    /// Ranged only: it lobs twin phase-disruptor rounds one after
-    /// another down the lane. Base 280, scaled.
+    /// Immortal (white-armored tracked walker — Level 19+): a fast armored
+    /// battle machine bigger than the Brute — long black rail cannon on
+    /// the chest, black missile pods over the shoulder, hot pink glow trim,
+    /// riding wide tank tracks. Ranged only: it fires one straight-flying
+    /// mortar shell (the Bombard's round, no arc) down the lane.
+    /// Base 280, scaled.
     static var immortalHP: CGFloat { 280 * active.enemyHPScale }
     static let immortalSpeed: CGFloat = 150
     static let immortalReward: Int = 250
     static let immortalSightRange: CGFloat = 640
     static let immortalShootRange: CGFloat = 420
     static let immortalFireCooldown: Double = 2.8
-    /// Twin disruptor rounds: heavy single hits, fired back to back —
-    /// this is the beat between the first and second round.
-    static let immortalBurstGap: Double = 0.22
-    static let immortalOrbDamage: CGFloat = 20
-    static let immortalOrbSpeed: CGFloat = 300
-    static let immortalOrbLife: Double = 2.0
-    static let immortalOrbBlast: CGFloat = 40
+    static let immortalShellDamage: CGFloat = 20
+    /// Straight-shot shells: the Bombard's mortar round fired flat and
+    /// fast, detonating with the Bombard's blast on impact.
+    static let immortalShellSpeed: CGFloat = 760
+    static let immortalShellLife: Double = 0.8
+    static let immortalShellBlast: CGFloat = 92
+    /// Shardwing (ice-dart dive-drone — Level 24+): the fastest thing in
+    /// the sky, cruising above even the gunships. Fragile up close and
+    /// short-reaching: it must dive screaming to the deck to loose its
+    /// twin-bolt burst, then climbs straight back to cruise. Base 95,
+    /// scaled — it pays a premium precisely because the dive is scary.
+    static var shardwingHP: CGFloat { 95 * active.enemyHPScale }
+    static let shardwingSpeed: CGFloat = 195
+    static let shardwingReward: Int = 300
+    static let shardwingSightRange: CGFloat = 720
+    static let shardwingShootRange: CGFloat = 340
+    static let shardwingFireCooldown: Double = 3.0
+    static let shardwingBoltDamage: CGFloat = 10
+    static let shardwingCruiseHeight: CGFloat = 220  // above the gunships
+    static let shardwingDiveHeight: CGFloat = 55    // deck-skimming attack run
+    /// A victim inside this range (with the dive timer reset) triggers
+    /// the dive.
+    static let shardwingDiveRange: CGFloat = 560
+    /// Seconds between dive passes.
+    static let shardwingDiveCooldown: Double = 7.0
+    /// Dive-run speed multiplier over cruise.
+    static let shardwingDiveSpeed: CGFloat = 1.7
+    static let shardwingBurstCount: Int = 2
+    static let shardwingBurstGap: Double = 0.14
+    static let shardwingBoltSpeed: CGFloat = 660
     static let enemyBoltSpeed: CGFloat = 520
     static let enemyBoltLife: Double = 1.2     // range ≈ 624: outranged by the hero
 
@@ -587,6 +686,20 @@ enum Balance {
     static let tankMissileSpeed: CGFloat = 640
     static let tankMissileLife: Double = 1.4
     static let tankMissileBlast: CGFloat = 38
+    // Gunship: Level 22 dual-rotor heavy attack helicopter — the player's
+    // first flying army unit. Larger tandem-rotor frame that hovers high
+    // above the lane and fires a 3-round burst from its chin turret.
+    static let gunshipCost: Int = 700
+    static let gunshipHP: CGFloat = 340
+    static let gunshipSpeed: CGFloat = 155
+    static let gunshipDamage: CGFloat = 22
+    static let gunshipFireCooldown: Double = 1.5
+    static let gunshipRange: CGFloat = 480
+    static let gunshipSightRange: CGFloat = 760
+    static let gunshipHoverHeight: CGFloat = 165
+    static let gunshipBurstCount: Int = 3
+    static let gunshipBurstGap: Double = 0.09
+    static let gunshipBoltSpeed: CGFloat = 720
 
     // MARK: - Parallax scroll factors (ported from your Unity Parallaxing.cs idea:
     // background moves slower than the camera; factor 1.0 = locked to world)

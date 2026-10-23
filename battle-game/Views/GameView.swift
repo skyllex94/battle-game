@@ -72,6 +72,9 @@ struct GameView: View {
     /// Level 11 fortress-line intel: introduces the fourth tower that now
     /// anchors each base. Freezes the field until the player dismisses it.
     @State private var showTowerIntro = false
+    /// Level 20 HQ refit intel: announces the Mk-II citadel main buildings
+    /// and their 4-missile rooftop volley on both sides.
+    @State private var showBaseIntro = false
     /// Level 5 grant sequence: 1 = free gun slot, 2 = Scatter gun.
     /// Shown one modal after another on battle entry; each CLAIM grants.
     @State private var grantStep: Int?
@@ -513,6 +516,24 @@ struct GameView: View {
                 .padding(.vertical, 12)
             }
 
+            // Level 20 HQ refit intel: announces the Mk-II citadel HQs and
+            // their 4-missile rooftop volley on both sides.
+            if showBaseIntro {
+                Color.black.opacity(0.68)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { closeBaseIntro() }
+
+                ViewThatFits(in: .vertical) {
+                    baseIntroCard
+                    ScrollView(.vertical, showsIndicators: false) {
+                        baseIntroCard
+                    }
+                    .frame(maxWidth: 360)
+                }
+                .padding(.vertical, 12)
+            }
+
             // Milestone hero unlock (Level 8 = Vanguard): portrait + stats, then
             // CLAIM persists the unlock, auto-equips, and resumes.
             if let fresh = heroUnlock {
@@ -682,16 +703,18 @@ struct GameView: View {
                     scene.isPaused = true
                     winTime = minimap.winTime
                     winStars = starsFor(time: minimap.winTime)
-                    // Diamond payout: clear reward (diminished on repeats) +
-                    // leftover war gold auto-converts (gold resets per run).
-                    // Repeat-ness reads BEFORE banking the stars.
-                    winWasRepeat = CampaignData.stars(for: level.id) > 0
-                    winClearDiamonds = Economy.clearReward(levelId: level.id, stars: winStars,
-                                                          isRepeat: winWasRepeat)
-                    winLeftoverDiamonds = Economy.leftoverReward(gold: minimap.money)
-                    CampaignData.awardStars(winStars, for: level.id)
-                    resetWinState()
-                    startDiamondCountUp(total: winClearDiamonds + winLeftoverDiamonds)
+                    if level.id != Balance.playgroundLevelId {
+                        // Diamond payout: clear reward (diminished on repeats) +
+                        // leftover war gold auto-converts (gold resets per run).
+                        // Repeat-ness reads BEFORE banking the stars.
+                        winWasRepeat = CampaignData.stars(for: level.id) > 0
+                        winClearDiamonds = Economy.clearReward(levelId: level.id, stars: winStars,
+                                                              isRepeat: winWasRepeat)
+                        winLeftoverDiamonds = Economy.leftoverReward(gold: minimap.money)
+                        CampaignData.awardStars(winStars, for: level.id)
+                        resetWinState()
+                        startDiamondCountUp(total: winClearDiamonds + winLeftoverDiamonds)
+                    }
                     SoundEngine.shared.stopBattleMusic()
                     SoundEngine.shared.victory()
                 }
@@ -738,6 +761,18 @@ struct GameView: View {
                     guard !showTowerIntro, !showUnitIntro, grantStep == nil,
                           heroUnlock == nil, !minimap.won, !minimap.lost else { return }
                     showTowerIntro = true
+                    showMenu = false
+                    scene.isPaused = true
+                }
+            }
+            // Level 20 HQ refit briefing: let the field settle, then freeze
+            // it and announce the Mk-II citadel HQs + 4-missile rooftop volley.
+            if level.id == Balance.upgradedBaseLevel {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    guard !showBaseIntro, !showTowerIntro, !showUnitIntro,
+                          grantStep == nil, heroUnlock == nil,
+                          !minimap.won, !minimap.lost else { return }
+                    showBaseIntro = true
                     showMenu = false
                     scene.isPaused = true
                 }
@@ -975,6 +1010,105 @@ struct GameView: View {
         .shadow(color: .red.opacity(0.25), radius: 20)
     }
 
+    /// Level 20 card: both HQs rendered in the new Mk-II citadel pixel art,
+    /// calling out the bigger fortified structure and 4-missile rooftop volley.
+    private var baseIntroCard: some View {
+        VStack(spacing: 9) {
+            HStack(spacing: 8) {
+                Rectangle()
+                    .fill(.orange.opacity(0.45))
+                    .frame(width: 22, height: 1)
+                Text("HQ REFIT")
+                    .font(.system(size: 10, weight: .black, design: .monospaced))
+                    .tracking(2)
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 10).padding(.vertical, 3)
+                    .background(.orange)
+                Rectangle()
+                    .fill(.orange.opacity(0.45))
+                    .frame(width: 22, height: 1)
+            }
+
+            ZStack {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(LinearGradient(colors: [.red.opacity(0.22),
+                                                 .black.opacity(0.80)],
+                                         startPoint: .top, endPoint: .bottom))
+                    .frame(width: 244, height: 136)
+                Rectangle()
+                    .fill(.red.opacity(0.26))
+                    .frame(width: 244, height: 1)
+                    .offset(y: 48)
+                HStack(spacing: 14) {
+                    Image(uiImage: BaseNode.previewImage(for: .player, upgraded: true))
+                        .interpolation(.none)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 98, height: 104)
+                        .shadow(color: .cyan.opacity(0.45), radius: 10)
+                    Image(uiImage: BaseNode.previewImage(for: .enemy, upgraded: true))
+                        .interpolation(.none)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 98, height: 104)
+                        .shadow(color: .red.opacity(0.55), radius: 12)
+                }
+            }
+            .frame(width: 244, height: 136)
+            .clipShape(PixelPanelShape(cut: 8))
+            .overlay(PixelPanelShape(cut: 8).stroke(.orange.opacity(0.8), lineWidth: 2))
+            .overlay(alignment: .topTrailing) {
+                Text("MK-II")
+                    .font(.system(size: 10, weight: .black, design: .monospaced))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(.orange)
+                    .padding(6)
+            }
+            .overlay(alignment: .bottomLeading) {
+                HStack(spacing: 3) {
+                    ForEach(0..<Balance.baseMissileCount, id: \.self) { _ in
+                        Rectangle()
+                            .fill(.orange)
+                            .frame(width: 5, height: 5)
+                    }
+                }
+                .padding(7)
+            }
+
+            Text("MK-II CITADEL HQ")
+                .font(.system(size: 19, weight: .black, design: .monospaced))
+                .tracking(2)
+                .foregroundStyle(.white)
+            Text("UPGRADED HQS · 4-MISSILE VOLLEY")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .tracking(1.5)
+                .foregroundStyle(.orange)
+            Text("Both main HQs have been refitted into heavy Mk-II citadels with reinforced casemates and a rooftop quad-missile battery that fires a 4-rocket salvo.")
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.75))
+                .lineLimit(3)
+                .minimumScaleFactor(0.85)
+                .frame(maxWidth: 290)
+            HStack(spacing: 10) {
+                UnitStatChip(label: "SALVO", value: "4 MISSILES")
+                UnitStatChip(label: "ENEMY HQ", value: "\(Int(Balance.enemyBaseHealth(forLevel: level.id).rounded()))")
+                UnitStatChip(label: "RANGE", value: "\(Int(Balance.baseRange))")
+            }
+            PixelMenuButton(title: "Close", style: .primary) {
+                SoundEngine.shared.uiTap()
+                closeBaseIntro()
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 16)
+        .background(.black.opacity(0.92))
+        .clipShape(PixelPanelShape(cut: 10))
+        .overlay(PixelPanelShape(cut: 10).stroke(.orange.opacity(0.65), lineWidth: 3))
+        .shadow(color: .orange.opacity(0.25), radius: 20)
+    }
+
     /// Unit debuting on this level, if any (Ranger on Level 2, Heavy on
     /// Level 3). Nil keeps entry instant — no modal, no pause.
     private var debutUnit: ArmyKind? {
@@ -1037,6 +1171,11 @@ struct GameView: View {
         } else {
             scene.isPaused = false
         }
+    }
+
+    private func closeBaseIntro() {
+        showBaseIntro = false
+        scene.isPaused = false
     }
 
     /// Level 5 grant CLAIM: step 1 grants the free slot (if still missing)

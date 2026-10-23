@@ -103,6 +103,15 @@ enum FrostbiteBG {
     /// horizon, two slow-breathing aurora ribbons, cold star twinkle and
     /// thin ice-haze streaks. All bakes + looping actions.
     static func buildSky(in layer: SKNode, sceneSize: CGSize) {
+        // Rimevault evening (Level 26): the same frozen theater under a
+        // low amber sun — deep indigo zenith melting to ember-gold at the
+        // horizon instead of the pale polar noon.
+        let evening = Balance.frostEvening
+        let eTop = UIColor(red: 0.05, green: 0.06, blue: 0.18, alpha: 1)
+        let eMid = UIColor(red: 0.20, green: 0.14, blue: 0.36, alpha: 1)
+        let eLow = UIColor(red: 0.62, green: 0.30, blue: 0.28, alpha: 1)
+        let eHorizon = UIColor(red: 1.0, green: 0.62, blue: 0.30, alpha: 1)
+        let eMist = UIColor(red: 0.52, green: 0.34, blue: 0.32, alpha: 1)
         // Dithered vertical gradient: navy -> steel -> pale ice -> mist.
         let grad = render(w: 2, h: 256) { cg in
             for y in 0..<256 {
@@ -110,13 +119,13 @@ enum FrostbiteBG {
                 let c: UIColor
                 switch t {
                 case 0..<0.40:
-                    c = blend(skyTop, skyMid, t / 0.40)
+                    c = blend(evening ? eTop : skyTop, evening ? eMid : skyMid, t / 0.40)
                 case 0.40..<0.68:
-                    c = blend(skyMid, skyLow, (t - 0.40) / 0.28)
+                    c = blend(evening ? eMid : skyMid, evening ? eLow : skyLow, (t - 0.40) / 0.28)
                 case 0.68..<0.85:
-                    c = blend(skyLow, horizonIce, (t - 0.68) / 0.17 * 0.7)
+                    c = blend(evening ? eLow : skyLow, evening ? eHorizon : horizonIce, (t - 0.68) / 0.17 * 0.7)
                 default:
-                    c = blend(horizonIce, mistCold, 0.4 + (t - 0.85) / 0.15 * 0.6)
+                    c = blend(evening ? eHorizon : horizonIce, evening ? eMist : mistCold, 0.4 + (t - 0.85) / 0.15 * 0.6)
                 }
                 fill(cg, 0, y, 2, 1, c)
             }
@@ -130,15 +139,20 @@ enum FrostbiteBG {
         let W = sceneSize.width, H = sceneSize.height
 
         // Winter sun: a small pale disc low over the glacier, warm white
-        // to keep the lane readable but cold overall.
-        let sun = SKShapeNode(circleOfRadius: 34)
-        sun.fillColor = SKColor(red: 1.0, green: 0.96, blue: 0.88, alpha: 1)
+        // to keep the lane readable but cold overall. Evening: a low
+        // amber disc sinking into the glacier, with a wider warm halo.
+        let sun = SKShapeNode(circleOfRadius: evening ? 42 : 34)
+        sun.fillColor = evening
+            ? SKColor(red: 1.0, green: 0.55, blue: 0.25, alpha: 1)
+            : SKColor(red: 1.0, green: 0.96, blue: 0.88, alpha: 1)
         sun.strokeColor = .clear
-        sun.position = CGPoint(x: W * 0.70, y: H * 0.15)
+        sun.position = CGPoint(x: W * (evening ? 0.60 : 0.70), y: H * (evening ? 0.10 : 0.15))
         sun.zPosition = 1
         layer.addChild(sun)
-        let halo = SKShapeNode(circleOfRadius: 120)
-        halo.fillColor = SKColor(red: 0.80, green: 0.90, blue: 1.0, alpha: 0.26)
+        let halo = SKShapeNode(circleOfRadius: evening ? 150 : 120)
+        halo.fillColor = evening
+            ? SKColor(red: 1.0, green: 0.60, blue: 0.30, alpha: 0.35)
+            : SKColor(red: 0.80, green: 0.90, blue: 1.0, alpha: 0.26)
         halo.strokeColor = .clear
         halo.position = sun.position
         halo.zPosition = 1
@@ -167,6 +181,7 @@ enum FrostbiteBG {
 
         // Aurora ribbons: two baked gradient sheets with wavy column fades,
         // pulsing alpha + slow drift — the cheapest "living" polar sky.
+        // Evening washes them out, so they burn dimmer under the amber sun.
         let auroraTex = auroraTexture()
         for i in 0..<2 {
             let ribbon = SKSpriteNode(texture: auroraTex)
@@ -175,11 +190,11 @@ enum FrostbiteBG {
             ribbon.position = CGPoint(x: W * 0.32 + CGFloat(i) * W * 0.34,
                                       y: H * (i == 0 ? 0.86 : 0.66))
             ribbon.zPosition = 1
-            ribbon.alpha = i == 0 ? 0.42 : 0.30
+            ribbon.alpha = evening ? (i == 0 ? 0.22 : 0.16) : (i == 0 ? 0.42 : 0.30)
             layer.addChild(ribbon)
             let pulse = SKAction.sequence([
-                .fadeAlpha(to: i == 0 ? 0.62 : 0.44, duration: 5.6 + Double(i) * 1.7),
-                .fadeAlpha(to: i == 0 ? 0.30 : 0.22, duration: 5.6 + Double(i) * 1.7),
+                .fadeAlpha(to: evening ? (i == 0 ? 0.34 : 0.24) : (i == 0 ? 0.62 : 0.44), duration: 5.6 + Double(i) * 1.7),
+                .fadeAlpha(to: evening ? (i == 0 ? 0.16 : 0.12) : (i == 0 ? 0.30 : 0.22), duration: 5.6 + Double(i) * 1.7),
             ])
             ribbon.run(.repeatForever(pulse))
             let sway = SKAction.moveBy(x: W * 0.04, y: 0, duration: 11.0 + Double(i) * 4.0)
@@ -188,9 +203,12 @@ enum FrostbiteBG {
         }
 
         // Ice-haze streaks: thin cold cloud sheets drifting slowly.
+        // Evening tints them warm ember-rose under the low sun.
         for _ in 0..<6 {
             let cw = W * rng.cgFloat(in: 0.32...0.55)
-            let cloud = SKSpriteNode(color: SKColor(red: 0.82, green: 0.88, blue: 0.96, alpha: 0.20),
+            let cloud = SKSpriteNode(color: evening
+                ? SKColor(red: 0.96, green: 0.62, blue: 0.44, alpha: 0.22)
+                : SKColor(red: 0.82, green: 0.88, blue: 0.96, alpha: 0.20),
                                      size: CGSize(width: cw, height: rng.cgFloat(in: 8...16)))
             cloud.position = CGPoint(x: rng.cgFloat(in: -W * 0.6...W * 0.6),
                                      y: H * rng.cgFloat(in: 0.04...0.46))
@@ -202,7 +220,17 @@ enum FrostbiteBG {
         }
 
         // Cinematic vignette (cold grade): darker edges, brighter center so
-        // the white field stays luminous.
+        // the white field stays luminous. Fixed 128x128 canvas: baked once,
+        // shared by every frost scene.
+        let vigNode = SKSpriteNode(texture: vignetteTexture())
+        vigNode.size = CGSize(width: W * 1.25, height: H * 1.5)
+        vigNode.zPosition = 50
+        layer.addChild(vigNode)
+    }
+
+    private static var vignetteTexCache: SKTexture?
+    private static func vignetteTexture() -> SKTexture {
+        if let vignetteTexCache { return vignetteTexCache }
         let vig = render(w: 128, h: 128) { cg in
             for px in 0..<128 {
                 for py in 0..<128 {
@@ -215,10 +243,8 @@ enum FrostbiteBG {
             }
         }
         vig.filteringMode = .linear
-        let vigNode = SKSpriteNode(texture: vig)
-        vigNode.size = CGSize(width: W * 1.25, height: H * 1.5)
-        vigNode.zPosition = 50
-        layer.addChild(vigNode)
+        vignetteTexCache = vig
+        return vig
     }
 
     private static var auroraTexCache: SKTexture?
@@ -340,14 +366,14 @@ enum FrostbiteBG {
         }
     }
 
-    /// Three glacier ranges stacked back to front: a high pale wall under
-    /// deep snow (most summits capped white), a colder mid range whose
-    /// taller peaks carry snow caps, and a dark near massif with only snow
-    /// ledges — over a frozen bay with drifted bergs and the region's
-    /// glowing ice-spire landmark. Cold haze pools between every range.
-    static func buildFar(in layer: SKNode, sceneSize: CGSize) {
-        let travel = Balance.levelWidth * Balance.parallaxFar
-        let panoW: CGFloat = sceneSize.width + travel + 500
+    private static var farTexCache: SKTexture?
+    /// Glacier panorama sheet (fixed 1100x280 canvas — lane width only
+    /// sizes the sprite, never the bake). Baked once and shared by every
+    /// frost briefing + battle: three painted ranges make this the heaviest
+    /// frost bake, and rebuilding it on the main thread is what stalls the
+    /// map → Level 21+ push.
+    private static func farTexture() -> SKTexture {
+        if let farTexCache { return farTexCache }
         let PW = 1100, PH = 280
         let tex = render(w: PW, h: PH) { cg in
             cg.clear(CGRect(x: 0, y: 0, width: PW, height: PH))
@@ -465,6 +491,19 @@ enum FrostbiteBG {
             fill(cg, 0, 202, PW, PH - 202,
                  blend(glacierDk, frostDeep, 0.55))
         }
+        farTexCache = tex
+        return tex
+    }
+
+    /// Three glacier ranges stacked back to front: a high pale wall under
+    /// deep snow (most summits capped white), a colder mid range whose
+    /// taller peaks carry snow caps, and a dark near massif with only snow
+    /// ledges — over a frozen bay with drifted bergs and the region's
+    /// glowing ice-spire landmark. Cold haze pools between every range.
+    static func buildFar(in layer: SKNode, sceneSize: CGSize) {
+        let travel = Balance.levelWidth * Balance.parallaxFar
+        let panoW: CGFloat = sceneSize.width + travel + 500
+        let tex = farTexture()
         let pano = SKSpriteNode(texture: tex)
         pano.anchorPoint = CGPoint(x: 0, y: 0.5)
         let panoH = sceneSize.height * 0.78
@@ -477,8 +516,9 @@ enum FrostbiteBG {
         // (rows ~100-194 of the texture, so it rides the spire mid-height).
         let glowX = -sceneSize.width * 0.6 + panoW * (950.0 / 1100.0)
         let glowRow: CGFloat = 150
+        let farH: CGFloat = 280 // farTexture() canvas height
         let glowY = -sceneSize.height * 0.07
-            + (CGFloat(PH) / 2 - glowRow) / CGFloat(PH) * panoH
+            + (farH / 2 - glowRow) / farH * panoH
         let glow = SKShapeNode(ellipseOf: CGSize(width: 120, height: 60))
         glow.fillColor = SKColor(red: 0.45, green: 0.88, blue: 1.0, alpha: 0.10)
         glow.strokeColor = .clear
@@ -490,12 +530,22 @@ enum FrostbiteBG {
         ])))
 
         // Thin cold veil so the panorama reads as distant air.
+        // Evening: a warm amber wash over the cold veil so the glacier
+        // ridge catches the sinking sun.
         let veil = SKSpriteNode(color: SKColor(red: 0.62, green: 0.74, blue: 0.86, alpha: 0.10),
                                 size: CGSize(width: panoW, height: panoH))
         veil.anchorPoint = CGPoint(x: 0, y: 0.5)
         veil.position = pano.position
         veil.zPosition = 2
         layer.addChild(veil)
+        if Balance.frostEvening {
+            let ember = SKSpriteNode(color: SKColor(red: 1.0, green: 0.48, blue: 0.22, alpha: 0.14),
+                                     size: CGSize(width: panoW, height: panoH * 0.45))
+            ember.anchorPoint = CGPoint(x: 0, y: 0.5)
+            ember.position = CGPoint(x: pano.position.x, y: pano.position.y - panoH * 0.16)
+            ember.zPosition = 3
+            layer.addChild(ember)
+        }
     }
 
     // MARK: - Mid ground (ONE strip set, never tiled)
@@ -579,6 +629,31 @@ enum FrostbiteBG {
             let drift = SKAction.moveBy(x: rng.cgFloat(in: 70...150), y: 0,
                                         duration: rng.double(in: 9...15))
             band.run(.repeatForever(.sequence([drift, drift.reversed()])))
+        }
+
+        // Frozen Narrows small alteration (Level 25): the glacier pinches
+        // into a channel — pale ice floes ride the near sheet's speed so
+        // the mid ground reads as the same pastures split by ice.
+        // Overlay only (baked sheets untouched), a handful of nodes,
+        // no per-frame code.
+        if Balance.frozenNarrows {
+            let leadRoot = MidParallaxNode()
+            leadRoot.baseX = 0
+            leadRoot.cameraFactor = Balance.parallaxMid + 0.055
+            leadRoot.zPosition = 2
+            layer.addChild(leadRoot)
+            var leadRNG = SeededRNG(seed: 225_025)
+            // Ice floes: small pale slabs scattered along the field line.
+            for _ in 0..<6 {
+                let s = leadRNG.cgFloat(in: 10...22)
+                let floe = SKSpriteNode(
+                    color: SKColor(red: 0.88, green: 0.94, blue: 0.99, alpha: 0.95),
+                    size: CGSize(width: s, height: s * 0.45))
+                floe.position = CGPoint(x: leadRNG.cgFloat(in: 0...panoW * 0.8),
+                                        y: baseY + leadRNG.cgFloat(in: 14...58))
+                floe.zRotation = leadRNG.cgFloat(in: -0.12...0.12)
+                leadRoot.addChild(floe)
+            }
         }
     }
 

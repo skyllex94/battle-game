@@ -24,24 +24,29 @@ struct BattlePrepView: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
-            let tight = geo.size.height < 420
-            ZStack {
-                // Living battlefield for THIS level.
-                if let scene = bgScene {
-                    SpriteView(scene: scene, options: [.ignoresSiblingOrder])
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .ignoresSafeArea(edges: .all)
-                }
-                LinearGradient(colors: [.black.opacity(0.80), .black.opacity(0.28)],
-                               startPoint: .leading, endPoint: .trailing)
+        // Backdrop lives OUTSIDE the GeometryReader as the root ZStack's
+        // bottom layer (same as MainMenuView): sizing the SpriteView inside
+        // a safe-area GeometryReader is what letterboxed it — it never
+        // stretched full width. Content keeps its own GeometryReader for
+        // the tight/roomy breakpoints.
+        ZStack {
+            // Living battlefield for THIS level, edge-to-edge.
+            if let scene = bgScene {
+                SpriteView(scene: scene, options: [.ignoresSiblingOrder])
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .ignoresSafeArea(edges: .all)
-                    .allowsHitTesting(false)
-                LinearGradient(colors: [.black.opacity(0.45), .clear],
-                               startPoint: .bottom, endPoint: .center)
-                    .ignoresSafeArea(edges: .all)
-                    .allowsHitTesting(false)
+            }
+            LinearGradient(colors: [.black.opacity(0.80), .black.opacity(0.28)],
+                           startPoint: .leading, endPoint: .trailing)
+                .ignoresSafeArea(edges: .all)
+                .allowsHitTesting(false)
+            LinearGradient(colors: [.black.opacity(0.45), .clear],
+                           startPoint: .bottom, endPoint: .center)
+                .ignoresSafeArea(edges: .all)
+                .allowsHitTesting(false)
 
+            GeometryReader { geo in
+                let tight = geo.size.height < 420
                 VStack(spacing: tight ? 6 : 9) {
                     topBar(tight: tight)
                     // Left: mission brief + launch. Right: hero/weapon over

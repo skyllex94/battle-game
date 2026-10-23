@@ -8,16 +8,19 @@ import CoreGraphics
 /// lantern-blue crystals, rime shards, wind-carved drifts and broken
 /// span stones half-buried in the snow).
 ///
-/// The gate keeps the heat climbing: marches out faster, pops pairs a
-/// touch more often, the field cap ticks up, and enemy HP scales
-/// another 5% (×2.4069, +5% over L22). The Immortal garrison cadence
-/// holds at every eighth summon — the Wardens' watch never blinks.
+/// First 5-tower line: a fifth gun emplacement anchors each base, pushed
+/// into the wide middle gap (player 4950 / enemy 8250) with no field
+/// growth — same 13200pt lane. The gate keeps the heat climbing:
+/// marches out faster, pops pairs a touch more often, the field cap
+/// ticks up, and enemy HP scales another 5% (×2.4069, +5% over L22).
+/// The Immortal garrison cadence holds at every eighth summon — the
+/// Wardens' watch never blinks.
 extension Balance {
     static let layout23 = LevelLayout(
         width: 13200,
         playerBaseX: 220,
-        playerTowerXs: [840, 1640, 2440, 3240],
-        enemyTowerXs: [9050, 9850, 10650, 11450],
+        playerTowerXs: [1750, 2550, 3350, 4150, 4950],
+        enemyTowerXs: [8250, 9050, 9850, 10650, 11450],
         enemyBaseX: 12980,
         heroSpawnX: 420,
         platforms: [],

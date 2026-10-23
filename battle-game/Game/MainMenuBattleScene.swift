@@ -169,6 +169,20 @@ final class MainMenuBattleScene: SKScene {
         washR.position = CGPoint(x: 0, y: groundY)
         washR.zPosition = 2
         world.addChild(washR)
+        // Opaque earth under the lane, past the bottom of the frame: the
+        // old translucent-only falloff showed the scene's black clear color
+        // as a hard horizontal band under bright fields (the frost snow
+        // especially). Frost sinks into deep ice-blue; other themes into
+        // dark soil. Tall enough that aspectFill crops never expose it.
+        let baseColor = frost
+            ? SKColor(red: 0.055, green: 0.075, blue: 0.14, alpha: 1)
+            : SKColor(red: 0.05, green: 0.045, blue: 0.08, alpha: 1)
+        let base = SKSpriteNode(color: baseColor,
+                                size: CGSize(width: laneW, height: size.height * 2))
+        base.anchorPoint = CGPoint(x: 0.5, y: 1)
+        base.position = CGPoint(x: 0, y: groundY - tileH + 1)
+        base.zPosition = 0
+        world.addChild(base)
         // Soft falloff below the lane: a gradient instead of a flat dark bar
         // so bright themes (the frost levels especially) don't end in a hard
         // black band under the diorama's snowfield.

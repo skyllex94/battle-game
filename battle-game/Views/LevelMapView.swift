@@ -235,7 +235,7 @@ private struct EmraNodeView: View {
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(.yellow)
             }
-            Text(level.name.uppercased())
+            Text("\(level.id). \(level.name)".uppercased())
                 .font(.system(size: 10, weight: .black, design: .monospaced))
                 .tracking(1)
                 .foregroundStyle(.white)

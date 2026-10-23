@@ -23,7 +23,7 @@ struct CampaignData {
         id: 999,
         name: "Playground",
         subtitle: "Unit inspection range",
-        briefing: "DEV ONLY. A tiny range with one tower on each side; the gate releases one unit of the kind under inspection per wave. Remove when done.",
+        briefing: "DEV ONLY. A tiny range with one player tower and no enemy tower; the gate releases one unit of this briefing's debut hostile per wave. Remove when done.",
         mapArtName: "MapBG",
         enemyWaves: 0,
         towerHP: 200,
@@ -100,7 +100,7 @@ struct CampaignData {
                  briefing: "An ice fortress inside a storm that never ends. Siege it fast or freeze slow. Objective: crack Whiteout Redoubt.",
                  mapArtName: "MapBG", enemyWaves: 13, towerHP: 640, baseHP: 1700),
         LevelDef(id: 23, name: "Howling Causeway", subtitle: "Cross the ice bridge",
-                 briefing: "One ice bridge over a black abyss, and Wardens walk it. Do not stop mid-span. Objective: cross the Causeway and raze the HQ.",
+                 briefing: "One ice bridge over a black abyss, and Wardens walk it. Both sides raise a fifth gun tower to close the middle gap — five towers a side from here on. Do not stop mid-span. Objective: cross the Causeway and raze the HQ.",
                  mapArtName: "MapBG", enemyWaves: 13, towerHP: 660, baseHP: 1760),
         LevelDef(id: 24, name: "Rimewatch Crag", subtitle: "Climb the frozen spire",
                  briefing: "A watch-post of blue ice rises above the whiteout. Whoever holds it sees every move on the glacier. Objective: take Rimewatch Crag and destroy the enemy HQ.",
@@ -245,8 +245,9 @@ struct HeroDef: Identifiable {
 }
 
 struct HeroRoster {
-    /// Hero Roster. FOR NOW: Scout + Vanguard (Vanguard is the Level 8
-    /// milestone unlock). Everything else stays locked (99).
+    /// Hero Roster. Scout + Vanguard (Level 8 milestone) + Bulwark
+    /// (Level 15 milestone) + Ranger (Level 21 milestone). Everything
+    /// else stays locked (99).
     static let heroes: [HeroDef] = [
         HeroDef(id: "scout", displayName: "Scout", iconArtName: "Hero_icon1",
                 maxHealth: 100, speed: 10, baseDamage: 0,
@@ -261,9 +262,9 @@ struct HeroRoster {
                 blurb: "Slow tank. Holds the lane under tower fire.",
                 unlockLevel: 15),
         HeroDef(id: "ranger", displayName: "Ranger", iconArtName: "Hero_icon4",
-                maxHealth: 220, speed: 20, baseDamage: 8,
+                maxHealth: 290, speed: 20, baseDamage: 8,
                 blurb: "Gun-ready skirmisher.",
-                unlockLevel: 99),
+                unlockLevel: 21),
         HeroDef(id: "saboteur", displayName: "Saboteur", iconArtName: "Hero_icon5",
                 maxHealth: 380, speed: 17, baseDamage: 10,
                 blurb: "Tower-killer. Bonus vs structures (stage 2).",

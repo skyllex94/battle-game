@@ -18,6 +18,11 @@ struct LevelDetailView: View {
     /// initial value — SwiftUI re-evaluates that on every re-render, and a
     /// throwaway scene would fight the running battle for the layout).
     @State private var bgScene: MainMenuBattleScene?
+    /// Gates the SpriteView one runloop past the push: the frost diorama's
+    /// first bake (Level 21+) is main-thread CoreGraphics, and presenting
+    /// it synchronously inside the navigation transition is what freezes
+    /// the map tap. The static gradient underneath covers the gap.
+    @State private var dioramaReady = false
 
     /// Enemy kinds debuting on this level (briefing intel).
     private var newEnemies: [EnemyKind] {
@@ -25,9 +30,13 @@ struct LevelDetailView: View {
     }
 
     /// Every hostile type this level actually summons (not just every unit
-    /// unlocked by this point in the campaign).
+    /// unlocked by this point in the campaign). Debuting hostiles always
+    /// close the roster, so the NEW chip never sits ahead of veterans.
     private var activeEnemies: [EnemyKind] {
-        Balance.layout(for: level.id).enemyKinds
+        let kinds = Balance.layout(for: level.id).enemyKinds
+        let veterans = kinds.filter { $0.unlockLevel != level.id }
+        let debuts = kinds.filter { $0.unlockLevel == level.id }
+        return veterans + debuts
     }
 
     /// Army unit that joins the roster on this level, if any.
@@ -48,11 +57,16 @@ struct LevelDetailView: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
-            let tight = geo.size.height < 420
+        // Backdrop lives OUTSIDE the GeometryReader as the root ZStack's
+        // bottom layer (same as MainMenuView): sizing the SpriteView inside
+        // a safe-area GeometryReader is what letterboxed it — it never
+        // stretched full width. Content keeps its own GeometryReader for
+        // the tight/roomy breakpoints.
+        ZStack {
+            backdrop
 
-            ZStack {
-                backdrop
+            GeometryReader { geo in
+                let tight = geo.size.height < 420
 
                 VStack(spacing: tight ? 8 : 10) {
                     header(tight: tight)
@@ -74,12 +88,18 @@ struct LevelDetailView: View {
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .background(Color.black.ignoresSafeArea(edges: .all))
         .onAppear {
             // Backdrop must dress THIS level's battlefield, not the last one
-            // played — build it once per level.
+            // played — build it once per level. Presentation waits a runloop
+            // so the map → briefing push never stalls on a cold bake.
             if bgScene?.levelId != level.id {
+                dioramaReady = false
                 bgScene = MainMenuBattleScene(size: CGSize(width: 1334, height: 750),
                                               levelId: level.id)
+                DispatchQueue.main.async { dioramaReady = true }
+            } else if !dioramaReady {
+                DispatchQueue.main.async { dioramaReady = true }
             }
         }
     }
@@ -88,7 +108,14 @@ struct LevelDetailView: View {
 
     @ViewBuilder
     private var backdrop: some View {
-        if let scene = bgScene {
+        // Static deep-field gradient: instant paint under the diorama so
+        // the push never flashes, and full-bleed to the window edges.
+        LinearGradient(colors: [Color(red: 0.03, green: 0.04, blue: 0.09),
+                                Color(red: 0.01, green: 0.01, blue: 0.03)],
+                       startPoint: .top, endPoint: .bottom)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea(edges: .all)
+        if let scene = bgScene, dioramaReady {
             SpriteView(scene: scene, options: [.ignoresSiblingOrder])
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea(edges: .all)
@@ -264,11 +291,14 @@ struct LevelDetailView: View {
     }
 
     /// DEV: tosses the selected loadout hero straight into the tiny
-    /// playground arena (one tower per side, one inspected unit per wave).
+    /// playground arena (one player tower, no enemy tower, one inspected
+    /// unit per wave). The gate releases THIS briefing's debut hostile —
+    /// levels with no debut fall back to the Saucer.
     /// Temporary — remove the button with snowFX dev pass done.
     private func playgroundButton(tight: Bool) -> some View {
         Button {
             SoundEngine.shared.uiTap()
+            Balance.playgroundUnit = newEnemies.first ?? .saucer
             path.append(Route.game(levelId: Balance.playgroundLevelId,
                                    heroId: HeroRoster.selectedHero.id))
         } label: {

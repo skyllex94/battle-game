@@ -140,13 +140,14 @@ enum Balance {
         /// walker is a singleton: the next one only marches once the
         /// previous falls.
         var immortalEvery: Int = 0
-        /// Every Nth summon screams in a Shardwing dive-drone (0 = never
-        /// shows). Strafers: they cruise high, dive low for a twin-bolt
-        /// burst, then climb back out (Level 24+).
-        var shardwingEvery: Int = 0
-        /// DEV playground (Level 999): tiny arena, one tower per side, and
-        /// the enemy gate releases only the unit under inspection. The
-        /// PLAYGROUND button on the briefing screen is the only entry.
+        /// Every Nth summon floats in a Saucer gun-drone (0 = never
+        /// shows). Heavy high-altitude saucer: cruises above the gunships
+        /// and holds station to fire twin-blaster bursts (Level 24+).
+        var saucerEvery: Int = 0
+        /// DEV playground (Level 999): tiny arena, one player tower, no
+        /// enemy tower, and the enemy gate releases only the unit under
+        /// inspection. The PLAYGROUND button on the briefing screen is
+        /// the only entry.
         var playground: Bool = false
 
         /// The lane is wind-glazed ice (Level 21+): ground sparkle texture,
@@ -172,6 +173,25 @@ enum Balance {
         /// (see LevelDressing.buildRimewatchCrag).
         var rimewatchCrag: Bool = false
 
+        /// Frozen Narrows ice-channel ground (Level 25): small pixel-art
+        /// whispers frozen into the snow field — brittle ice sheets,
+        /// rime shards and wind-carved drifts
+        /// (see LevelDressing.buildFrozenNarrows). The mid ground carries
+        /// the matching small alteration (see FrostbiteBG.buildMid): pale
+        /// ice floes.
+        var frozenNarrows: Bool = false
+
+        /// Rimevault vault ground (Level 26): small pixel-art whispers
+        /// frozen into the snow field — sunken vault door-slabs, rime
+        /// shards, wind-carved drifts and ember braziers burning against
+        /// the evening cold (see LevelDressing.buildRimevault).
+        var rimevault: Bool = false
+
+        /// Frost evening grade (Level 26 Rimevault): the same frozen
+        /// theater under a low amber sun — deep indigo zenith melting to
+        /// ember-gold at the horizon. FrostbiteBG.buildSky reads this.
+        var frostEvening: Bool = false
+
         /// The enemy kinds this level can actually summon, in roster order.
         /// Briefings use this instead of campaign unlock levels, so a level
         /// that disables a unit (e.g. Level 13 has no Reavers) doesn't list it.
@@ -183,9 +203,9 @@ enum Balance {
             if jetEvery > 0 { kinds.append(.jet) }
             if mechEvery > 0 { kinds.append(.mech) }
             if heliEvery > 0 { kinds.append(.heli) }
-            if shardwingEvery > 0 { kinds.append(.shardwing) }
             if truckEvery > 0 { kinds.append(.missileTruck) }
             if immortalEvery > 0 { kinds.append(.immortal) }
+            if saucerEvery > 0 { kinds.append(.saucer) }
             return kinds
         }
     }
@@ -204,9 +224,10 @@ enum Balance {
     /// DEV playground level id (see the PLAYGROUND button on the briefing
     /// screen). Special-cased everywhere campaign scaling applies.
     static let playgroundLevelId = 999
-    /// The unit the playground gate releases, one per wave. Swap this to
-    /// inspect any unit; the Shardwing is the newest roster member.
-    static var playgroundUnit: EnemyKind = .shardwing
+    /// The unit the playground gate releases, one per wave. Set by the
+    /// briefing's PLAYGROUND button to that level's debut hostile
+    /// (Saucer fallback); swap manually to inspect any other unit.
+    static var playgroundUnit: EnemyKind = .saucer
 
     /// Enemy structure durability at Level 1. Every campaign level after
     /// that adds 10%, compounding (L2 ×1.10, L3 ×1.21 …).
@@ -274,6 +295,8 @@ enum Balance {
         case 22: return layout22
         case 23: return layout23
         case 24: return layout24
+        case 25: return layout25
+        case 26: return layout26
         default: return layout1
         }
     }
@@ -300,6 +323,13 @@ enum Balance {
     /// Rimewatch Crag watch ground (Level 24): blue-ice spire teeth +
     /// sundered watch-cairn rubble frozen into the field.
     static var rimewatchCrag: Bool { active.rimewatchCrag }
+    /// Frozen Narrows ice-channel ground (Level 25): brittle ice sheets
+    /// frozen into the field, with matching mid-ground ice floes.
+    static var frozenNarrows: Bool { active.frozenNarrows }
+    /// Rimevault vault ground (Level 26): sunken vault slabs + braziers.
+    static var rimevault: Bool { active.rimevault }
+    /// Frost evening grade (Level 26): amber dusk over the ice.
+    static var frostEvening: Bool { active.frostEvening }
     static var groundTopY: CGFloat = 120        // y of the walkable surface
     /// True on desert themes (dune sand + sand dressing; Levels 7-13).
     static var dunes: Bool {
@@ -363,7 +393,19 @@ enum Balance {
     /// Full deaths the hero survives per attempt. Each death costs one
     /// heart (HUD); the run ends in defeat when the last heart is lost.
     static let heroLives: Int = 3
-    static let startingGold: Int = 500 // Unity PlayerMoney.startingMoney
+    /// Base war chest (Level 1-2). Every 2 levels it grows by
+    /// `startingGoldStep` (L1-2: 300, L3-4: 350, L5-6: 400, …).
+    static let startingGold: Int = 300
+    /// Starting-gold bump, granted every 2 campaign levels.
+    static let startingGoldStep: Int = 50
+    /// DEV playground war chest: a fat stack so every army card can be
+    /// fielded while inspecting the unit under test.
+    static let playgroundStartingGold: Int = 1000
+    /// Starting gold for a level id (playground pays the fat stack).
+    static func startingGold(for levelId: Int) -> Int {
+        guard levelId != playgroundLevelId else { return playgroundStartingGold }
+        return startingGold + ((max(1, levelId) - 1) / 2) * startingGoldStep
+    }
     // MARK: - Hero respawn (dropped from above, in front of the player base)
     static let respawnDelay: Double = 2.0      // seconds dead before the drop
     static let respawnOffsetX: CGFloat = 150   // in front of the player base, toward mid
@@ -446,8 +488,8 @@ enum Balance {
     static var truckCount: Int { active.truckCount }
     /// Every Nth summon is the Immortal walker (0 = never). Singleton.
     static var immortalEvery: Int { active.immortalEvery }
-    /// Every Nth summon is a Shardwing dive-drone (0 = never).
-    static var shardwingEvery: Int { active.shardwingEvery }
+    /// Every Nth summon is a Saucer gun-drone (0 = never).
+    static var saucerEvery: Int { active.saucerEvery }
     static let firstSummonDelay: Double = 5.0
     /// Raider (the classic marcher — Levels 1+). Base 40; Level 5+ scales
     /// via the layout's enemyHPScale (L5 = ×1.05, L6 = ×1.1025).
@@ -579,30 +621,26 @@ enum Balance {
     static let immortalShellSpeed: CGFloat = 760
     static let immortalShellLife: Double = 0.8
     static let immortalShellBlast: CGFloat = 92
-    /// Shardwing (ice-dart dive-drone — Level 24+): the fastest thing in
-    /// the sky, cruising above even the gunships. Fragile up close and
-    /// short-reaching: it must dive screaming to the deck to loose its
-    /// twin-bolt burst, then climbs straight back to cruise. Base 95,
-    /// scaled — it pays a premium precisely because the dive is scary.
-    static var shardwingHP: CGFloat { 95 * active.enemyHPScale }
-    static let shardwingSpeed: CGFloat = 195
-    static let shardwingReward: Int = 300
-    static let shardwingSightRange: CGFloat = 720
-    static let shardwingShootRange: CGFloat = 340
-    static let shardwingFireCooldown: Double = 3.0
-    static let shardwingBoltDamage: CGFloat = 10
-    static let shardwingCruiseHeight: CGFloat = 220  // above the gunships
-    static let shardwingDiveHeight: CGFloat = 55    // deck-skimming attack run
-    /// A victim inside this range (with the dive timer reset) triggers
-    /// the dive.
-    static let shardwingDiveRange: CGFloat = 560
-    /// Seconds between dive passes.
-    static let shardwingDiveCooldown: Double = 7.0
-    /// Dive-run speed multiplier over cruise.
-    static let shardwingDiveSpeed: CGFloat = 1.7
-    static let shardwingBurstCount: Int = 2
-    static let shardwingBurstGap: Double = 0.14
-    static let shardwingBoltSpeed: CGFloat = 660
+    /// Saucer (twin-blaster gun-drone — Level 24+): a bigger flying drone
+    /// built off the saucer reference — wide rust-orange disc hull with a
+    /// red eye, twin boxy blaster cannons slung below firing blue plasma.
+    /// It cruises higher than the Heli Gunship and holds station to loose
+    /// 2-round blaster bursts with a small splash. Slow, tanky,
+    /// long-reaching. Base 330, scaled — it pays a premium as the
+    /// Level 24 sky terror.
+    static var saucerHP: CGFloat { 330 * active.enemyHPScale }
+    static let saucerSpeed: CGFloat = 100
+    static let saucerReward: Int = 325
+    static let saucerSightRange: CGFloat = 740
+    static let saucerShootRange: CGFloat = 480
+    static let saucerFireCooldown: Double = 2.8
+    static let saucerBoltDamage: CGFloat = 11
+    static let saucerHoverHeight: CGFloat = 225  // above the gunships (heli 160)
+    static let saucerBurstCount: Int = 2
+    static let saucerBurstGap: Double = 0.16
+    static let saucerBoltSpeed: CGFloat = 680
+    /// Blue-plasma splash: small AoE around each saucer impact (px radius).
+    static let saucerBlast: CGFloat = 70
     static let enemyBoltSpeed: CGFloat = 520
     static let enemyBoltLife: Double = 1.2     // range ≈ 624: outranged by the hero
 

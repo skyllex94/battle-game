@@ -9,7 +9,7 @@ import UIKit
 /// advancing for a scuttling march cycle.
 enum UnitPixelArt {
 
-    enum Kind { case trooper, heavy, ranger, truck, bombard, tank, gunship, enemy, brute, reaver, skitter, jet, mech, heli, missileTruck, immortal, shardwing }
+    enum Kind { case trooper, heavy, ranger, truck, bombard, tank, gunship, enemy, brute, reaver, skitter, jet, mech, heli, missileTruck, immortal, saucer }
 
     /// Walk frames for a kind: full 4-step stride
     /// (contact -> support -> toe-off -> swing). Generated once, shared.
@@ -36,7 +36,7 @@ enum UnitPixelArt {
         case .heli: made = (0...3).map { heli(pose: $0) }
         case .missileTruck: made = (0...3).map { missileTruck(pose: $0) }
         case .immortal: made = (0...3).map { immortal(pose: $0) }
-        case .shardwing: made = (0...3).map { shardwing(pose: $0) }
+        case .saucer: made = (0...3).map { saucer(pose: $0) }
         }
         frameCache[kind] = made
         return made
@@ -312,13 +312,13 @@ enum UnitPixelArt {
             portraitCache[kind] = portrait
             return portrait
         }
-        // Shardwing portrait: the whole dart scaled to fit the card with
-        // the shard lance raised off the belly mount.
-        if kind == .shardwing {
+        // Saucer portrait: the whole disc scaled to fit the card with
+        // the twin blasters raised off the belly mount.
+        if kind == .saucer {
             _ = frames(for: kind)
             _ = armTexture(for: kind)
-            guard let body = imageCache["body-shardwing-0"],
-                  let arm = imageCache["arm-shardwing"] else { return UIImage() }
+            guard let body = imageCache["body-saucer-0"],
+                  let arm = imageCache["arm-saucer"] else { return UIImage() }
             let m = armMetrics(for: kind)
             let format = UIGraphicsImageRendererFormat()
             format.scale = 1
@@ -326,14 +326,14 @@ enum UnitPixelArt {
             let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
                                                    format: format).image { ctx in
                 let cg = ctx.cgContext
-                // Body canvas is 40x26: shrink so the raised lance fits.
-                let s: CGFloat = 0.6
-                let bw = 40 * s, bh = 26 * s
+                // Body canvas is 64x36: shrink so the raised guns fit.
+                let s: CGFloat = 0.48
+                let bw = 64 * s, bh = 36 * s
                 let x0 = (36 - bw) / 2, y0 = (24 - bh) / 2
                 body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
-                // Lance pivots on the belly mount, breaking the frame.
+                // Guns pivot on the belly mount, breaking the frame.
                 cg.saveGState()
-                cg.translateBy(x: x0 + 24 * s, y: y0 + 17 * s)
+                cg.translateBy(x: x0 + 40 * s, y: y0 + 26 * s)
                 cg.rotate(by: -0.5)
                 let aw = CGFloat(m.w) * s, ah = CGFloat(m.h) * s
                 arm.draw(in: CGRect(x: -aw * 0.21, y: -ah / 2, width: aw, height: ah))
@@ -394,8 +394,8 @@ enum UnitPixelArt {
         case .immortal:
             bodyKey = "body-immortal-0"; armKey = "arm-immortal"
             shoulder = CGPoint(x: 20, y: 11)
-        case .shardwing:
-            bodyKey = "body-shardwing-0"; armKey = "arm-shardwing"
+        case .saucer:
+            bodyKey = "body-saucer-0"; armKey = "arm-saucer"
             shoulder = CGPoint(x: 14, y: 15)
         }
         // Warm the cache (no-ops once textures exist).
@@ -1850,7 +1850,7 @@ enum UnitPixelArt {
         case .heli: return heliArm()
         case .missileTruck: return missileTruckArm()
         case .immortal: return immortalArm()
-        case .shardwing: return shardwingArm()
+        case .saucer: return saucerArm()
         }
     }
 
@@ -2336,96 +2336,117 @@ enum UnitPixelArt {
         }
     }
 
-    // MARK: - Shardwing (Level 24 flying dive-drone)
+    // MARK: - Saucer (Level 24 twin-blaster gun-drone)
 
-    /// Ice-dart dive-drone (40x26), side view facing +x: a needle hull of
-    /// pale rime-ice with a deep-blue belly, a swept dorsal fin + ventral
-    /// fin that flex against each other per pose, a cyan eye slit in the
-    /// nose wedge, frost exhaust crystals at the tail with a shimmering
-    /// trail, and a red war-mark so it still reads as hostile. The 4
-    /// poses flex the fins + stretch the trail so the glide reads in
-    /// motion. The aimable shard lance lives in shardwingArm(); the pivot
-    /// sits at canvas (24, 17), on the belly gun mount.
-    private static func shardwing(pose: Int) -> SKTexture {
-        canvas(w: 40, h: 26, key: "body-shardwing-\(pose)") { cg in
-            let pale = UIColor(red: 0.78, green: 0.89, blue: 0.97, alpha: 1)
-            let mid = UIColor(red: 0.52, green: 0.68, blue: 0.85, alpha: 1)
-            let deep = UIColor(red: 0.24, green: 0.36, blue: 0.52, alpha: 1)
-            let eye = UIColor(red: 0.45, green: 1.0, blue: 0.95, alpha: 1)
-            let glow = UIColor(red: 0.65, green: 0.95, blue: 1.0, alpha: 1)
-            let trim = UIColor(red: 0.85, green: 0.20, blue: 0.16, alpha: 1)
-            let trimD = UIColor(red: 0.50, green: 0.10, blue: 0.10, alpha: 1)
+    /// Big flying drone (64x36), side view facing +x, built off the saucer
+    /// reference: a wide rust-orange disc hull with a raised dome, glowing
+    /// red eye slit on the nose rim, dark belly plate, and twin boxy
+    /// blaster cannons slung below with blue-plasma muzzles. The 4 poses
+    /// flicker the eye + plasma glow and rock the disc so the heavy hover
+    /// reads in motion. The aimable twin blasters live in saucerArm();
+    /// the pivot sits at canvas (40, 26), on the belly gun mount.
+    private static func saucer(pose: Int) -> SKTexture {
+        canvas(w: 64, h: 36, key: "body-saucer-\(pose)") { cg in
+            let rust = UIColor(red: 0.74, green: 0.43, blue: 0.19, alpha: 1)
+            let rustHi = UIColor(red: 0.96, green: 0.66, blue: 0.32, alpha: 1)
+            let rustD = UIColor(red: 0.42, green: 0.22, blue: 0.10, alpha: 1)
+            let rustDk = UIColor(red: 0.24, green: 0.12, blue: 0.06, alpha: 1)
+            let gunmetal = UIColor(red: 0.30, green: 0.28, blue: 0.26, alpha: 1)
+            let gunHi = UIColor(red: 0.55, green: 0.52, blue: 0.48, alpha: 1)
+            let eye = UIColor(red: 1.0, green: 0.16, blue: 0.12, alpha: 1)
+            let eyeHi = UIColor(red: 1.0, green: 0.55, blue: 0.45, alpha: 1)
+            let plasma = UIColor(red: 0.30, green: 0.55, blue: 1.0, alpha: 1)
+            let plasmaHi = UIColor(red: 0.70, green: 0.88, blue: 1.0, alpha: 1)
             let O = outline
 
-            let flex = [0, 1, 0, -1][pose]
-            let trail = [1, 2, 3, 2][pose]
+            let lift = [0, 1, 0, -1][pose]
+            let hot = pose % 2 == 0
 
-            // Frost trail bleeding off the tail crystals.
-            fill(cg, x: 0, y: 12, w: trail, h: 2, glow.withAlphaComponent(0.6))
-            // Tail exhaust crystals + pose shimmer.
-            fill(cg, x: 2, y: 10, w: 3, h: 6, O)
-            fill(cg, x: 3, y: 11, w: 1, h: 4, glow)
-            if pose % 2 == 0 {
-                fill(cg, x: 3, y: 11, w: 1, h: 1, .white)
+            // --- Rear engine glow bleeding off the tail.
+            fill(cg, x: 1, y: 13 + lift, w: 3, h: 3, O)
+            fill(cg, x: 1, y: 14 + lift, w: 2, h: 1, hot ? plasmaHi : plasma)
+
+            // --- Wide disc hull: flat saucer rim + domed top.
+            fill(cg, x: 4, y: 10 + lift, w: 54, h: 9, O)
+            fill(cg, x: 5, y: 11 + lift, w: 52, h: 7, rustD)
+            fill(cg, x: 5, y: 11 + lift, w: 52, h: 2, rust)
+            fill(cg, x: 6, y: 11 + lift, w: 50, h: 1, rustHi)
+            fill(cg, x: 5, y: 16 + lift, w: 52, h: 2, rustDk)
+            // Panel seams + rivets around the rim.
+            for rx in [12, 22, 32, 42] {
+                fill(cg, x: rx, y: 12 + lift, w: 1, h: 5, rustDk)
             }
-            // Needle hull: outline, pale upper, deep belly.
-            fill(cg, x: 4, y: 10, w: 34, h: 6, O)
-            fill(cg, x: 5, y: 11, w: 32, h: 3, mid)
-            fill(cg, x: 5, y: 11, w: 32, h: 1, .white.withAlphaComponent(0.55))
-            fill(cg, x: 5, y: 13, w: 32, h: 2, deep)
-            fill(cg, x: 5, y: 13, w: 32, h: 1, pale.withAlphaComponent(0.35))
-            // Red war-mark so the dart reads hostile at a glance.
-            fill(cg, x: 24, y: 11, w: 2, h: 1, trim)
-            fill(cg, x: 24, y: 14, w: 2, h: 1, trimD)
-            // Nose wedge + cyan eye slit.
-            fill(cg, x: 36, y: 11, w: 3, h: 4, O)
-            fill(cg, x: 36, y: 12, w: 3, h: 2, mid)
-            fill(cg, x: 36, y: 12, w: 3, h: 1, eye)
-            if pose % 2 == 0 {
-                fill(cg, x: 38, y: 12, w: 1, h: 1, .white)
-            }
-            // Swept dorsal fin, flexing up per pose.
-            fill(cg, x: 13, y: 4 - flex, w: 4, h: 7, O)
-            fill(cg, x: 14, y: 5 - flex, w: 2, h: 5, mid)
-            fill(cg, x: 14, y: 5 - flex, w: 1, h: 5, .white.withAlphaComponent(0.5))
-            fill(cg, x: 14, y: 4 - flex, w: 2, h: 1, glow)
-            // Ventral fin, mirroring the dorsal flex.
-            fill(cg, x: 13, y: 15 + flex, w: 4, h: 6, O)
-            fill(cg, x: 14, y: 16 + flex, w: 2, h: 4, deep)
-            fill(cg, x: 14, y: 16 + flex, w: 1, h: 4, mid)
-            // Rear stabilizer at the tail top.
-            fill(cg, x: 5, y: 8, w: 5, h: 3, O)
-            fill(cg, x: 6, y: 9, w: 3, h: 1, mid)
-            // Belly gun mount: the shard lance hangs off this nub.
-            fill(cg, x: 22, y: 15, w: 5, h: 2, O)
-            fill(cg, x: 23, y: 15, w: 3, h: 1, deep)
+            fill(cg, x: 8, y: 17 + lift, w: 3, h: 1, rustHi.withAlphaComponent(0.5))
+            // Raised dome on top.
+            fill(cg, x: 24, y: 5 + lift, w: 16, h: 6, O)
+            fill(cg, x: 25, y: 6 + lift, w: 14, h: 4, rust)
+            fill(cg, x: 25, y: 6 + lift, w: 14, h: 1, rustHi)
+            fill(cg, x: 29, y: 4 + lift, w: 6, h: 2, O)
+            fill(cg, x: 30, y: 4 + lift, w: 4, h: 1, gunHi)
+            // Red eye slit on the nose rim (the hostile read).
+            fill(cg, x: 52, y: 12 + lift, w: 6, h: 5, O)
+            fill(cg, x: 53, y: 13 + lift, w: 4, h: 3, eye)
+            fill(cg, x: 53, y: 13 + lift, w: 4, h: 1, hot ? .white : eyeHi)
+
+            // --- Dark belly plate the guns hang off.
+            fill(cg, x: 16, y: 18 + lift, w: 32, h: 4, O)
+            fill(cg, x: 17, y: 19 + lift, w: 30, h: 2, gunmetal)
+            fill(cg, x: 17, y: 19 + lift, w: 30, h: 1, gunHi.withAlphaComponent(0.6))
+
+            // --- Twin boxy blaster cannons (front + rear block).
+            // Rear cannon (sits a touch higher in depth).
+            fill(cg, x: 18, y: 21 + lift, w: 14, h: 8, O)
+            fill(cg, x: 19, y: 22 + lift, w: 12, h: 6, rustD)
+            fill(cg, x: 19, y: 22 + lift, w: 12, h: 1, rustHi)
+            fill(cg, x: 28, y: 23 + lift, w: 4, h: 4, O)
+            fill(cg, x: 29, y: 24 + lift, w: 2, h: 2, hot ? plasmaHi : plasma)
+            // Front cannon (the hero-facing gun).
+            fill(cg, x: 34, y: 21 + lift, w: 15, h: 8, O)
+            fill(cg, x: 35, y: 22 + lift, w: 13, h: 6, rust)
+            fill(cg, x: 35, y: 22 + lift, w: 13, h: 1, rustHi)
+            fill(cg, x: 35, y: 27 + lift, w: 13, h: 1, rustDk)
+            fill(cg, x: 45, y: 23 + lift, w: 4, h: 4, O)
+            fill(cg, x: 46, y: 24 + lift, w: 2, h: 2, hot ? .white : plasmaHi)
+            fill(cg, x: 46, y: 24 + lift, w: 1, h: 2, hot ? plasmaHi : plasma)
+            // Landing skid nubs under each block.
+            fill(cg, x: 21, y: 29 + lift, w: 5, h: 2, O)
+            fill(cg, x: 38, y: 29 + lift, w: 5, h: 2, O)
+            fill(cg, x: 22, y: 29 + lift, w: 3, h: 1, gunmetal)
+            fill(cg, x: 39, y: 29 + lift, w: 3, h: 1, gunmetal)
         }
     }
 
-    /// Shard lance: a slim ice pike — frost-crystal tail, deep grip wrap,
-    /// glowing shaft with a pale core, and a cyan arrowhead with a hot
-    /// white heart. Mounts on the belly nub and steers at targets like a
-    /// gun-arm.
-    private static func shardwingArm() -> SKTexture {
-        canvas(w: armW, h: armH, key: "arm-shardwing") { cg in
-            let pale = UIColor(red: 0.78, green: 0.89, blue: 0.97, alpha: 1)
-            let deep = UIColor(red: 0.24, green: 0.36, blue: 0.52, alpha: 1)
-            let eye = UIColor(red: 0.45, green: 1.0, blue: 0.95, alpha: 1)
-            let glow = UIColor(red: 0.65, green: 0.95, blue: 1.0, alpha: 1)
+    /// Twin blasters: armored mount + twin stacked barrels, each tipped
+    /// with a blue-plasma muzzle block. Mounts on the belly gun mount and
+    /// steers at targets like a gun-arm — the scene fires 2-round bursts
+    /// through it.
+    private static func saucerArm() -> SKTexture {
+        canvas(w: armW, h: armH, key: "arm-saucer") { cg in
+            let rust = UIColor(red: 0.74, green: 0.43, blue: 0.19, alpha: 1)
+            let rustD = UIColor(red: 0.42, green: 0.22, blue: 0.10, alpha: 1)
+            let metal = UIColor(red: 0.22, green: 0.22, blue: 0.26, alpha: 1)
+            let plasma = UIColor(red: 0.30, green: 0.55, blue: 1.0, alpha: 1)
+            let plasmaHi = UIColor(red: 0.70, green: 0.88, blue: 1.0, alpha: 1)
             let O = outline
-            // Frost-crystal tail + grip wrapping the mount (x=5).
-            fill(cg, x: 1, y: 5, w: 2, h: 2, O)
-            fill(cg, x: 1, y: 5, w: 2, h: 1, glow)
-            fill(cg, x: 2, y: 5, w: 6, h: 3, O)
-            fill(cg, x: 3, y: 5, w: 4, h: 2, deep)
-            // Glowing shaft with a pale core.
-            fill(cg, x: 8, y: 5, w: 10, h: 2, O)
-            fill(cg, x: 9, y: 5, w: 8, h: 1, pale)
-            fill(cg, x: 9, y: 6, w: 8, h: 1, glow)
-            // Cyan arrowhead with a hot white heart.
-            fill(cg, x: 17, y: 3, w: 5, h: 6, O)
-            fill(cg, x: 18, y: 4, w: 3, h: 4, eye)
-            fill(cg, x: 19, y: 5, w: 1, h: 2, .white)
+            // Armored mount wrapping the grip (x=5).
+            fill(cg, x: 1, y: 2, w: 8, h: 8, O)
+            fill(cg, x: 2, y: 3, w: 6, h: 6, rust)
+            fill(cg, x: 2, y: 3, w: 6, h: 1, UIColor(red: 0.96, green: 0.66, blue: 0.32, alpha: 1))
+            fill(cg, x: 2, y: 7, w: 6, h: 1, rustD)
+            // Twin receiver block.
+            fill(cg, x: 8, y: 2, w: 6, h: 8, O)
+            fill(cg, x: 9, y: 3, w: 4, h: 6, metal)
+            // Upper + lower barrels.
+            fill(cg, x: 13, y: 2, w: 7, h: 3, O)
+            fill(cg, x: 14, y: 3, w: 5, h: 1, metal)
+            fill(cg, x: 13, y: 7, w: 7, h: 3, O)
+            fill(cg, x: 14, y: 8, w: 5, h: 1, metal)
+            // Twin blue-plasma muzzle blocks.
+            fill(cg, x: 19, y: 2, w: 3, h: 3, O)
+            fill(cg, x: 19, y: 7, w: 3, h: 3, O)
+            fill(cg, x: 20, y: 3, w: 1, h: 1, plasmaHi)
+            fill(cg, x: 20, y: 8, w: 1, h: 1, plasma)
+            fill(cg, x: 20, y: 3, w: 1, h: 1, plasmaHi.withAlphaComponent(0.9))
         }
     }
 

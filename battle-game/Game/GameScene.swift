@@ -98,6 +98,9 @@ final class GameScene: SKScene {
     private var shieldMax: CGFloat = 0
     private var lastShieldHitAt: TimeInterval = -10
     /// Spendable gold for the army (unit shop lands next). Starts at your Unity value.
+    /// Playground pays the fat dev stack (see Balance.startingGold(for:)).
+    /// The pinned levelId isn't set yet at property-init time, so this
+    /// default is corrected in init + resetLevel once levelId is known.
     private var money: Int = Balance.startingGold
 
     // MARK: - Main bases (enemy base fans bolts + summons marchers)
@@ -177,6 +180,7 @@ final class GameScene: SKScene {
         // The battle owns the global layout while it runs.
         Balance.battleOwnsLayout = true
         Balance.active = Balance.layout(for: levelId)
+        money = Balance.startingGold(for: levelId)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
@@ -276,7 +280,7 @@ final class GameScene: SKScene {
         applyHeroUpgrades(fullRestore: true)
         heroLives = Balance.heroLives
         heroPackArmed = HeroAddons.boosterTier(heroId: heroId) > 0
-        money = Balance.startingGold
+        money = Balance.startingGold(for: levelId)
         sceneTime = 0
         lastUpdate = 0
         respawnAt = -1
@@ -327,6 +331,8 @@ final class GameScene: SKScene {
         if Balance.whiteoutRedoubt { LevelDressing.buildWhiteoutRedoubt(in: world) }
         if Balance.howlingCauseway { LevelDressing.buildHowlingCauseway(in: world) }
         if Balance.rimewatchCrag { LevelDressing.buildRimewatchCrag(in: world) }
+        if Balance.frozenNarrows { LevelDressing.buildFrozenNarrows(in: world) }
+        if Balance.rimevault { LevelDressing.buildRimevault(in: world) }
         if Balance.active.theme == .dawn { LevelDressing.buildDuneWash(in: world) }
         if Balance.active.theme == .sunscorch { LevelDressing.buildSunscorchField(in: world) }
         if Balance.active.theme == .sandhold { LevelDressing.buildSandholdKeep(in: world) }
@@ -1052,7 +1058,7 @@ final class GameScene: SKScene {
             // Summon marchers toward the player base, capped. Levels with a
             // doubleChance sometimes pop a PAIR out of the gate together.
             // Priority order on a shared summon number: Heli Gunship (heliEvery),
-            // then Shardwing divers (shardwingEvery, Level 24+), then Brute
+            // then Saucer gun-drones (saucerEvery, Level 24+), then Brute
             // (bruteEvery), Reaver (reaverEvery), Mech (mechEvery,
             // only while none is alive), Skitter (skitterEvery), Jet (jetEvery).
             // The Immortal (immortalEvery, Level 19+) is a singleton like
@@ -1085,8 +1091,8 @@ final class GameScene: SKScene {
                         kind = .immortal
                     } else if Balance.heliEvery > 0, summonCount % Balance.heliEvery == 0 {
                         kind = .heli
-                    } else if Balance.shardwingEvery > 0, summonCount % Balance.shardwingEvery == 0 {
-                        kind = .shardwing
+                    } else if Balance.saucerEvery > 0, summonCount % Balance.saucerEvery == 0 {
+                        kind = .saucer
                     } else if Balance.bruteEvery > 0, summonCount % Balance.bruteEvery == 0 {
                         kind = .brute
                     } else if Balance.reaverEvery > 0, summonCount % Balance.reaverEvery == 0 {
@@ -1364,6 +1370,8 @@ final class GameScene: SKScene {
                 updateJetDodge(e, dt: dt)
             } else if e.kind.isHelicopter {
                 updateHeliFlight(e, dt: dt)
+            } else if e.kind == .saucer {
+                updateSaucerFlight(e, dt: dt)
             }
 
             // Target priority: closest exposed body in sight (hero or ally)
@@ -1403,11 +1411,6 @@ final class GameScene: SKScene {
                 // until out of the camera view, then leave the field.
                 if playerBase?.alive == false {
                     e.face(-1)
-                    if e.kind == .shardwing {
-                        // No victory dives: abort the run, drift back to cruise.
-                        e.diving = false
-                        e.diveOffset += (0 - e.diveOffset) * min(1, 3 * CGFloat(dt))
-                    }
                     e.position.x = max(40, e.position.x - e.moveSpeed * CGFloat(dt))
                     e.animateMarch(dt: dt, advancing: true)
                     e.position.y = enemyRestY(e) + e.yBob
@@ -1419,11 +1422,6 @@ final class GameScene: SKScene {
                     continue
                 }
                 e.animateMarch(dt: dt, advancing: false)
-                if e.kind == .shardwing {
-                    // Nothing to dive at: abort the run, drift back to cruise.
-                    e.diving = false
-                    e.diveOffset += (0 - e.diveOffset) * min(1, 3 * CGFloat(dt))
-                }
                 e.position.y = enemyRestY(e)
                 continue
             }
@@ -1431,12 +1429,6 @@ final class GameScene: SKScene {
             let dist = hypot(aim.x - e.position.x, aim.y - e.position.y)
             e.face(aim.x - e.position.x)
             e.aimAt(CGVector(dx: aim.x - e.position.x, dy: aim.y - e.position.y))
-            // Shardwings never stop-and-shoot: they strafe (see below).
-            if e.kind == .shardwing {
-                updateShardwing(e, dt: dt, target: aim, dist: dist)
-                e.position.y = enemyRestY(e) + e.yBob
-                continue
-            }
             // Melee fighters range on the ground line (horizontal gap): their
             // tower/HQ aim points float 100pt up, and the diagonal would let
             // them push inside structures without ever swinging. Shooters
@@ -1484,6 +1476,8 @@ final class GameScene: SKScene {
                         fireMechBurst(from: e, to: aim)
                     } else if e.kind.isHelicopter {
                         fireHeliBurst(from: e, to: aim)
+                    } else if e.kind == .saucer {
+                        fireSaucerBurst(from: e, to: aim)
                     } else if e.kind == .missileTruck {
                         fireMissile(from: e, to: aim)
                     } else if e.kind == .immortal {
@@ -1727,78 +1721,52 @@ final class GameScene: SKScene {
         world.addChild(flash)
     }
 
-    /// Shardwing strafe runs: the ice dart cruises high and fast, then —
-    /// once a victim is inside dive range and the dive timer has reset —
-    /// drops screaming to the deck, rushes the line at dive speed, and
-    /// unloads a twin-bolt burst the moment it is low and inside its
-    /// short reach. Then it climbs straight back to cruise. A pass that
-    /// overshoots its mark with no shot aborts and resets on a short
-    /// timer instead of circling forever.
-    private func updateShardwing(_ e: EnemyNode, dt: TimeInterval, target: CGPoint, dist: CGFloat) {
-        e.diveCooldown = max(0, e.diveCooldown - dt)
-        let drop = Balance.shardwingCruiseHeight - Balance.shardwingDiveHeight
-        let dir: CGFloat = target.x > e.position.x ? 1 : -1
-        if e.diving {
-            let pace = e.moveSpeed * Balance.shardwingDiveSpeed
-            e.position.x = max(40, e.position.x + dir * pace * CGFloat(dt))
-            e.diveOffset += (-drop - e.diveOffset) * min(1, 5 * CGFloat(dt))
-            e.animateMarch(dt: dt, advancing: true)
-            // Low + inside the short reach: loose the twin burst, climb out.
-            if e.diveOffset <= -drop * 0.85, dist <= e.shootRange, e.fireCooldown <= 0 {
-                e.fireCooldown = e.fireInterval
-                fireShardwingBurst(from: e, to: target)
-                e.diving = false
-                e.diveCooldown = Balance.shardwingDiveCooldown
-            } else if (dir < 0 && e.position.x < target.x - 160)
-                        || (dir > 0 && e.position.x > target.x + 160) {
-                // Overshot the mark with no shot: abort the pass.
-                e.diving = false
-                e.diveCooldown = 2.0
-            }
-        } else {
-            e.position.x = max(40, e.position.x + dir * e.moveSpeed * CGFloat(dt))
-            e.diveOffset += (0 - e.diveOffset) * min(1, 3 * CGFloat(dt))
-            e.animateMarch(dt: dt, advancing: true)
-            if dist < Balance.shardwingDiveRange, e.diveCooldown <= 0 {
-                e.diving = true
-            }
+    /// Saucer hover hum: retriggers the rotor loop while the heavy drone
+    /// is on the field (positional, so it fades with range). Slower than
+    /// the gunship — a low lumbering wash for a bigger airframe.
+    private func updateSaucerFlight(_ e: EnemyNode, dt: TimeInterval) {
+        e.rotorSoundTimer -= dt
+        if e.rotorSoundTimer <= 0 {
+            e.rotorSoundTimer = 2.9
+            SoundEngine.shared.heliRotor(at: e.position.x)
         }
     }
 
-    /// Shardwing attack run: a twin-bolt snap-shot from the shard lance,
-    /// loosed only at the bottom of a dive. Fast tracers, so the pass
-    /// punishes a static line but gives a moving hero a dodge window.
-    private func fireShardwingBurst(from e: EnemyNode, to target: CGPoint) {
-        for r in 0..<Balance.shardwingBurstCount {
-            let delay = Double(r) * Balance.shardwingBurstGap
+    /// Saucer twin-blaster burst: two blue-plasma rounds from the belly
+    /// guns. Holds high station like the gunship, so each volley is a
+    /// predictable 2-round snap to dodge.
+    private func fireSaucerBurst(from e: EnemyNode, to target: CGPoint) {
+        for r in 0..<Balance.saucerBurstCount {
+            let delay = Double(r) * Balance.saucerBurstGap
             if delay == 0 {
-                fireShardwingRound(from: e, to: target)
+                fireSaucerRound(from: e, to: target)
             } else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                     guard let self, e.alive else { return }
-                    self.fireShardwingRound(from: e, to: target)
+                    self.fireSaucerRound(from: e, to: target)
                 }
             }
         }
     }
 
-    /// One dive-round: a slim high-velocity ice tracer + muzzle flash.
-    private func fireShardwingRound(from e: EnemyNode, to target: CGPoint) {
+    /// One saucer round: a blue-plasma orb + muzzle flash. Small splash
+    /// on impact (see splashPlayer) so grouped troops feel the blast.
+    private func fireSaucerRound(from e: EnemyNode, to target: CGPoint) {
         let muzzle = e.muzzle()
         var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
         let len = max(1, hypot(dir.dx, dir.dy))
         dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
         SoundEngine.shared.enemyFire(at: muzzle.x)
-        let bolt = ProjectileFactory.makeTowerBolt(team: .enemy)
-        bolt.setScale(0.85)
-        bolt.position = muzzle
-        bolt.zRotation = atan2(dir.dy, dir.dx)
-        world.addChild(bolt)
-        projectiles.append(Projectile(node: bolt, dir: dir, life: Balance.enemyBoltLife,
-                                      speed: Balance.shardwingBoltSpeed, damage: e.boltDamage,
-                                      team: .enemy))
+        let orb = ProjectileFactory.makeSaucerPlasma()
+        orb.position = muzzle
+        orb.zRotation = atan2(dir.dy, dir.dx)
+        world.addChild(orb)
+        projectiles.append(Projectile(node: orb, dir: dir, life: Balance.enemyBoltLife,
+                                      speed: Balance.saucerBoltSpeed, damage: e.boltDamage,
+                                      team: .enemy,
+                                      contactBlast: Balance.saucerBlast))
         let flash = ProjectileFactory.makeMuzzleFlash()
-        flash.setScale(0.75)
+        flash.setScale(0.9)
         flash.position = muzzle
         world.addChild(flash)
     }
@@ -2345,7 +2313,11 @@ final class GameScene: SKScene {
                 if p.blast > 0 {
                     explode(p, at: p.node.position)
                 } else if p.contactBlast > 0 {
-                    detonate(at: p.node.position, radius: p.contactBlast)
+                    if p.team == .enemy {
+                        splashPlayer(at: p.node.position, radius: p.contactBlast, damage: p.damage)
+                    } else {
+                        detonate(at: p.node.position, radius: p.contactBlast)
+                    }
                 } else {
                     impact(at: p.node.position)
                 }
@@ -2357,6 +2329,13 @@ final class GameScene: SKScene {
             if p.blast > 0 {
                 if touchesFoe(p) {
                     explode(p, at: p.node.position)
+                    ProjectileFactory.recycle(p.node)
+                    continue
+                }
+            } else if p.team == .enemy, p.contactBlast > 0 {
+                // Saucer plasma: splash carries the damage (no double-hit).
+                if touchesPlayer(at: p.node.position) {
+                    splashPlayer(at: p.node.position, radius: p.contactBlast, damage: p.damage)
                     ProjectileFactory.recycle(p.node)
                     continue
                 }
@@ -2566,6 +2545,57 @@ final class GameScene: SKScene {
         puff.position = pt
         puff.setScale(1.4)
         world.addChild(puff)
+    }
+
+    /// Non-damaging contact test for enemy splash shells (saucer plasma):
+    /// true when the orb touches any player-side body, tower or HQ.
+    /// The splash itself carries the damage (see splashPlayer), so the
+    /// primary victim is never double-hit.
+    private func touchesPlayer(at pt: CGPoint) -> Bool {
+        for a in allies where a.alive {
+            if abs(pt.x - a.position.x) < a.size.width / 2 + 14,
+               abs(pt.y - a.position.y) < a.size.height / 2 + 10 {
+                return true
+            }
+        }
+        if towerIndex(at: pt, team: .player) != nil { return true }
+        if baseIndex(at: pt, team: .player) != nil { return true }
+        if !heroProtected,
+           abs(pt.x - hero.position.x) < 36,
+           abs(pt.y - hero.position.y) < Balance.heroHeight / 2 + 8 {
+            return true
+        }
+        return false
+    }
+
+    /// Enemy splash (saucer plasma): blue blast FX + full damage to
+    /// every player-side body in the radius — allies, hero, towers, HQ.
+    private func splashPlayer(at pt: CGPoint, radius: CGFloat, damage: CGFloat) {
+        SoundEngine.shared.missileDetonate(at: pt.x)
+        let boom = ProjectileFactory.makeSaucerBlast(radius: radius)
+        boom.position = pt
+        world.addChild(boom)
+        for a in allies where a.alive {
+            if hypot(a.position.x - pt.x, a.position.y - pt.y) <= radius + a.size.width / 2 {
+                damageAlly(a, amount: damage)
+            }
+        }
+        if !heroProtected,
+           hypot(hero.position.x - pt.x, hero.position.y - pt.y) <= radius + 34 {
+            damageHero(amount: damage)
+        }
+        for (i, t) in towers.enumerated() where t.team == .player && t.alive {
+            if hypot(t.node.position.x - pt.x,
+                     (Balance.groundTopY + 100) - pt.y) <= radius + 62 {
+                damageTower(at: i, amount: damage)
+            }
+        }
+        if let base = bases.first(where: { $0.team == .player }), base.alive,
+           let idx = bases.firstIndex(where: { $0.node === base.node }),
+           hypot(base.node.position.x - pt.x,
+                 (Balance.groundTopY + 100) - pt.y) <= radius + 130 {
+            damageBase(at: idx, amount: damage)
+        }
     }
 
     // MARK: - Debug (temporary HUD readout)

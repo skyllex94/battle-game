@@ -32,6 +32,16 @@ struct GameView: View {
                                                weapon: gun,
                                                heroId: hero.id))
         _weapon = State(initialValue: gun)
+        // Seed the HUD wallet with this level's starting gold (playground
+        // pays the fat dev stack); the ~7Hz scene poll corrects it live.
+        _minimap = State(initialValue: MinimapSnapshot(levelWidth: Balance.levelWidth, heroX: Balance.heroSpawnX,
+                                                 cameraX: 0, viewWidth: 1334,
+                                                 playerBaseX: Balance.playerBaseX,
+                                                  playerTowerXs: Balance.playerTowerXs,
+                                                  enemyTowerXs: Balance.enemyTowerXs,
+                                                 enemyBaseX: Balance.enemyBaseX,
+                                                 heroHP: Balance.heroHP, heroMaxHP: Balance.heroHP,
+                                                 money: Balance.startingGold(for: level.id)))
     }
 
     @State private var scene: GameScene
@@ -69,8 +79,8 @@ struct GameView: View {
     /// New-unit intel card: levels that debut a unit pause 1s after entry
     /// and brief the player (stats + portrait) until dismissed.
     @State private var showUnitIntro = false
-    /// Level 11 fortress-line intel: introduces the fourth tower that now
-    /// anchors each base. Freezes the field until the player dismisses it.
+    /// Fortress-line intel: Level 11 introduces the fourth tower per base,
+    /// Level 23 the fifth. Freezes the field until the player dismisses it.
     @State private var showTowerIntro = false
     /// Level 20 HQ refit intel: announces the Mk-II citadel main buildings
     /// and their 4-missile rooftop volley on both sides.
@@ -496,8 +506,9 @@ struct GameView: View {
                 .shadow(color: .yellow.opacity(0.2), radius: 18)
             }
 
-            // Level 11 fortress-line intel: announces the fourth tower that
-            // now anchors each base. Close/tap outside resumes the sim.
+            // Fortress-line intel: announces the new tower count anchoring
+            // each base (4 on Level 11, 5 on Level 23). Close/tap outside
+            // resumes the sim.
             if showTowerIntro {
                 Color.black.opacity(0.68)
                     .ignoresSafeArea()
@@ -534,8 +545,9 @@ struct GameView: View {
                 .padding(.vertical, 12)
             }
 
-            // Milestone hero unlock (Level 8 = Vanguard): portrait + stats, then
-            // CLAIM persists the unlock, auto-equips, and resumes.
+            // Milestone hero unlock (Vanguard on Level 8, Bulwark on 15,
+            // Ranger on 21): portrait + stats, then CLAIM persists the
+            // unlock, auto-equips, and resumes.
             if let fresh = heroUnlock {
                 Color.black.opacity(0.65)
                     .ignoresSafeArea()
@@ -744,8 +756,8 @@ struct GameView: View {
             weapon = scene.heroWeapon
             revivedThisRun = false
             // New-unit briefing: let the battle breathe 1s, then freeze and brief.
-            // Level 11 sequences this AFTER the fortress-line card instead.
-            if debutUnit != nil, level.id != 11 {
+            // Levels 11 / 23 sequence this AFTER the fortress-line card instead.
+            if debutUnit != nil, level.id != 11, level.id != 23 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                     guard debutUnit != nil, !showUnitIntro,
                           !minimap.won, !minimap.lost else { return }
@@ -754,9 +766,10 @@ struct GameView: View {
                     scene.isPaused = true
                 }
             }
-            // Level 11 fortress-line briefing: let the field settle, then
-            // freeze it and announce the fourth tower at each base.
-            if level.id == 11 {
+            // Fortress-line briefing: let the field settle, then freeze
+            // it and announce the new tower line at each base (4 on
+            // Level 11, 5 on Level 23 — the new standard from 23 on).
+            if level.id == 11 || level.id == 23 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                     guard !showTowerIntro, !showUnitIntro, grantStep == nil,
                           heroUnlock == nil, !minimap.won, !minimap.lost else { return }
@@ -922,25 +935,19 @@ struct GameView: View {
         hudPop = false
     }
 
-    /// Level 11 card: the enemy's red tower rendered in the same procedural
-    /// pixel art as the battlefield, with the new four-tower line called out.
+    /// Fortress-line card: the enemy's red tower in battlefield pixel art,
+    /// calling out the new tower line — 4 per side on Level 11, 5 per side
+    /// on Level 23 (the standard from 23 on).
+    private var towerIntroCount: Int { level.id == 23 ? 5 : 4 }
+    /// Body copy for the fortress-line card (4th vs 5th tower wording).
+    private var towerIntroBody: String {
+        if towerIntroCount >= 5 {
+            return "A fifth gun emplacement now anchors each base, closing the middle gap. Five towers a side from here on — another three-bolt volley between you and their HQ."
+        }
+        return "A fourth gun emplacement now anchors each base. The red tower below is the enemy's new fortification — another three-bolt volley between you and their HQ."
+    }
     private var towerIntroCard: some View {
         VStack(spacing: 9) {
-            HStack(spacing: 8) {
-                Rectangle()
-                    .fill(.orange.opacity(0.45))
-                    .frame(width: 22, height: 1)
-                Text("NEW FORTIFICATION")
-                    .font(.system(size: 10, weight: .black, design: .monospaced))
-                    .tracking(2)
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 10).padding(.vertical, 3)
-                    .background(.orange)
-                Rectangle()
-                    .fill(.orange.opacity(0.45))
-                    .frame(width: 22, height: 1)
-            }
-
             ZStack {
                 RoundedRectangle(cornerRadius: 3)
                     .fill(LinearGradient(colors: [.red.opacity(0.20),
@@ -963,7 +970,7 @@ struct GameView: View {
             .clipShape(PixelPanelShape(cut: 8))
             .overlay(PixelPanelShape(cut: 8).stroke(.red.opacity(0.8), lineWidth: 2))
             .overlay(alignment: .topTrailing) {
-                Text("×4")
+                Text("×\(towerIntroCount)")
                     .font(.system(size: 12, weight: .black, design: .monospaced))
                     .foregroundStyle(.black)
                     .padding(.horizontal, 7).padding(.vertical, 2)
@@ -972,7 +979,7 @@ struct GameView: View {
             }
             .overlay(alignment: .bottomLeading) {
                 HStack(spacing: 3) {
-                    ForEach(0..<4, id: \.self) { _ in
+                    ForEach(0..<towerIntroCount, id: \.self) { _ in
                         Rectangle()
                             .fill(.red)
                             .frame(width: 5, height: 5)
@@ -985,11 +992,11 @@ struct GameView: View {
                 .font(.system(size: 19, weight: .black, design: .monospaced))
                 .tracking(2)
                 .foregroundStyle(.white)
-            Text("BOTH BASES: 4 TOWERS")
+            Text("BOTH BASES: \(towerIntroCount) TOWERS")
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                 .tracking(1.5)
                 .foregroundStyle(.red)
-            Text("A fourth gun emplacement now anchors each base. The red tower below is the enemy's new fortification — another three-bolt volley between you and their HQ.")
+            Text(towerIntroBody)
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white.opacity(0.75))
@@ -997,7 +1004,7 @@ struct GameView: View {
                 .minimumScaleFactor(0.85)
                 .frame(maxWidth: 280)
             HStack(spacing: 10) {
-                UnitStatChip(label: "TOWERS", value: "4 / SIDE")
+                UnitStatChip(label: "TOWERS", value: "\(towerIntroCount) / SIDE")
                 UnitStatChip(label: "TOWER HP", value: "\(Int(Balance.enemyTowerHealth(forLevel: level.id)))")
                 UnitStatChip(label: "RANGE", value: "\(Int(Balance.towerRange))")
             }
@@ -1014,21 +1021,6 @@ struct GameView: View {
     /// calling out the bigger fortified structure and 4-missile rooftop volley.
     private var baseIntroCard: some View {
         VStack(spacing: 9) {
-            HStack(spacing: 8) {
-                Rectangle()
-                    .fill(.orange.opacity(0.45))
-                    .frame(width: 22, height: 1)
-                Text("HQ REFIT")
-                    .font(.system(size: 10, weight: .black, design: .monospaced))
-                    .tracking(2)
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 10).padding(.vertical, 3)
-                    .background(.orange)
-                Rectangle()
-                    .fill(.orange.opacity(0.45))
-                    .frame(width: 22, height: 1)
-            }
-
             ZStack {
                 RoundedRectangle(cornerRadius: 3)
                     .fill(LinearGradient(colors: [.red.opacity(0.22),
@@ -1073,7 +1065,8 @@ struct GameView: View {
                             .frame(width: 5, height: 5)
                     }
                 }
-                .padding(7)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
             }
 
             Text("MK-II CITADEL HQ")
@@ -1124,8 +1117,9 @@ struct GameView: View {
         return min(1, remaining / kind.cooldown)
     }
 
-    /// Hero this level unlocks (Vanguard at Level 8), only while it is
-    /// still unclaimed. Already-owned milestones never re-modal.
+    /// Hero this level unlocks (Vanguard on 8, Bulwark on 15, Ranger on
+    /// 21), only while it is still unclaimed. Already-owned milestones
+    /// never re-modal.
     private var milestoneHero: HeroDef? {
         HeroRoster.heroes.first { $0.unlockLevel == level.id && !HeroRoster.isUnlocked($0) }
     }
@@ -1157,11 +1151,12 @@ struct GameView: View {
         scene.isPaused = false
     }
 
-    /// Dismiss the Level 11 fortress-line intel, then hand off to the
-    /// Bombard's NEW UNIT card (both debut on this level).
+    /// Dismiss the fortress-line intel, then hand off to the NEW UNIT card
+    /// when both debut together (Level 11: Bombard). Level 23 has no unit
+    /// debut, so it resumes straight away.
     private func closeTowerIntro() {
         showTowerIntro = false
-        if level.id == 11, debutUnit != nil, !minimap.won, !minimap.lost {
+        if debutUnit != nil, !minimap.won, !minimap.lost {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                 guard !showUnitIntro, !showTowerIntro,
                       !minimap.won, !minimap.lost else { return }

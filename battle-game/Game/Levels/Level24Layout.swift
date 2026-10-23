@@ -8,17 +8,20 @@ import CoreGraphics
 /// watch-cairn rubble with cold-blue crystals, rime shards and
 /// wind-carved drifts).
 ///
-/// Design only — no new units yet. The gate keeps the heat climbing:
-/// marches out faster, pops pairs a touch more often, the field cap
-/// ticks up, and enemy HP scales another 5% (×2.5272, +5% over L23).
-/// The Immortal garrison cadence holds at every eighth summon — the
-/// watch never blinks.
+/// Level 24 debut: the Saucer gun-drone — a bigger flying drone off the
+/// saucer reference, cruising higher than the Heli Gunship and holding
+/// high station to fire twin-blaster bursts. The 5-tower line holds from
+/// Level 23 (fifth emplacements at player 4950 / enemy 8250, same
+/// 13200pt lane). The gate keeps the heat climbing: marches out faster,
+/// pops pairs a touch more often, the field cap ticks up, and enemy HP
+/// scales another 5% (×2.5272, +5% over L23). The Immortal garrison
+/// cadence holds at every eighth summon — the watch never blinks.
 extension Balance {
     static let layout24 = LevelLayout(
         width: 13200,
         playerBaseX: 220,
-        playerTowerXs: [840, 1640, 2440, 3240],
-        enemyTowerXs: [9050, 9850, 10650, 11450],
+        playerTowerXs: [1750, 2550, 3350, 4150, 4950],
+        enemyTowerXs: [8250, 9050, 9850, 10650, 11450],
         enemyBaseX: 12980,
         heroSpawnX: 420,
         platforms: [],
@@ -50,6 +53,9 @@ extension Balance {
         /// The Immortals hold the watch — one walker at a time,
         /// every eighth summon.
         immortalEvery: 8,
+        /// Level 24 debut: Saucer gun-drones float in every sixth summon,
+        /// above even the gunships — twin blasters, high hover.
+        saucerEvery: 6,
         /// The lane stays wind-glazed ice like the Approach and Causeway.
         iceField: true,
         /// Rimewatch Crag watch ground: small pixel-art whispers

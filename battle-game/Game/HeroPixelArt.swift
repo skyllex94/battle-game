@@ -145,34 +145,41 @@ enum HeroPixelArt {
     }
 
     private static func marchLegs(_ cg: CGContext, step: Int, cx: Int, top: Int, len: Int,
-                                  main: UIColor, shade: UIColor, pad: UIColor,
-                                  boot: UIColor, sole: UIColor, wide: Bool = false) {
-        let w = wide ? 4 : 3
+                                   main: UIColor, shade: UIColor, pad: UIColor,
+                                   boot: UIColor, sole: UIColor, wide: Bool = false,
+                                   legW: Int? = nil, heavyBoots: Bool = false) {
+        let w = legW ?? (wide ? 4 : 3)
         let back = stride(step, back: true)
         let front = stride(step, back: false)
         marchLeg(cg, hipX: cx - 3, dx: back.dx, lift: back.lift,
                  top: top, len: len, w: w,
-                 main: main, shade: shade, pad: pad, boot: boot, sole: sole)
+                 main: main, shade: shade, pad: pad, boot: boot, sole: sole,
+                 heavyBoots: heavyBoots)
         marchLeg(cg, hipX: cx + 2, dx: front.dx, lift: front.lift,
                  top: top, len: len, w: w,
-                 main: main, shade: shade, pad: pad, boot: boot, sole: sole)
+                 main: main, shade: shade, pad: pad, boot: boot, sole: sole,
+                 heavyBoots: heavyBoots)
     }
 
     private static func marchLeg(_ cg: CGContext, hipX: Int, dx: Int, lift: Int,
                                  top: Int, len: Int, w: Int,
                                  main: UIColor, shade: UIColor, pad: UIColor,
-                                 boot: UIColor, sole: UIColor) {
+                                 boot: UIColor, sole: UIColor, heavyBoots: Bool = false) {
         let footX = hipX + dx
         let footY = top + len - lift
         let kneeX = (hipX + footX) / 2 + 1
         let kneeY = (top + footY) / 2
         segment(cg, x0: hipX, y0: top, x1: kneeX, y1: kneeY, w: w, color: main)
         segment(cg, x0: kneeX, y0: kneeY, x1: footX, y1: footY, w: w - 1, color: shade)
-        fill(cg, x: kneeX - 2, y: kneeY - 1, w: 4, h: 3, pad)
-        fill(cg, x: kneeX - 2, y: kneeY - 1, w: 4, h: 1, white.withAlphaComponent(0.3))
-        fill(cg, x: footX - 2, y: footY, w: 5, h: 2, boot)
-        fill(cg, x: footX - 2, y: footY + 2, w: 5, h: 1, sole)
-        fill(cg, x: footX + 2, y: footY, w: 1, h: 2, sole)
+        // Knee guard scales with the thigh; heavy boots go wider + taller.
+        let padW = max(4, w + 1)
+        let bootW = heavyBoots ? w + 2 : 5
+        let bootH = heavyBoots ? 3 : 2
+        fill(cg, x: kneeX - padW / 2, y: kneeY - 1, w: padW, h: 3, pad)
+        fill(cg, x: kneeX - padW / 2, y: kneeY - 1, w: padW, h: 1, white.withAlphaComponent(0.3))
+        fill(cg, x: footX - bootW / 2, y: footY, w: bootW, h: bootH, boot)
+        fill(cg, x: footX - bootW / 2, y: footY + bootH, w: bootW, h: 1, sole)
+        fill(cg, x: footX + bootW / 2, y: footY, w: 1, h: bootH, sole)
     }
 
     /// Backpack unit with tank stripe + vents (shared astronaut gear).
@@ -395,31 +402,47 @@ enum HeroPixelArt {
         let O = outline
         // Scout backpack + quiver of marks.
         pack(cg, x: 7, top: 15 + bob, w: 3, h: 8, shell: suit, stripe: lens)
-        fill(cg, x: 22, y: 14 + bob, w: 3, h: 8, O)
-        fill(cg, x: 23, y: 13 + bob, w: 1, h: 2, lens)
-        // Stitched hood + amber lens.
-        fill(cg, x: 10, y: 1 + bob, w: 12, h: 9, O)
-        fill(cg, x: 11, y: 2 + bob, w: 10, h: 7, cloak)
-        fill(cg, x: 11, y: 2 + bob, w: 10, h: 1, white.withAlphaComponent(0.3))
-        fill(cg, x: 11, y: 8 + bob, w: 1, h: 1, cloakD)
-        fill(cg, x: 20, y: 8 + bob, w: 1, h: 1, cloakD)
+        fill(cg, x: 23, y: 14 + bob, w: 3, h: 8, O)
+        fill(cg, x: 24, y: 13 + bob, w: 1, h: 2, lens)
+        // Stitched hood + amber lens (broadened to match the bulk).
+        fill(cg, x: 9, y: 1 + bob, w: 14, h: 9, O)
+        fill(cg, x: 10, y: 2 + bob, w: 12, h: 7, cloak)
+        fill(cg, x: 10, y: 2 + bob, w: 12, h: 1, white.withAlphaComponent(0.3))
+        fill(cg, x: 10, y: 8 + bob, w: 1, h: 1, cloakD)
+        fill(cg, x: 21, y: 8 + bob, w: 1, h: 1, cloakD)
         fill(cg, x: 16, y: 5 + bob, w: 5, h: blink ? 1 : 3, O)
         if !blink { fill(cg, x: 17, y: 5 + bob, w: 3, h: 2, lens) }
-        // Cloak mantle + brass clasp.
-        fill(cg, x: 7, y: 10 + bob, w: 15, h: 5, O)
-        fill(cg, x: 8, y: 10 + bob, w: 13, h: 4, cloak)
+        // Cloak mantle + brass clasp (widened over the heavier torso).
+        fill(cg, x: 6, y: 10 + bob, w: 17, h: 5, O)
+        fill(cg, x: 7, y: 10 + bob, w: 15, h: 4, cloak)
         fill(cg, x: 14, y: 11 + bob, w: 3, h: 2, lens)
-        // Torso + cloak tail + rangefinder.
-        fill(cg, x: 11, y: 15 + bob, w: 9, h: 9, O)
-        fill(cg, x: 12, y: 16 + bob, w: 7, h: 7, shell)
-        fill(cg, x: 12, y: 16 + bob, w: 1, h: 7, cloakD)
+        // Shoulder pauldrons: shell plates over the mantle edges.
+        fill(cg, x: 3, y: 10 + bob, w: 6, h: 4, O)
+        fill(cg, x: 4, y: 11 + bob, w: 4, h: 2, shell)
+        fill(cg, x: 4, y: 11 + bob, w: 4, h: 1, white.withAlphaComponent(0.3))
+        fill(cg, x: 21, y: 10 + bob, w: 6, h: 4, O)
+        fill(cg, x: 22, y: 11 + bob, w: 4, h: 2, shell)
+        fill(cg, x: 22, y: 11 + bob, w: 4, h: 1, white.withAlphaComponent(0.3))
+        // Bulkier torso + cloak tail + rangefinder.
+        fill(cg, x: 10, y: 15 + bob, w: 11, h: 10, O)
+        fill(cg, x: 11, y: 16 + bob, w: 9, h: 8, shell)
+        fill(cg, x: 11, y: 16 + bob, w: 1, h: 8, cloakD)
+        fill(cg, x: 11, y: 16 + bob, w: 9, h: 1, white.withAlphaComponent(0.25))
         fill(cg, x: 15, y: 17 + bob, w: 2, h: 2, lens)
-        fill(cg, x: 6, y: 15 + bob, w: 4, h: 11, cloakD)
-        // Belt + striding walk legs.
-        fill(cg, x: 11, y: 24 + bob, w: 9, h: 2, suitD)
-        fill(cg, x: 14, y: 24 + bob, w: 2, h: 2, cloak)
+        // Brass chest band + rivets over the plate.
+        fill(cg, x: 12, y: 20 + bob, w: 7, h: 1, lens)
+        fill(cg, x: 12, y: 20 + bob, w: 1, h: 1, O)
+        fill(cg, x: 18, y: 20 + bob, w: 1, h: 1, O)
+        fill(cg, x: 5, y: 15 + bob, w: 5, h: 11, cloakD)
+        // Heavy war belt cinched over the plate.
+        fill(cg, x: 10, y: 23 + bob, w: 11, h: 3, O)
+        fill(cg, x: 11, y: 24 + bob, w: 9, h: 1, suit)
+        fill(cg, x: 14, y: 23 + bob, w: 3, h: 3, lens)
+        fill(cg, x: 15, y: 24 + bob, w: 1, h: 1, O)
+        // Thick column legs with big knee guards + heavy boots.
         marchLegs(cg, step: step, cx: 14, top: 26 + bob, len: 7, main: suit,
-                  shade: suitD, pad: cloak, boot: suitD, sole: lens)
+                   shade: suitD, pad: cloak, boot: suitD, sole: lens,
+                   legW: 5, heavyBoots: true)
     }
 
     // MARK: - Saboteur (demo expert: violet shell + live charges)

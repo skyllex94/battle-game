@@ -106,12 +106,26 @@ enum FrostbiteBG {
         // Rimevault evening (Level 26): the same frozen theater under a
         // low amber sun — deep indigo zenith melting to ember-gold at the
         // horizon instead of the pale polar noon.
+        // Pale Abyss night (Level 27): the same theater after dark — a
+        // near-black indigo zenith over a pale moonlit horizon, with the
+        // aurora burning brighter than at noon.
         let evening = Balance.frostEvening
+        let night = Balance.frostNight
         let eTop = UIColor(red: 0.05, green: 0.06, blue: 0.18, alpha: 1)
         let eMid = UIColor(red: 0.20, green: 0.14, blue: 0.36, alpha: 1)
         let eLow = UIColor(red: 0.62, green: 0.30, blue: 0.28, alpha: 1)
         let eHorizon = UIColor(red: 1.0, green: 0.62, blue: 0.30, alpha: 1)
         let eMist = UIColor(red: 0.52, green: 0.34, blue: 0.32, alpha: 1)
+        let nTop = UIColor(red: 0.008, green: 0.012, blue: 0.05, alpha: 1)
+        let nMid = UIColor(red: 0.05, green: 0.07, blue: 0.20, alpha: 1)
+        let nLow = UIColor(red: 0.16, green: 0.22, blue: 0.40, alpha: 1)
+        let nHorizon = UIColor(red: 0.62, green: 0.74, blue: 0.88, alpha: 1)
+        let nMist = UIColor(red: 0.30, green: 0.38, blue: 0.52, alpha: 1)
+        func gradeTop() -> UIColor { night ? nTop : (evening ? eTop : skyTop) }
+        func gradeMid() -> UIColor { night ? nMid : (evening ? eMid : skyMid) }
+        func gradeLow() -> UIColor { night ? nLow : (evening ? eLow : skyLow) }
+        func gradeHorizon() -> UIColor { night ? nHorizon : (evening ? eHorizon : horizonIce) }
+        func gradeMist() -> UIColor { night ? nMist : (evening ? eMist : mistCold) }
         // Dithered vertical gradient: navy -> steel -> pale ice -> mist.
         let grad = render(w: 2, h: 256) { cg in
             for y in 0..<256 {
@@ -119,13 +133,13 @@ enum FrostbiteBG {
                 let c: UIColor
                 switch t {
                 case 0..<0.40:
-                    c = blend(evening ? eTop : skyTop, evening ? eMid : skyMid, t / 0.40)
+                    c = blend(gradeTop(), gradeMid(), t / 0.40)
                 case 0.40..<0.68:
-                    c = blend(evening ? eMid : skyMid, evening ? eLow : skyLow, (t - 0.40) / 0.28)
+                    c = blend(gradeMid(), gradeLow(), (t - 0.40) / 0.28)
                 case 0.68..<0.85:
-                    c = blend(evening ? eLow : skyLow, evening ? eHorizon : horizonIce, (t - 0.68) / 0.17 * 0.7)
+                    c = blend(gradeLow(), gradeHorizon(), (t - 0.68) / 0.17 * 0.7)
                 default:
-                    c = blend(evening ? eHorizon : horizonIce, evening ? eMist : mistCold, 0.4 + (t - 0.85) / 0.15 * 0.6)
+                    c = blend(gradeHorizon(), gradeMist(), 0.4 + (t - 0.85) / 0.15 * 0.6)
                 }
                 fill(cg, 0, y, 2, 1, c)
             }
@@ -141,18 +155,36 @@ enum FrostbiteBG {
         // Winter sun: a small pale disc low over the glacier, warm white
         // to keep the lane readable but cold overall. Evening: a low
         // amber disc sinking into the glacier, with a wider warm halo.
-        let sun = SKShapeNode(circleOfRadius: evening ? 42 : 34)
-        sun.fillColor = evening
-            ? SKColor(red: 1.0, green: 0.55, blue: 0.25, alpha: 1)
-            : SKColor(red: 1.0, green: 0.96, blue: 0.88, alpha: 1)
+        // Night: a high pale moon with a cold halo + crater shading.
+        let sunRadius: CGFloat = night ? 30 : (evening ? 42 : 34)
+        let sun = SKShapeNode(circleOfRadius: sunRadius)
+        sun.fillColor = night
+            ? SKColor(red: 0.90, green: 0.94, blue: 1.0, alpha: 1)
+            : (evening
+                ? SKColor(red: 1.0, green: 0.55, blue: 0.25, alpha: 1)
+                : SKColor(red: 1.0, green: 0.96, blue: 0.88, alpha: 1))
         sun.strokeColor = .clear
-        sun.position = CGPoint(x: W * (evening ? 0.60 : 0.70), y: H * (evening ? 0.10 : 0.15))
+        sun.position = CGPoint(x: W * (night ? 0.32 : (evening ? 0.60 : 0.70)),
+                               y: H * (night ? 0.42 : (evening ? 0.10 : 0.15)))
         sun.zPosition = 1
         layer.addChild(sun)
-        let halo = SKShapeNode(circleOfRadius: evening ? 150 : 120)
-        halo.fillColor = evening
-            ? SKColor(red: 1.0, green: 0.60, blue: 0.30, alpha: 0.35)
-            : SKColor(red: 0.80, green: 0.90, blue: 1.0, alpha: 0.26)
+        if night {
+            // Moon craters: two dim pits so the disc reads as a moon.
+            for (dx, dy, r) in [(-8.0, 5.0, 6.0), (7.0, -4.0, 4.5)] as [(CGFloat, CGFloat, CGFloat)] {
+                let crater = SKShapeNode(circleOfRadius: r)
+                crater.fillColor = SKColor(red: 0.78, green: 0.83, blue: 0.92, alpha: 0.9)
+                crater.strokeColor = .clear
+                crater.position = CGPoint(x: dx, y: dy)
+                crater.zPosition = 1
+                sun.addChild(crater)
+            }
+        }
+        let halo = SKShapeNode(circleOfRadius: night ? 110 : (evening ? 150 : 120))
+        halo.fillColor = night
+            ? SKColor(red: 0.65, green: 0.78, blue: 1.0, alpha: 0.22)
+            : (evening
+                ? SKColor(red: 1.0, green: 0.60, blue: 0.30, alpha: 0.35)
+                : SKColor(red: 0.80, green: 0.90, blue: 1.0, alpha: 0.26))
         halo.strokeColor = .clear
         halo.position = sun.position
         halo.zPosition = 1
@@ -162,8 +194,9 @@ enum FrostbiteBG {
         ])))
 
         // Cold starfield: sparse white dots in the upper half, gentle pulse.
+        // Night doubles the field so the dark zenith feels deep.
         var rng = SeededRNG(seed: 71021017)
-        for _ in 0..<56 {
+        for _ in 0..<(night ? 110 : 56) {
             let sx = rng.cgFloat(in: -W * 0.6...W * 0.6)
             let sy = rng.cgFloat(in: -H * 0.02...H * 0.62)
             let s = rng.cgFloat(in: 1.4...3.0)
@@ -182,6 +215,7 @@ enum FrostbiteBG {
         // Aurora ribbons: two baked gradient sheets with wavy column fades,
         // pulsing alpha + slow drift — the cheapest "living" polar sky.
         // Evening washes them out, so they burn dimmer under the amber sun.
+        // Night lets them burn brightest over the abyss.
         let auroraTex = auroraTexture()
         for i in 0..<2 {
             let ribbon = SKSpriteNode(texture: auroraTex)
@@ -190,11 +224,17 @@ enum FrostbiteBG {
             ribbon.position = CGPoint(x: W * 0.32 + CGFloat(i) * W * 0.34,
                                       y: H * (i == 0 ? 0.86 : 0.66))
             ribbon.zPosition = 1
-            ribbon.alpha = evening ? (i == 0 ? 0.22 : 0.16) : (i == 0 ? 0.42 : 0.30)
+            let baseAlpha: CGFloat = night ? (i == 0 ? 0.62 : 0.46)
+                : (evening ? (i == 0 ? 0.22 : 0.16) : (i == 0 ? 0.42 : 0.30))
+            ribbon.alpha = baseAlpha
             layer.addChild(ribbon)
+            let hiAlpha: CGFloat = night ? (i == 0 ? 0.85 : 0.64)
+                : (evening ? (i == 0 ? 0.34 : 0.24) : (i == 0 ? 0.62 : 0.44))
+            let loAlpha: CGFloat = night ? (i == 0 ? 0.48 : 0.36)
+                : (evening ? (i == 0 ? 0.16 : 0.12) : (i == 0 ? 0.30 : 0.22))
             let pulse = SKAction.sequence([
-                .fadeAlpha(to: evening ? (i == 0 ? 0.34 : 0.24) : (i == 0 ? 0.62 : 0.44), duration: 5.6 + Double(i) * 1.7),
-                .fadeAlpha(to: evening ? (i == 0 ? 0.16 : 0.12) : (i == 0 ? 0.30 : 0.22), duration: 5.6 + Double(i) * 1.7),
+                .fadeAlpha(to: hiAlpha, duration: 5.6 + Double(i) * 1.7),
+                .fadeAlpha(to: loAlpha, duration: 5.6 + Double(i) * 1.7),
             ])
             ribbon.run(.repeatForever(pulse))
             let sway = SKAction.moveBy(x: W * 0.04, y: 0, duration: 11.0 + Double(i) * 4.0)
@@ -204,11 +244,15 @@ enum FrostbiteBG {
 
         // Ice-haze streaks: thin cold cloud sheets drifting slowly.
         // Evening tints them warm ember-rose under the low sun.
+        // Night thins them to cold moonlit veils.
         for _ in 0..<6 {
             let cw = W * rng.cgFloat(in: 0.32...0.55)
-            let cloud = SKSpriteNode(color: evening
-                ? SKColor(red: 0.96, green: 0.62, blue: 0.44, alpha: 0.22)
-                : SKColor(red: 0.82, green: 0.88, blue: 0.96, alpha: 0.20),
+            let cloudColor: SKColor = night
+                ? SKColor(red: 0.55, green: 0.64, blue: 0.82, alpha: 0.16)
+                : (evening
+                    ? SKColor(red: 0.96, green: 0.62, blue: 0.44, alpha: 0.22)
+                    : SKColor(red: 0.82, green: 0.88, blue: 0.96, alpha: 0.20))
+            let cloud = SKSpriteNode(color: cloudColor,
                                      size: CGSize(width: cw, height: rng.cgFloat(in: 8...16)))
             cloud.position = CGPoint(x: rng.cgFloat(in: -W * 0.6...W * 0.6),
                                      y: H * rng.cgFloat(in: 0.04...0.46))
@@ -532,6 +576,7 @@ enum FrostbiteBG {
         // Thin cold veil so the panorama reads as distant air.
         // Evening: a warm amber wash over the cold veil so the glacier
         // ridge catches the sinking sun.
+        // Night: a deep indigo wash so the ridge sinks into the dark.
         let veil = SKSpriteNode(color: SKColor(red: 0.62, green: 0.74, blue: 0.86, alpha: 0.10),
                                 size: CGSize(width: panoW, height: panoH))
         veil.anchorPoint = CGPoint(x: 0, y: 0.5)
@@ -545,6 +590,16 @@ enum FrostbiteBG {
             ember.position = CGPoint(x: pano.position.x, y: pano.position.y - panoH * 0.16)
             ember.zPosition = 3
             layer.addChild(ember)
+        }
+        if Balance.frostNight {
+            pano.color = SKColor(red: 0.55, green: 0.62, blue: 0.90, alpha: 1)
+            pano.colorBlendFactor = 0.35
+            let nightWash = SKSpriteNode(color: SKColor(red: 0.04, green: 0.05, blue: 0.16, alpha: 0.30),
+                                         size: CGSize(width: panoW, height: panoH))
+            nightWash.anchorPoint = CGPoint(x: 0, y: 0.5)
+            nightWash.position = pano.position
+            nightWash.zPosition = 3
+            layer.addChild(nightWash)
         }
     }
 
@@ -653,6 +708,72 @@ enum FrostbiteBG {
                                         y: baseY + leadRNG.cgFloat(in: 14...58))
                 floe.zRotation = leadRNG.cgFloat(in: -0.12...0.12)
                 leadRoot.addChild(floe)
+            }
+        }
+
+        // Pale Abyss small alteration (Level 27): the pasture shelf splits
+        // open on the abyss rift — a dark crevasse band with a pale-blue
+        // glow lip riding the near sheet's speed, plus faint rising motes.
+        // Overlay only (baked sheets untouched), a handful of nodes,
+        // no per-frame code beyond looping actions.
+        if Balance.paleAbyss {
+            let riftRoot = MidParallaxNode()
+            riftRoot.baseX = 0
+            riftRoot.cameraFactor = Balance.parallaxMid + 0.055
+            riftRoot.zPosition = 2
+            layer.addChild(riftRoot)
+            var riftRNG = SeededRNG(seed: 227_027)
+            // The rift: 3 dark slashes with glowing pale rims, staggered
+            // along the field line so the camera crosses them mid-lane.
+            for r in 0..<3 {
+                let w = riftRNG.cgFloat(in: 180...300)
+                let x = panoW * (0.25 + CGFloat(r) * 0.22) + riftRNG.cgFloat(in: -40...40)
+                let y = baseY + riftRNG.cgFloat(in: 18...52)
+                let dark = SKShapeNode(ellipseOf: CGSize(width: w, height: 14))
+                dark.fillColor = SKColor(red: 0.01, green: 0.02, blue: 0.06, alpha: 0.95)
+                dark.strokeColor = .clear
+                dark.position = CGPoint(x: x, y: y)
+                dark.zRotation = riftRNG.cgFloat(in: -0.04...0.04)
+                riftRoot.addChild(dark)
+                let lip = SKSpriteNode(
+                    color: SKColor(red: 0.55, green: 0.85, blue: 1.0, alpha: 0.55),
+                    size: CGSize(width: w * 0.92, height: 2))
+                lip.position = CGPoint(x: x, y: y + 7)
+                lip.zRotation = dark.zRotation
+                riftRoot.addChild(lip)
+                // Breathing glow above the crack — the abyss exhaling cold.
+                let breath = SKShapeNode(ellipseOf: CGSize(width: w * 0.8, height: 26))
+                breath.fillColor = SKColor(red: 0.45, green: 0.75, blue: 1.0, alpha: 0.08)
+                breath.strokeColor = .clear
+                breath.position = CGPoint(x: x, y: y + 12)
+                riftRoot.addChild(breath)
+                breath.run(.repeatForever(.sequence([
+                    .fadeAlpha(to: 0.45, duration: riftRNG.double(in: 2.2...3.4)),
+                    .fadeAlpha(to: 1.0, duration: riftRNG.double(in: 2.2...3.4)),
+                ])))
+            }
+            // Pale motes rising off the rift.
+            for i in 0..<10 {
+                let mote = SKSpriteNode(
+                    color: SKColor(red: 0.70, green: 0.88, blue: 1.0, alpha: 0.85),
+                    size: CGSize(width: 3, height: 3))
+                let homeX = riftRNG.cgFloat(in: 0...panoW * 0.8)
+                let homeY = baseY + riftRNG.cgFloat(in: 14...50)
+                mote.position = CGPoint(x: homeX, y: homeY)
+                riftRoot.addChild(mote)
+                let rise = SKAction.moveBy(x: riftRNG.cgFloat(in: -16...16),
+                                           y: riftRNG.cgFloat(in: 50...110),
+                                           duration: riftRNG.double(in: 2.4...4.2))
+                let vanish = SKAction.sequence([
+                    SKAction.wait(forDuration: 1.2),
+                    SKAction.fadeOut(withDuration: 1.4),
+                ])
+                mote.run(.repeatForever(.sequence([
+                    SKAction.wait(forDuration: Double(i) * 0.3),
+                    SKAction.group([rise, vanish]),
+                    SKAction.run { mote.position = CGPoint(x: homeX, y: homeY) },
+                    SKAction.fadeIn(withDuration: 0.4),
+                ])))
             }
         }
     }

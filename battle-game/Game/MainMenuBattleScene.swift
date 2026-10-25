@@ -107,7 +107,10 @@ final class MainMenuBattleScene: SKScene {
         let laneW = size.width * 2.2
         let tileW: CGFloat = 500
         let tileH: CGFloat = 104 // 125x26 @4x
-        let groundY = -size.height * 0.22
+        // Ground rides low so the sky + fight own the frame: the lane gets
+        // a full readable band without pushing the towers into the sky
+        // (the diorama reads "zoomed out" when the lane squeezes thin).
+        let groundY = -size.height * 0.30
         // Desert levels dress the diorama lane in sand, not moss turf.
         // Granite Reach uses its own alpine rock tile; the frozen approach
         // uses the snow-lane tile with an icy lip.
@@ -115,10 +118,13 @@ final class MainMenuBattleScene: SKScene {
         let sand = !frost && Balance.dunes
         let sunrise = !frost && Balance.active.theme == .sunrise
         let alpine = !frost && Balance.alpinePass
+        let mordor = !frost && Balance.active.theme == .mordor
         let lipColor = frost
             ? SKColor(red: 0.84, green: 0.95, blue: 1.0, alpha: 0.85)
             : alpine
             ? SKColor(red: 1.0, green: 0.84, blue: 0.60, alpha: 0.8)
+            : mordor
+            ? SKColor(red: 1.0, green: 0.45, blue: 0.14, alpha: 0.8)
             : sunrise
             ? SKColor(red: 1.0, green: 0.84, blue: 0.56, alpha: 0.8)
             : sand
@@ -127,15 +133,26 @@ final class MainMenuBattleScene: SKScene {
         var x: CGFloat = -laneW / 2
         var i = 0
         while x < laneW / 2 {
-            let tile = SKSpriteNode(texture: frost
+            let full = frost
                 ? FrostbiteBG.snowLaneTileTexture()
                 : alpine
                 ? TwilightRuinsBG.alpineTileTexture()
+                : mordor
+                ? MordorBG.mordorLaneTileTexture()
                 : sunrise
                 ? TwilightRuinsBG.sunriseSandTileTexture()
                 : sand
                 ? TwilightRuinsBG.sandTileTexture()
-                : TwilightRuinsBG.tileTexture(variant: i))
+                : TwilightRuinsBG.tileTexture(variant: i)
+            // The tile art ends in near-black outline + AO rows; showing
+            // them full-bleed reads as a black bar along the bottom edge.
+            // Crop the bottom 2px so the lane melts into the earth below.
+            let pxH = max(4, full.size().height)
+            let tileTex = SKTexture(rect: CGRect(x: 0, y: 2 / pxH,
+                                                  width: 1, height: (pxH - 2) / pxH),
+                                     in: full)
+            tileTex.filteringMode = .nearest
+            let tile = SKSpriteNode(texture: tileTex)
             tile.anchorPoint = CGPoint(x: 0, y: 1)
             tile.size = CGSize(width: tileW, height: tileH)
             if i % 6 == 5 {
@@ -176,6 +193,8 @@ final class MainMenuBattleScene: SKScene {
         // dark soil. Tall enough that aspectFill crops never expose it.
         let baseColor = frost
             ? SKColor(red: 0.055, green: 0.075, blue: 0.14, alpha: 1)
+            : mordor
+            ? SKColor(red: 0.06, green: 0.02, blue: 0.02, alpha: 1)
             : SKColor(red: 0.05, green: 0.045, blue: 0.08, alpha: 1)
         let base = SKSpriteNode(color: baseColor,
                                 size: CGSize(width: laneW, height: size.height * 2))
@@ -208,7 +227,7 @@ final class MainMenuBattleScene: SKScene {
                 let cg = ctx.cgContext
                 for y in 0..<h {
                     let t = CGFloat(y) / CGFloat(h - 1)
-                    cg.setFillColor(UIColor(white: 0, alpha: 0.42 + t * 0.5).cgColor)
+                    cg.setFillColor(UIColor(white: 0, alpha: 0.30 + t * 0.38).cgColor)
                     cg.fill(CGRect(x: 0, y: y, width: 2, height: 1))
                 }
             }
@@ -221,7 +240,7 @@ final class MainMenuBattleScene: SKScene {
     // MARK: - Towers (the battlefield anchors)
 
     private func buildMenuTowers() {
-        let groundY = -size.height * 0.22
+        let groundY = -size.height * 0.30
         let leftX = -size.width * 0.36
         let rightX = size.width * 0.36
         // Diorama matches the pinned level's tower tier (Mk-II from 18 on).
@@ -266,7 +285,7 @@ final class MainMenuBattleScene: SKScene {
     // MARK: - Looping skirmish (march -> firefight -> fall back -> loop)
 
     private func buildSkirmish() {
-        let groundY = -size.height * 0.22
+        let groundY = -size.height * 0.30
         // Two fireteams per side, staggered so the fight never fully stops.
         for (index, side) in [(-1, 0), (-1, 1), (1, 0), (1, 1)].enumerated() {
             let dir = CGFloat(side.0) // -1 = blue (faces right), +1 = red

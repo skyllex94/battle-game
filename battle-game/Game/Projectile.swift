@@ -950,6 +950,56 @@ enum ProjectileFactory {
         return root
     }
 
+    /// Phoenix plasma dart: chunky pixel-art ember-orange bolt — hotter
+    /// and slimmer than the saucer orb: white-hot core, ember-orange
+    /// mid-shell, crimson rim, plus a soft orange halo and 2 trailing
+    /// spark squares. Flies nose-first (scene sets zRotation); the core
+    /// pulses faster than the saucer's, for a darting read.
+    static func makePhoenixPlasma() -> SKNode {
+        let root = SKNode()
+        root.zPosition = 15
+        // Soft ember halo (reads at range, above the lane).
+        let halo = SKShapeNode(ellipseOf: CGSize(width: 26, height: 17))
+        halo.fillColor = SKColor(red: 1.0, green: 0.45, blue: 0.12, alpha: 0.30)
+        halo.strokeColor = .clear
+        root.addChild(halo)
+        // Outer crimson rim (slim pixel dart).
+        let rim = SKShapeNode(rectOf: CGSize(width: 24, height: 11), cornerRadius: 2)
+        rim.fillColor = SKColor(red: 0.68, green: 0.10, blue: 0.08, alpha: 1)
+        rim.strokeColor = SKColor(red: 0.36, green: 0.05, blue: 0.05, alpha: 1)
+        rim.lineWidth = 2
+        root.addChild(rim)
+        // Ember-orange mid-shell.
+        let mid = SKShapeNode(rectOf: CGSize(width: 17, height: 8), cornerRadius: 2)
+        mid.fillColor = SKColor(red: 1.0, green: 0.45, blue: 0.12, alpha: 1)
+        mid.strokeColor = .clear
+        mid.position = CGPoint(x: 1, y: 0)
+        root.addChild(mid)
+        // White-hot core.
+        let core = SKShapeNode(rectOf: CGSize(width: 9, height: 5), cornerRadius: 1)
+        core.fillColor = SKColor(red: 1.0, green: 0.95, blue: 0.88, alpha: 1)
+        core.strokeColor = .clear
+        core.position = CGPoint(x: 2, y: 0)
+        root.addChild(core)
+        core.run(.repeatForever(.sequence([
+            .fadeAlpha(to: 0.55, duration: 0.09),
+            .fadeAlpha(to: 1.0, duration: 0.09),
+        ])))
+        // Trailing spark squares (pixel-art exhaust).
+        for i in 0..<2 {
+            let spark = SKShapeNode(rectOf: CGSize(width: 5, height: 5))
+            spark.fillColor = SKColor(red: 1.0, green: 0.55, blue: 0.18, alpha: 0.9)
+            spark.strokeColor = .clear
+            spark.position = CGPoint(x: -13 - CGFloat(i) * 7, y: i == 0 ? 2 : -2)
+            root.addChild(spark)
+            spark.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.25, duration: 0.11),
+                .fadeAlpha(to: 0.9, duration: 0.11),
+            ])))
+        }
+        return root
+    }
+
     /// Saucer splash boom: red-plasma detonation — hot core flash, red
     /// fireballs, crackling spark squares + a pale shockwave ring.
     /// Self-removes (~0.6s).
@@ -1005,6 +1055,113 @@ enum ProjectileFactory {
             .removeFromParent(),
         ]))
         root.run(.sequence([.wait(forDuration: 0.6), .removeFromParent()]))
+        return root
+    }
+
+    /// Tempest arc-bolt: the artillery drone's heavy round — hot white
+    /// core, saturated cyan mid-shell, deep-steel rim, plus a cool halo
+    /// and 2 trailing spark squares. Flies nose-first (scene sets
+    /// zRotation); the core pulses fast while it lumbers downrange.
+    static func makeTempestOrb() -> SKNode {
+        let root = SKNode()
+        root.zPosition = 15
+        // Cool cyan halo (reads at range, above the lane).
+        let halo = SKShapeNode(ellipseOf: CGSize(width: 34, height: 22))
+        halo.fillColor = SKColor(red: 0.35, green: 0.75, blue: 1.0, alpha: 0.32)
+        halo.strokeColor = .clear
+        root.addChild(halo)
+        // Outer deep-steel rim (pixel chunk: square-ish bolt).
+        let rim = SKShapeNode(rectOf: CGSize(width: 22, height: 15), cornerRadius: 3)
+        rim.fillColor = SKColor(red: 0.10, green: 0.25, blue: 0.45, alpha: 1)
+        rim.strokeColor = SKColor(red: 0.05, green: 0.12, blue: 0.25, alpha: 1)
+        rim.lineWidth = 2
+        root.addChild(rim)
+        // Saturated mid-shell.
+        let mid = SKShapeNode(rectOf: CGSize(width: 15, height: 11), cornerRadius: 2)
+        mid.fillColor = SKColor(red: 0.35, green: 0.75, blue: 1.0, alpha: 1)
+        mid.strokeColor = .clear
+        mid.position = CGPoint(x: 1, y: 0)
+        root.addChild(mid)
+        // Hot white core.
+        let core = SKShapeNode(rectOf: CGSize(width: 9, height: 6), cornerRadius: 1)
+        core.fillColor = SKColor(red: 0.92, green: 0.98, blue: 1.0, alpha: 1)
+        core.strokeColor = .clear
+        core.position = CGPoint(x: 2, y: 0)
+        root.addChild(core)
+        core.run(.repeatForever(.sequence([
+            .fadeAlpha(to: 0.55, duration: 0.10),
+            .fadeAlpha(to: 1.0, duration: 0.10),
+        ])))
+        // Trailing spark squares (pixel-art exhaust).
+        for i in 0..<2 {
+            let spark = SKShapeNode(rectOf: CGSize(width: 5, height: 5))
+            spark.fillColor = SKColor(red: 0.50, green: 0.85, blue: 1.0, alpha: 0.9)
+            spark.strokeColor = .clear
+            spark.position = CGPoint(x: -13 - CGFloat(i) * 7, y: i == 0 ? 2 : -2)
+            root.addChild(spark)
+            spark.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.25, duration: 0.12),
+                .fadeAlpha(to: 0.9, duration: 0.12),
+            ])))
+        }
+        return root
+    }
+
+    /// Tempest detonation: the widest boom in the army — cyan core flash,
+    /// blue fireballs, crackling spark squares + a pale shockwave ring.
+    /// Self-removes (~0.7s).
+    static func makeTempestBlast(radius: CGFloat) -> SKNode {
+        let root = SKNode()
+        guard GameSettings.particlesEnabled else {
+            root.run(.sequence([.wait(forDuration: 0.01), .removeFromParent()]))
+            return root
+        }
+        root.zPosition = 16
+        let puff = SKShapeNode(circleOfRadius: radius * 0.35)
+        puff.fillColor = SKColor(red: 0.35, green: 0.70, blue: 1.0, alpha: 0.95)
+        puff.strokeColor = .clear
+        root.addChild(puff)
+        puff.run(.sequence([
+            .group([.scale(to: 2.2, duration: 0.32),
+                    .fadeOut(withDuration: 0.32)]),
+            .removeFromParent(),
+        ]))
+        let flash = SKShapeNode(circleOfRadius: radius * 0.25)
+        flash.fillColor = SKColor(red: 0.92, green: 0.97, blue: 1.0, alpha: 1)
+        flash.strokeColor = .clear
+        root.addChild(flash)
+        flash.run(.sequence([
+            .group([.scale(to: 0.2, duration: 0.16),
+                    .fadeOut(withDuration: 0.16)]),
+            .removeFromParent(),
+        ]))
+        for i in 0..<fxCount(6) {
+            let spark = SKShapeNode(rectOf: CGSize(width: 7, height: 7))
+            spark.fillColor = SKColor(red: 0.40 + CGFloat(i) * 0.05, green: 0.75, blue: 1.0, alpha: 1)
+            spark.strokeColor = .clear
+            spark.position = .zero
+            spark.zRotation = CGFloat(i) * 0.55
+            root.addChild(spark)
+            let a = CGFloat(i) * .pi / 3 + 0.4
+            spark.run(.sequence([
+                .group([.moveBy(x: cos(a) * radius * 0.85, y: sin(a) * radius * 0.6, duration: 0.34),
+                        .rotate(byAngle: 1.2, duration: 0.34),
+                        .fadeOut(withDuration: 0.34)]),
+                .removeFromParent(),
+            ]))
+        }
+        let ring = SKShapeNode(circleOfRadius: radius * 0.9)
+        ring.fillColor = .clear
+        ring.strokeColor = SKColor(red: 0.45, green: 0.80, blue: 1.0, alpha: 0.9)
+        ring.lineWidth = 3
+        ring.setScale(0.3)
+        root.addChild(ring)
+        ring.run(.sequence([
+            .group([.scale(to: 1.0, duration: 0.38),
+                    .fadeOut(withDuration: 0.38)]),
+            .removeFromParent(),
+        ]))
+        root.run(.sequence([.wait(forDuration: 0.7), .removeFromParent()]))
         return root
     }
 

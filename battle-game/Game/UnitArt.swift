@@ -9,7 +9,7 @@ import UIKit
 /// advancing for a scuttling march cycle.
 enum UnitPixelArt {
 
-    enum Kind { case trooper, heavy, ranger, truck, bombard, tank, gunship, enemy, brute, reaver, skitter, jet, mech, heli, missileTruck, immortal, saucer }
+    enum Kind { case trooper, heavy, ranger, truck, bombard, tank, gunship, storm, enemy, brute, reaver, skitter, gnasher, jet, mech, heli, missileTruck, immortal, saucer, phoenix, tempest, revrent }
 
     /// Walk frames for a kind: full 4-step stride
     /// (contact -> support -> toe-off -> swing). Generated once, shared.
@@ -25,10 +25,12 @@ enum UnitPixelArt {
         case .bombard: made = (0...3).map { bombard(pose: $0) }
         case .tank: made = (0...3).map { tank(pose: $0) }
         case .gunship: made = (0...3).map { gunship(pose: $0) }
+        case .storm: made = (0...3).map { storm(pose: $0) }
         case .enemy: made = (0...3).map { enemy(pose: $0) }
         case .brute: made = (0...3).map { brute(pose: $0) }
         case .reaver: made = (0...3).map { reaver(pose: $0) }
         case .skitter: made = (0...3).map { skitter(pose: $0) }
+        case .gnasher: made = (0...3).map { gnasher(pose: $0) }
         case .jet: made = (0...3).map { jet(pose: $0) }
         case .mech:
             let body = mechBody()
@@ -37,6 +39,9 @@ enum UnitPixelArt {
         case .missileTruck: made = (0...3).map { missileTruck(pose: $0) }
         case .immortal: made = (0...3).map { immortal(pose: $0) }
         case .saucer: made = (0...3).map { saucer(pose: $0) }
+        case .phoenix: made = (0...3).map { phoenix(pose: $0) }
+        case .tempest: made = (0...3).map { tempest(pose: $0) }
+        case .revrent: made = (0...3).map { revrent(pose: $0) }
         }
         frameCache[kind] = made
         return made
@@ -154,6 +159,35 @@ enum UnitPixelArt {
                 cg.saveGState()
                 cg.translateBy(x: x0 + 20 * s, y: y0 + 8.5 * s)
                 cg.rotate(by: -0.12)
+                let aw = CGFloat(m.w) * s, ah = CGFloat(m.h) * s
+                arm.draw(in: CGRect(x: -aw * 0.2, y: -ah / 2, width: aw, height: ah))
+                cg.restoreGState()
+            }
+            portraitCache[kind] = portrait
+            return portrait
+        }
+        // Storm portrait: the whole rocket tank with the pod cluster
+        // raised off the battery — the wavy-volley shooter.
+        if kind == .storm {
+            _ = frames(for: kind)
+            _ = armTexture(for: kind)
+            guard let body = imageCache["body-storm-0"],
+                  let arm = imageCache["arm-storm"] else { return UIImage() }
+            let m = armMetrics(for: kind)
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            format.opaque = false
+            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
+                                                   format: format).image { ctx in
+                let cg = ctx.cgContext
+                let s: CGFloat = 0.62
+                let bw = 48 * s, bh = 32 * s
+                let x0 = (36 - bw) / 2, y0 = (24 - bh) / 2
+                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+                // Pod cluster pivots on the battery grip.
+                cg.saveGState()
+                cg.translateBy(x: x0 + 24 * s, y: y0 + 6 * s)
+                cg.rotate(by: -0.18)
                 let aw = CGFloat(m.w) * s, ah = CGFloat(m.h) * s
                 arm.draw(in: CGRect(x: -aw * 0.2, y: -ah / 2, width: aw, height: ah))
                 cg.restoreGState()
@@ -342,6 +376,96 @@ enum UnitPixelArt {
             portraitCache[kind] = portrait
             return portrait
         }
+        // Phoenix portrait: the whole red interceptor scaled to fit
+        // the card with the graviton emitter raised off the prow mount.
+        if kind == .phoenix {
+            _ = frames(for: kind)
+            _ = armTexture(for: kind)
+            guard let body = imageCache["body-phoenix-0"],
+                  let arm = imageCache["arm-phoenix"] else { return UIImage() }
+            let m = armMetrics(for: kind)
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            format.opaque = false
+            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
+                                                   format: format).image { ctx in
+                let cg = ctx.cgContext
+                // Body canvas is 64x36: shrink so the raised emitter fits.
+                let s: CGFloat = 0.48
+                let bw = 64 * s, bh = 36 * s
+                let x0 = (36 - bw) / 2, y0 = (24 - bh) / 2
+                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+                // Guns pivot on the prow mount, breaking the frame.
+                cg.saveGState()
+                cg.translateBy(x: x0 + 44 * s, y: y0 + 26 * s)
+                cg.rotate(by: -0.5)
+                let aw = CGFloat(m.w) * s, ah = CGFloat(m.h) * s
+                arm.draw(in: CGRect(x: -aw * 0.21, y: -ah / 2, width: aw, height: ah))
+                cg.restoreGState()
+            }
+            portraitCache[kind] = portrait
+            return portrait
+        }
+        // Tempest portrait: the whole artillery frame scaled to fit
+        // the card with the twin arc lances raised off the chin mount.
+        if kind == .tempest {
+            _ = frames(for: kind)
+            _ = armTexture(for: kind)
+            guard let body = imageCache["body-tempest-0"],
+                  let arm = imageCache["arm-tempest"] else { return UIImage() }
+            let m = armMetrics(for: kind)
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            format.opaque = false
+            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
+                                                   format: format).image { ctx in
+                let cg = ctx.cgContext
+                // Body canvas is 56x32: shrink so the raised lances fit.
+                let s: CGFloat = 0.55
+                let bw = 56 * s, bh = 32 * s
+                let x0 = (36 - bw) / 2, y0 = (24 - bh) / 2
+                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+                // Lances pivot on the chin mount, breaking the frame.
+                cg.saveGState()
+                cg.translateBy(x: x0 + 38 * s, y: y0 + 23 * s)
+                cg.rotate(by: -0.5)
+                let aw = CGFloat(m.w) * s, ah = CGFloat(m.h) * s
+                arm.draw(in: CGRect(x: -aw * 0.21, y: -ah / 2, width: aw, height: ah))
+                cg.restoreGState()
+            }
+            portraitCache[kind] = portrait
+            return portrait
+        }
+        // Revrent portrait: the whole bluish carrier scaled to fit
+        // the card with its sensor relay raised off the prow mount —
+        // the 5 interceptors read as cyan ticks around the hull.
+        if kind == .revrent {
+            _ = frames(for: kind)
+            _ = armTexture(for: kind)
+            guard let body = imageCache["body-revrent-0"],
+                  let arm = imageCache["arm-revrent"] else { return UIImage() }
+            let m = armMetrics(for: kind)
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            format.opaque = false
+            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
+                                                   format: format).image { ctx in
+                let cg = ctx.cgContext
+                // Body canvas is 72x40: shrink so the raised relay fits.
+                let s: CGFloat = 0.44
+                let bw = 72 * s, bh = 40 * s
+                let x0 = (36 - bw) / 2, y0 = (24 - bh) / 2
+                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+                cg.saveGState()
+                cg.translateBy(x: x0 + 52 * s, y: y0 + 26 * s)
+                cg.rotate(by: -0.5)
+                let aw = CGFloat(m.w) * s, ah = CGFloat(m.h) * s
+                arm.draw(in: CGRect(x: -aw * 0.21, y: -ah / 2, width: aw, height: ah))
+                cg.restoreGState()
+            }
+            portraitCache[kind] = portrait
+            return portrait
+        }
         let bodyKey: String
         let armKey: String
         let shoulder: CGPoint // grip point in portrait px
@@ -364,6 +488,9 @@ enum UnitPixelArt {
         case .tank:
             bodyKey = "body-tank-0"; armKey = "arm-tank-v1"
             shoulder = CGPoint(x: 16, y: 14)
+        case .storm:
+            bodyKey = "body-storm-0"; armKey = "arm-storm"
+            shoulder = CGPoint(x: 16, y: 14)
         case .gunship:
             bodyKey = "body-gunship-0"; armKey = "arm-gunship"
             shoulder = CGPoint(x: 14, y: 15)
@@ -379,6 +506,9 @@ enum UnitPixelArt {
         case .skitter:
             bodyKey = "body-skitter-0"; armKey = "arm-skitter"
             shoulder = CGPoint(x: 16, y: 16)
+        case .gnasher:
+            bodyKey = "body-gnasher-0"; armKey = "arm-gnasher"
+            shoulder = CGPoint(x: 16, y: 15)
         case .jet:
             bodyKey = "body-jet-0"; armKey = "arm-jet"
             shoulder = CGPoint(x: 14, y: 15)
@@ -396,6 +526,15 @@ enum UnitPixelArt {
             shoulder = CGPoint(x: 20, y: 11)
         case .saucer:
             bodyKey = "body-saucer-0"; armKey = "arm-saucer"
+            shoulder = CGPoint(x: 14, y: 15)
+        case .phoenix:
+            bodyKey = "body-phoenix-0"; armKey = "arm-phoenix"
+            shoulder = CGPoint(x: 14, y: 15)
+        case .tempest:
+            bodyKey = "body-tempest-0"; armKey = "arm-tempest"
+            shoulder = CGPoint(x: 14, y: 15)
+        case .revrent:
+            bodyKey = "body-revrent-0"; armKey = "arm-revrent"
             shoulder = CGPoint(x: 14, y: 15)
         }
         // Warm the cache (no-ops once textures exist).
@@ -1174,6 +1313,155 @@ enum UnitPixelArt {
         }
     }
 
+    // MARK: - Player Storm (Level 26 rocket-artillery tank)
+
+    /// Rocket tank (48x32), side view facing +x: the tank family's tracked
+    /// running gear and olive hull, but the turret is a tall pod head —
+    /// flank rails hinting the stacked tubes, barrels exiting forward out
+    /// of the pod nose — over a blue-banded slab with a hatch ring, rear
+    /// stowage bin and whip antenna. The aimable pod cluster (arm pivot
+    /// at the battery's grip) looses the 4-round wavy volley.
+    private static func storm(pose: Int) -> SKTexture {
+        canvas(w: 48, h: 32, key: "body-storm-\(pose)") { cg in
+            let olive = UIColor(red: 0.40, green: 0.40, blue: 0.30, alpha: 1)
+            let oliveLit = UIColor(red: 0.62, green: 0.62, blue: 0.45, alpha: 1)
+            let oliveDk = UIColor(red: 0.25, green: 0.27, blue: 0.19, alpha: 1)
+            let camoD = UIColor(red: 0.20, green: 0.22, blue: 0.15, alpha: 1)
+            let team = UIColor(red: 0.30, green: 0.60, blue: 1.0, alpha: 1)
+            let teamLit = UIColor(red: 0.55, green: 0.80, blue: 1.0, alpha: 1)
+            let steel = UIColor(red: 0.36, green: 0.38, blue: 0.44, alpha: 1)
+            let steelLit = UIColor(red: 0.58, green: 0.60, blue: 0.66, alpha: 1)
+            let warn = UIColor(red: 1.0, green: 0.62, blue: 0.16, alpha: 1)
+            let glow = UIColor(red: 1.0, green: 0.35, blue: 0.12, alpha: 1)
+            let under = UIColor(red: 0.06, green: 0.06, blue: 0.07, alpha: 1)
+            let tire = UIColor(red: 0.13, green: 0.15, blue: 0.18, alpha: 1)
+            let rimLit = UIColor(red: 0.62, green: 0.66, blue: 0.72, alpha: 1)
+            let lamp = UIColor(red: 1.0, green: 0.93, blue: 0.70, alpha: 1)
+            let O = outline
+            let y = [0, 0, 1, 0][pose] // suspension bounce
+
+            // --- Tracks: same chain + road-gear language as the tank.
+            let link = [0, 1, 2, 3][pose]
+            fill(cg, x: 7, y: 22, w: 37, h: 10, O)
+            fill(cg, x: 2, y: 25, w: 6, h: 6, O)
+            fill(cg, x: 43, y: 25, w: 4, h: 6, O)
+            fill(cg, x: 8, y: 23, w: 35, h: 8, tire)
+            fill(cg, x: 3, y: 26, w: 5, h: 4, tire)
+            fill(cg, x: 43, y: 26, w: 3, h: 4, tire)
+            for rx in [14, 22, 30, 38] {
+                fill(cg, x: rx - 3, y: 26, w: 7, h: 6, oliveDk)
+                fill(cg, x: rx - 3, y: 26, w: 3, h: 1, rimLit)
+                fill(cg, x: rx - 1, y: 28, w: 3, h: 2, steel)
+                fill(cg, x: rx - 1, y: 28, w: 3, h: 1, steelLit)
+            }
+            for i in 0..<9 {
+                let lx = 10 + ((i * 4 + link) % 32)
+                fill(cg, x: lx, y: 29, w: 2, h: 2, under)
+            }
+            for i in 0..<2 {
+                let ly = 26 + ((i * 3 + link) % 5)
+                fill(cg, x: 3, y: ly, w: 2, h: 2, under)
+                fill(cg, x: 43, y: ly, w: 2, h: 2, under)
+            }
+
+            // --- Hull: armored flank, lit deck, dark belly, team stripe.
+            fill(cg, x: 2, y: 13 + y, w: 44, h: 10, O)
+            fill(cg, x: 3, y: 14 + y, w: 42, h: 8, olive)
+            fill(cg, x: 3, y: 14 + y, w: 42, h: 2, oliveLit)
+            fill(cg, x: 3, y: 20 + y, w: 42, h: 2, oliveDk)
+            fill(cg, x: 3, y: 17 + y, w: 42, h: 2, team)
+            fill(cg, x: 3, y: 17 + y, w: 42, h: 1, teamLit)
+            // Camo flecks along the hull shoulder.
+            fill(cg, x: 7, y: 15 + y, w: 3, h: 1, camoD)
+            fill(cg, x: 14, y: 16 + y, w: 4, h: 1, camoD)
+            fill(cg, x: 23, y: 15 + y, w: 3, h: 1, camoD)
+            fill(cg, x: 31, y: 16 + y, w: 4, h: 1, camoD)
+
+            // --- Exhaust stack at the very back, hot tip.
+            fill(cg, x: 1, y: 10 + y, w: 4, h: 6, O)
+            fill(cg, x: 2, y: 11 + y, w: 2, h: 4, steel)
+            fill(cg, x: 1, y: 9 + y, w: 4, h: 2, O)
+            fill(cg, x: 2, y: 10 + y, w: 2, h: 1, warn)
+
+            // --- Rear stowage bin with a spare rocket nose-up.
+            fill(cg, x: 5, y: 6 + y, w: 6, h: 7, O)
+            fill(cg, x: 6, y: 7 + y, w: 4, h: 5, oliveDk)
+            fill(cg, x: 7, y: 4 + y, w: 2, h: 3, warn)
+            fill(cg, x: 7, y: 4 + y, w: 1, h: 1, .white.withAlphaComponent(0.6))
+
+            // --- Turret slab: low mount under the pod battery, lit top,
+            // blue band, hatch ring + periscope pip.
+            fill(cg, x: 12, y: 8 + y, w: 19, h: 6, O)
+            fill(cg, x: 13, y: 9 + y, w: 17, h: 4, olive)
+            fill(cg, x: 13, y: 9 + y, w: 17, h: 1, oliveLit)
+            fill(cg, x: 13, y: 11 + y, w: 17, h: 2, team)
+            fill(cg, x: 13, y: 11 + y, w: 17, h: 1, teamLit)
+            fill(cg, x: 15, y: 9 + y, w: 4, h: 3, O)
+            fill(cg, x: 16, y: 10 + y, w: 2, h: 1, oliveDk)
+            fill(cg, x: 16, y: 9 + y, w: 1, h: 1, glow)
+
+            // --- Rocket pod head: tall housing riding the slab, seen from
+            // the side since the battery faces forward — tube rows read as
+            // rails along the flank, with the barrels exiting out of the
+            // pod's nose to the right. No open mouths face the camera.
+            fill(cg, x: 13, y: 0 + y, w: 21, h: 9, O)
+            fill(cg, x: 14, y: 1 + y, w: 19, h: 7, oliveDk)
+            fill(cg, x: 14, y: 1 + y, w: 19, h: 1, oliveLit)
+            // Flank rails hinting the stacked tube rows inside.
+            fill(cg, x: 14, y: 3 + y, w: 17, h: 1, steelLit)
+            fill(cg, x: 14, y: 6 + y, w: 17, h: 1, steelLit)
+            for tx in [17, 21, 25, 29] {
+                fill(cg, x: tx, y: 2 + y, w: 1, h: 5, olive)
+            }
+            // Pod nose: dark exit face with two hot barrel tips running
+            // forward out of the housing.
+            fill(cg, x: 31, y: 1 + y, w: 3, h: 7, O)
+            fill(cg, x: 32, y: 2 + y, w: 1, h: 2, glow)
+            fill(cg, x: 32, y: 5 + y, w: 1, h: 2, glow)
+            fill(cg, x: 13, y: 0 + y, w: 1, h: 9, steelLit)
+
+            // --- Nose: headlight, lamp housing, chin skid.
+            fill(cg, x: 45, y: 16 + y, w: 2, h: 3, O)
+            fill(cg, x: 45, y: 17 + y, w: 1, h: 1, lamp)
+            fill(cg, x: 41, y: 22 + y, w: 6, h: 2, O)
+            fill(cg, x: 42, y: 22 + y, w: 4, h: 1, under)
+
+            // --- Antenna whip on the slab behind the pod.
+            fill(cg, x: 12, y: 5 + y, w: 1, h: 4, O)
+        }
+    }
+
+    /// Storm pod cluster: a compact 2x2 rocket-tube head on the battery
+    /// grip — armored cheeks, four hot throats the wavy volley leaves
+    /// from, team tick on the cheek.
+    private static func stormArm() -> SKTexture {
+        let m = armMetrics(for: .storm)
+        return canvas(w: m.w, h: m.h, key: "arm-storm") { cg in
+            let steel = UIColor(red: 0.34, green: 0.36, blue: 0.42, alpha: 1)
+            let steelHi = UIColor(red: 0.58, green: 0.60, blue: 0.66, alpha: 1)
+            let steelDk = UIColor(red: 0.17, green: 0.18, blue: 0.22, alpha: 1)
+            let olive = UIColor(red: 0.40, green: 0.40, blue: 0.30, alpha: 1)
+            let team = UIColor(red: 0.30, green: 0.60, blue: 1.0, alpha: 1)
+            let glow = UIColor(red: 1.0, green: 0.45, blue: 0.18, alpha: 1)
+            let O = outline
+            // Cheek block wrapping the grip (x=5).
+            fill(cg, x: 1, y: 3, w: 8, h: 9, O)
+            fill(cg, x: 2, y: 4, w: 6, h: 7, olive)
+            fill(cg, x: 2, y: 4, w: 6, h: 1, .white.withAlphaComponent(0.4))
+            fill(cg, x: 3, y: 7, w: 2, h: 2, team)
+            // Twin tube rows running to the muzzle face.
+            fill(cg, x: 8, y: 3, w: 12, h: 9, O)
+            fill(cg, x: 9, y: 4, w: 10, h: 7, steel)
+            fill(cg, x: 9, y: 4, w: 10, h: 1, steelHi)
+            fill(cg, x: 9, y: 10, w: 10, h: 1, steelDk)
+            fill(cg, x: 9, y: 7, w: 10, h: 1, steelDk)
+            // Muzzle face with the four hot throats.
+            fill(cg, x: 19, y: 3, w: 3, h: 9, O)
+            fill(cg, x: 20, y: 4, w: 1, h: 2, glow)
+            fill(cg, x: 20, y: 8, w: 1, h: 2, glow)
+        }
+    }
+
     // MARK: - Player Gunship (Level 22 dual-rotor attack helicopter)
 
     /// Heavy dual-rotor attack helicopter (76x40), side view facing +x:
@@ -1743,6 +2031,73 @@ enum UnitPixelArt {
         }
     }
 
+    // MARK: - Enemy gnasher (pale volatile rusher, Level 27)
+
+    /// Pale abyss-floor crawler: low segmented chassis, jagged ice-spike
+    /// tail, a huge jawed skull that hangs open on alternate frames, twin
+    /// cyan eyes and a glowing volatile cyst on the torso that telegraphs
+    /// the death detonation. Faces +x; the hooked talon mounts on the
+    /// shoulder pivot and chops like the axe.
+    private static func gnasher(pose: Int) -> SKTexture {
+        canvas(key: "body-gnasher-\(pose)") { cg in
+            let chitin = UIColor(red: 0.80, green: 0.87, blue: 0.93, alpha: 1)
+            let chitinD = UIColor(red: 0.52, green: 0.62, blue: 0.75, alpha: 1)
+            let flesh = UIColor(red: 0.10, green: 0.13, blue: 0.22, alpha: 1)
+            let glow = UIColor(red: 0.45, green: 0.95, blue: 1.0, alpha: 1)
+            let O = outline
+            let jawOpen = pose % 2 == 1
+
+            // Ice-spike tail sweeping back (-x) with a glowing barb.
+            fill(cg, x: 1, y: 12, w: 7, h: 2, O)
+            fill(cg, x: 2, y: 12, w: 5, h: 1, chitinD)
+            fill(cg, x: 4, y: 10, w: 1, h: 3, O)
+            fill(cg, x: 4, y: 10, w: 1, h: 2, chitin)
+            fill(cg, x: 0, y: 11, w: 2, h: 2, O)
+            fill(cg, x: 0, y: 11, w: 1, h: 1, glow)
+            // Segmented back plates (3) with rim light.
+            for i in 0..<3 {
+                let px = 7 + i * 4
+                fill(cg, x: px, y: 10, w: 4, h: 4, O)
+                fill(cg, x: px + 1, y: 10, w: 2, h: 3, chitin)
+                fill(cg, x: px + 1, y: 10, w: 2, h: 1, .white.withAlphaComponent(0.55))
+            }
+            // Frost spikes along the spine.
+            for sx in [8, 12, 16] {
+                fill(cg, x: sx, y: 7, w: 1, h: 3, O)
+                fill(cg, x: sx, y: 7, w: 1, h: 2, glow)
+            }
+            // Huge jawed skull toward +x: upper snout fixed, lower jaw
+            // hangs open on alternate frames.
+            fill(cg, x: 15, y: 11, w: 8, h: 5, O)
+            fill(cg, x: 16, y: 12, w: 6, h: 3, flesh)
+            // Twin cyan eyes.
+            fill(cg, x: 17, y: 12, w: 2, h: 2, glow)
+            fill(cg, x: 20, y: 12, w: 1, h: 2, glow)
+            // Upper fangs.
+            fill(cg, x: 21, y: 15, w: 1, h: 2, .white)
+            fill(cg, x: 19, y: 15, w: 1, h: 1, .white)
+            // Lower jaw (drops when open).
+            let jawY = jawOpen ? 18 : 16
+            fill(cg, x: 16, y: jawY, w: 7, h: 2, O)
+            fill(cg, x: 17, y: jawY, w: 5, h: 1, chitinD)
+            fill(cg, x: 18, y: jawY - 1, w: 1, h: 1, .white)
+            fill(cg, x: 21, y: jawY - 1, w: 1, h: 1, .white)
+            // Volatile cyst on the torso: the detonation sac, glowing.
+            fill(cg, x: 10, y: 15, w: 5, h: 5, O)
+            fill(cg, x: 11, y: 16, w: 3, h: 3, glow)
+            fill(cg, x: 12, y: 17, w: 1, h: 1, .white)
+            // Fore talon + belly plate.
+            fill(cg, x: 15, y: 17, w: 4, h: 3, O)
+            fill(cg, x: 16, y: 18, w: 3, h: 1, chitin)
+            fill(cg, x: 9, y: 16, w: 6, h: 2, chitinD)
+            // Two pairs of scuttling legs, offset phases.
+            legs(cg, frame: pose, cx: 9, top: 20, len: 8,
+                 pants: flesh, shade: chitinD, boot: dark, outline: O)
+            legs(cg, frame: (pose + 2) % 4, cx: 14, top: 20, len: 8,
+                 pants: flesh, shade: chitinD, boot: dark, outline: O)
+        }
+    }
+
     // MARK: - Marching legs (4-frame stride)
 
     /// Thick pixel line between two points (w-wide row per step).
@@ -1823,8 +2178,16 @@ enum UnitPixelArt {
             return ArmMetrics(w: 40, h: 16, gripX: 6, tipX: 38)
         case .tank:
             return ArmMetrics(w: 30, h: 14, gripX: 6, tipX: 27)
+        case .storm:
+            return ArmMetrics(w: 24, h: 14, gripX: 5, tipX: 21)
         case .gunship:
             return ArmMetrics(w: 26, h: 12, gripX: 5, tipX: 24)
+        case .revrent:
+            return ArmMetrics(w: 24, h: 12, gripX: 5, tipX: 21)
+        case .saucer:
+            return ArmMetrics(w: 24, h: 12, gripX: 5, tipX: 21)
+        case .phoenix:
+            return ArmMetrics(w: 24, h: 12, gripX: 5, tipX: 21)
         default:
             return ArmMetrics(w: armW, h: armH, gripX: armGripX, tipX: armTipX)
         }
@@ -1840,17 +2203,22 @@ enum UnitPixelArt {
         case .truck: return truckArm()
         case .bombard: return bombardArm()
         case .tank: return tankArm()
+        case .storm: return stormArm()
         case .gunship: return gunshipArm()
         case .enemy: return enemyArm()
         case .brute: return bruteArm()
         case .reaver: return reaverArm()
         case .skitter: return skitterArm()
+        case .gnasher: return gnasherArm()
         case .jet: return jetArm()
         case .mech: return mechArm()
         case .heli: return heliArm()
         case .missileTruck: return missileTruckArm()
         case .immortal: return immortalArm()
         case .saucer: return saucerArm()
+        case .phoenix: return phoenixArm()
+        case .tempest: return tempestArm()
+        case .revrent: return revrentArm()
         }
     }
 
@@ -2071,6 +2439,34 @@ enum UnitPixelArt {
             fill(cg, x: 9, y: 4, w: 8, h: 1, glow)
             fill(cg, x: 15, y: 1, w: 4, h: 3, O)
             fill(cg, x: 16, y: 1, w: 2, h: 2, .white.withAlphaComponent(0.5))
+        }
+    }
+
+    /// Gnasher talon-jaw: a pale forelimb ending in a hooked chitin fang
+    /// with a cyan cutting edge and a glowing joint cyst. Mounts on the
+    /// shoulder pivot and chops via the same swing() as the reaver axe.
+    private static func gnasherArm() -> SKTexture {
+        canvas(w: armW, h: armH, key: "arm-gnasher") { cg in
+            let chitin = UIColor(red: 0.80, green: 0.87, blue: 0.93, alpha: 1)
+            let chitinD = UIColor(red: 0.52, green: 0.62, blue: 0.75, alpha: 1)
+            let flesh = UIColor(red: 0.10, green: 0.13, blue: 0.22, alpha: 1)
+            let glow = UIColor(red: 0.45, green: 0.95, blue: 1.0, alpha: 1)
+            let O = outline
+            // Pale forelimb wrapping the grip (x=5).
+            fill(cg, x: 2, y: 5, w: 6, h: 3, O)
+            fill(cg, x: 3, y: 5, w: 4, h: 2, flesh)
+            fill(cg, x: 5, y: 4, w: 3, h: 4, O)
+            fill(cg, x: 6, y: 5, w: 1, h: 2, chitinD)
+            // Glowing joint cyst on the limb.
+            fill(cg, x: 3, y: 6, w: 2, h: 2, O)
+            fill(cg, x: 3, y: 6, w: 2, h: 1, glow)
+            // Hooked jaw-fang sweeping up-forward with a cyan edge.
+            fill(cg, x: 8, y: 3, w: 10, h: 6, O)
+            fill(cg, x: 9, y: 4, w: 8, h: 4, chitin)
+            fill(cg, x: 9, y: 4, w: 8, h: 1, glow)
+            fill(cg, x: 9, y: 4, w: 2, h: 4, .white.withAlphaComponent(0.4))
+            fill(cg, x: 15, y: 1, w: 4, h: 3, O)
+            fill(cg, x: 16, y: 1, w: 2, h: 2, glow)
         }
     }
 
@@ -2450,6 +2846,362 @@ enum UnitPixelArt {
         }
     }
 
+    // MARK: - Phoenix (Level 30 red strike-fighter)
+
+    /// Fast crimson interceptor (64x36), side view facing +x, built off the
+    /// StarCraft Phoenix read: a sleek arrowhead hull between twin curved
+    /// wing-sails sweeping back, a glowing cockpit eye slit on the nose
+    /// rim, a graviton emitter fork slung below the prow, and an engine
+    /// glow bleeding off the tail. All red: crimson plates, ember-lit
+    /// leading edges, gold trim, white-hot cores. The 4 poses bob the
+    /// frame, flicker the eye + engine + wing-tip glows so the darting
+    /// hover reads in motion. The aimable graviton projector lives in
+    /// phoenixArm(); the pivot sits at canvas (44, 26), on the prow mount.
+    private static func phoenix(pose: Int) -> SKTexture {
+        canvas(w: 64, h: 36, key: "body-phoenix-\(pose)") { cg in
+            let hull = UIColor(red: 0.62, green: 0.10, blue: 0.10, alpha: 1)
+            let hullHi = UIColor(red: 1.0, green: 0.38, blue: 0.14, alpha: 1)
+            let hullLt = UIColor(red: 1.0, green: 0.62, blue: 0.30, alpha: 1)
+            let hullD = UIColor(red: 0.34, green: 0.06, blue: 0.07, alpha: 1)
+            let hullDk = UIColor(red: 0.16, green: 0.04, blue: 0.05, alpha: 1)
+            let gold = UIColor(red: 1.0, green: 0.76, blue: 0.28, alpha: 1)
+            let eye = UIColor(red: 1.0, green: 0.20, blue: 0.10, alpha: 1)
+            let plasma = UIColor(red: 1.0, green: 0.42, blue: 0.12, alpha: 1)
+            let plasmaHi = UIColor(red: 1.0, green: 0.85, blue: 0.55, alpha: 1)
+            let O = outline
+
+            let lift = [0, 1, 0, -1][pose]
+            let hot = pose % 2 == 0
+
+            // --- Tail engine glow bleeding off the stern.
+            fill(cg, x: 19, y: 16 + lift, w: 3, h: 4, O)
+            fill(cg, x: 19, y: 17 + lift, w: 2, h: 2, hot ? plasmaHi : plasma)
+
+            // --- Upper wing-sail: a curved crimson blade sweeping up-back
+            // off the spine, ember-lit leading edge, glowing tip feather.
+            fill(cg, x: 26, y: 8 + lift, w: 12, h: 7, O)
+            fill(cg, x: 27, y: 9 + lift, w: 10, h: 5, hullD)
+            fill(cg, x: 27, y: 13 + lift, w: 10, h: 1, hull)
+            fill(cg, x: 20, y: 5 + lift, w: 9, h: 4, O)
+            fill(cg, x: 21, y: 6 + lift, w: 7, h: 2, hull)
+            fill(cg, x: 21, y: 6 + lift, w: 7, h: 1, hullHi)
+            fill(cg, x: 14, y: 2 + lift, w: 8, h: 4, O)
+            fill(cg, x: 15, y: 3 + lift, w: 6, h: 2, hullHi)
+            fill(cg, x: 15, y: 3 + lift, w: 2, h: 1, hot ? .white : plasmaHi)
+            // Tip feather: split vane catching the firelight.
+            fill(cg, x: 12, y: 1 + lift, w: 4, h: 2, O)
+            fill(cg, x: 13, y: 1 + lift, w: 2, h: 1, hot ? plasmaHi : plasma)
+            // Spine strut tying the sail to the hull.
+            fill(cg, x: 30, y: 12 + lift, w: 3, h: 3, O)
+            fill(cg, x: 31, y: 13 + lift, w: 1, h: 1, gold)
+
+            // --- Lower wing-sail: mirrored blade sweeping down-back under
+            // the belly, darker (falls away from the fire), hot tip.
+            fill(cg, x: 26, y: 21 + lift, w: 12, h: 7, O)
+            fill(cg, x: 27, y: 22 + lift, w: 10, h: 5, hullDk)
+            fill(cg, x: 27, y: 22 + lift, w: 10, h: 1, hullD)
+            fill(cg, x: 20, y: 26 + lift, w: 9, h: 4, O)
+            fill(cg, x: 21, y: 27 + lift, w: 7, h: 2, hullD)
+            fill(cg, x: 21, y: 28 + lift, w: 7, h: 1, hull)
+            fill(cg, x: 15, y: 30 + lift, w: 7, h: 3, O)
+            fill(cg, x: 16, y: 31 + lift, w: 5, h: 1, hullHi)
+            fill(cg, x: 16, y: 31 + lift, w: 1, h: 1, hot ? .white : plasmaHi)
+            // Belly strut.
+            fill(cg, x: 30, y: 21 + lift, w: 3, h: 3, O)
+            fill(cg, x: 31, y: 21 + lift, w: 1, h: 1, gold)
+
+            // --- Sleek arrowhead hull: stern block tapering to the nose.
+            fill(cg, x: 22, y: 14 + lift, w: 26, h: 8, O)
+            fill(cg, x: 23, y: 15 + lift, w: 24, h: 6, hull)
+            fill(cg, x: 23, y: 15 + lift, w: 24, h: 1, hullHi)
+            fill(cg, x: 23, y: 20 + lift, w: 24, h: 1, hullDk)
+            // Panel seams + rivets.
+            for rx in [28, 36, 44] {
+                fill(cg, x: rx, y: 15 + lift, w: 1, h: 6, hullD)
+            }
+            fill(cg, x: 25, y: 16 + lift, w: 2, h: 1, hullLt.withAlphaComponent(0.6))
+            // Gold squadron stripe along the flank.
+            fill(cg, x: 24, y: 18 + lift, w: 12, h: 1, gold)
+            fill(cg, x: 24, y: 19 + lift, w: 12, h: 1, hullDk)
+            // --- Armored prow + glowing cockpit eye slit (the hostile read).
+            fill(cg, x: 48, y: 14 + lift, w: 9, h: 8, O)
+            fill(cg, x: 49, y: 15 + lift, w: 7, h: 6, hull)
+            fill(cg, x: 49, y: 15 + lift, w: 7, h: 1, hullHi)
+            fill(cg, x: 54, y: 16 + lift, w: 3, h: 4, O)
+            fill(cg, x: 55, y: 17 + lift, w: 1, h: 2, hot ? .white : eye)
+            fill(cg, x: 55, y: 17 + lift, w: 1, h: 1, hot ? plasmaHi : eye)
+            // Nose spike.
+            fill(cg, x: 57, y: 17 + lift, w: 3, h: 2, O)
+            fill(cg, x: 58, y: 17 + lift, w: 1, h: 1, hot ? plasmaHi : hullHi)
+
+            // --- Graviton emitter fork slung below the prow: twin prongs
+            // with a crackling plasma thread between them (the arm mounts
+            // just ahead of this fork and fires through it).
+            fill(cg, x: 42, y: 22 + lift, w: 4, h: 6, O)
+            fill(cg, x: 43, y: 23 + lift, w: 2, h: 4, hullD)
+            fill(cg, x: 50, y: 22 + lift, w: 4, h: 6, O)
+            fill(cg, x: 51, y: 23 + lift, w: 2, h: 4, hull)
+            fill(cg, x: 51, y: 23 + lift, w: 2, h: 1, hullHi)
+            fill(cg, x: 46, y: 24 + lift, w: 4, h: 2, hot ? plasmaHi : plasma)
+            fill(cg, x: 47, y: 24 + lift, w: 2, h: 1, hot ? .white : plasmaHi)
+            // Emitter hardpoint block on the belly.
+            fill(cg, x: 40, y: 20 + lift, w: 16, h: 3, O)
+            fill(cg, x: 41, y: 20 + lift, w: 14, h: 2, hullD)
+            fill(cg, x: 41, y: 20 + lift, w: 14, h: 1, hull.withAlphaComponent(0.7))
+        }
+    }
+
+    /// Graviton projector: armored crimson mount + twin emitter prongs
+    /// with a red-plasma fork between them. Mounts on the prow gun mount
+    /// and steers at targets like a gun-arm — the scene fires 3-round
+    /// bursts through it.
+    private static func phoenixArm() -> SKTexture {
+        canvas(w: armW, h: armH, key: "arm-phoenix") { cg in
+            let hull = UIColor(red: 0.62, green: 0.10, blue: 0.10, alpha: 1)
+            let hullD = UIColor(red: 0.34, green: 0.06, blue: 0.07, alpha: 1)
+            let metal = UIColor(red: 0.22, green: 0.22, blue: 0.26, alpha: 1)
+            let plasma = UIColor(red: 1.0, green: 0.42, blue: 0.12, alpha: 1)
+            let plasmaHi = UIColor(red: 1.0, green: 0.85, blue: 0.55, alpha: 1)
+            let O = outline
+            // Armored mount wrapping the grip (x=5).
+            fill(cg, x: 1, y: 2, w: 8, h: 8, O)
+            fill(cg, x: 2, y: 3, w: 6, h: 6, hull)
+            fill(cg, x: 2, y: 3, w: 6, h: 1, UIColor(red: 1.0, green: 0.38, blue: 0.14, alpha: 1))
+            fill(cg, x: 2, y: 7, w: 6, h: 1, hullD)
+            // Twin receiver block.
+            fill(cg, x: 8, y: 2, w: 6, h: 8, O)
+            fill(cg, x: 9, y: 3, w: 4, h: 6, metal)
+            // Upper + lower emitter prongs.
+            fill(cg, x: 13, y: 2, w: 7, h: 3, O)
+            fill(cg, x: 14, y: 3, w: 5, h: 1, metal)
+            fill(cg, x: 13, y: 7, w: 7, h: 3, O)
+            fill(cg, x: 14, y: 8, w: 5, h: 1, metal)
+            // Graviton fork: red plasma bridging the prongs at the muzzle.
+            fill(cg, x: 19, y: 2, w: 3, h: 8, O)
+            fill(cg, x: 20, y: 3, w: 1, h: 6, plasma)
+            fill(cg, x: 20, y: 5, w: 1, h: 2, plasmaHi)
+        }
+    }
+
+    // MARK: - Tempest (Level 29 arc-artillery drone, allied)
+
+    /// Storm-frigate drone (56x32), side view facing +x: a steel-blue
+    /// dart hull carried between two ducted lift-fan rings, a swirling
+    /// cyan storm-core gyro spinning amidships, a swept ventral wing, and
+    /// a triple lightning trident crackling ahead of the armored prow.
+    /// The 4 poses bob the frame, spin the fan blurs, rotate the storm
+    /// swirl and flicker the trident — the hover reads as a living storm.
+    /// The aimable Tesla-coil lance lives in tempestArm(); the pivot sits
+    /// at canvas (38, 23), on the chin gun mount.
+    private static func tempest(pose: Int) -> SKTexture {
+        canvas(w: 56, h: 32, key: "body-tempest-\(pose)") { cg in
+            let hull = UIColor(red: 0.23, green: 0.30, blue: 0.42, alpha: 1)
+            let hullHi = UIColor(red: 0.62, green: 0.78, blue: 0.95, alpha: 1)
+            let hullDk = UIColor(red: 0.09, green: 0.13, blue: 0.20, alpha: 1)
+            let plate = UIColor(red: 0.30, green: 0.39, blue: 0.53, alpha: 1)
+            let deep = UIColor(red: 0.05, green: 0.07, blue: 0.12, alpha: 1)
+            let blade = UIColor(red: 0.45, green: 0.50, blue: 0.58, alpha: 1)
+            let bladeHi = UIColor(red: 0.72, green: 0.78, blue: 0.88, alpha: 1)
+            let storm = UIColor(red: 0.35, green: 0.85, blue: 1.0, alpha: 1)
+            let stormHi = UIColor(red: 0.82, green: 0.97, blue: 1.0, alpha: 1)
+            let arc = UIColor(red: 0.75, green: 0.85, blue: 1.0, alpha: 1)
+            let O = outline
+
+            let lift = [0, 1, 0, -1][pose]
+            let hot = pose % 2 == 0
+            let spin = [0, 2, 0, -2][pose]
+
+            // --- Ducted lift-fan rings: armored annulus, dark intake,
+            // spinning blur with a travelling slit, lit crown, struts
+            // tying each ring down to the spine.
+            for rx in [7, 39] {
+                fill(cg, x: rx, y: 4 + lift, w: 11, h: 9, O)
+                fill(cg, x: rx + 1, y: 5 + lift, w: 9, h: 7, hullDk)
+                fill(cg, x: rx + 2, y: 6 + lift, w: 7, h: 5, deep)
+                // Spinning blur + travelling slit.
+                fill(cg, x: rx + 1, y: 7 + lift, w: 9, h: 3, blade)
+                fill(cg, x: rx + 1, y: 7 + lift, w: 9, h: 1, bladeHi)
+                fill(cg, x: rx + 5 + spin, y: 7 + lift, w: 1, h: 3, deep)
+                // Lit crown + hot intake glow.
+                fill(cg, x: rx + 2, y: 4 + lift, w: 7, h: 1, hullHi)
+                if hot {
+                    fill(cg, x: rx + 4, y: 8 + lift, w: 3, h: 2, storm)
+                }
+                // Struts down to the spine, cyan wash on the inner feet.
+                fill(cg, x: rx + 2, y: 12 + lift, w: 2, h: 2, O)
+                fill(cg, x: rx + 2, y: 12 + lift, w: 2, h: 2, hull)
+                fill(cg, x: rx + 7, y: 12 + lift, w: 2, h: 2, O)
+                fill(cg, x: rx + 7, y: 12 + lift, w: 2, h: 2, hull)
+                fill(cg, x: rx + 7, y: 13 + lift, w: 1, h: 1, storm)
+            }
+
+            // --- Tail stabilizer riding the rear ring + strobe + wisps.
+            fill(cg, x: 4, y: 8 + lift, w: 3, h: 6, O)
+            fill(cg, x: 5, y: 9 + lift, w: 1, h: 4, hull)
+            fill(cg, x: 4, y: 9 + lift, w: 1, h: 4, storm.withAlphaComponent(0.7))
+            fill(cg, x: 5, y: 7 + lift, w: 1, h: 1, hot ? .white : storm)
+            fill(cg, x: 8, y: 15 + lift, w: 1, h: 1, storm.withAlphaComponent(0.5))
+            fill(cg, x: 7, y: 17 + lift, w: 1, h: 1, storm.withAlphaComponent(0.35))
+
+            // --- Dart spine: armored prow-to-tail hull, lit sheer,
+            // paneled flanks, pale ID stripe, cyan keel lights.
+            fill(cg, x: 10, y: 13 + lift, w: 38, h: 8, O)
+            fill(cg, x: 11, y: 14 + lift, w: 36, h: 6, hull)
+            fill(cg, x: 11, y: 13 + lift, w: 36, h: 1, hullHi)
+            fill(cg, x: 11, y: 20 + lift, w: 36, h: 1, hullDk)
+            // Panel seams + rivets (skipping the storm-core well).
+            for sx in [18, 40] {
+                fill(cg, x: sx, y: 14 + lift, w: 1, h: 6, plate)
+            }
+            for vx in Swift.stride(from: 12, through: 46, by: 4) {
+                if vx >= 24, vx <= 34 { continue }
+                fill(cg, x: vx, y: 14 + lift, w: 1, h: 1, hullHi.withAlphaComponent(0.7))
+            }
+            // Pale squadron stripe on the tail flank.
+            fill(cg, x: 12, y: 15 + lift, w: 5, h: 2, stormHi.withAlphaComponent(0.85))
+            fill(cg, x: 12, y: 17 + lift, w: 5, h: 1, hullDk)
+            // Keel lights.
+            fill(cg, x: 41, y: 20 + lift, w: 1, h: 1, storm)
+            fill(cg, x: 44, y: 20 + lift, w: 1, h: 1, hot ? stormHi : storm)
+            // Rear exhaust breath on the transom.
+            fill(cg, x: 10, y: 15 + lift, w: 1, h: 3, storm.withAlphaComponent(0.8))
+            if hot {
+                fill(cg, x: 10, y: 16 + lift, w: 1, h: 1, stormHi)
+            }
+
+            // --- Armored prow + targeting slit.
+            fill(cg, x: 48, y: 14 + lift, w: 7, h: 6, O)
+            fill(cg, x: 49, y: 15 + lift, w: 5, h: 4, hull)
+            fill(cg, x: 49, y: 14 + lift, w: 5, h: 1, hullHi)
+            fill(cg, x: 49, y: 15 + lift, w: 4, h: 3, deep)
+            fill(cg, x: 50, y: 16 + lift, w: 2, h: 1, hot ? .white : storm)
+
+            // --- Lightning trident crackling ahead of the prow.
+            fill(cg, x: 52, y: 14 + lift, w: 1, h: 1, arc)
+            fill(cg, x: 53, y: 13 + lift, w: 1, h: 1, arc)
+            fill(cg, x: 54, y: 12 + lift, w: 1, h: 1, arc)
+            fill(cg, x: 55, y: 12 + lift, w: 1, h: 1, hot ? stormHi : arc)
+            fill(cg, x: 52, y: 16 + lift, w: 1, h: 1, stormHi)
+            fill(cg, x: 53, y: 16 + lift, w: 1, h: 1, stormHi)
+            fill(cg, x: 54, y: 16 + lift, w: 1, h: 1, stormHi)
+            fill(cg, x: 55, y: 16 + lift, w: 1, h: 1, hot ? .white : stormHi)
+            fill(cg, x: 52, y: 18 + lift, w: 1, h: 1, arc)
+            fill(cg, x: 53, y: 19 + lift, w: 1, h: 1, arc)
+            fill(cg, x: 54, y: 20 + lift, w: 1, h: 1, arc)
+            fill(cg, x: 55, y: 20 + lift, w: 1, h: 1, hot ? stormHi : arc)
+
+            // --- Storm-core gyro amidships: dark well, cyan ring, two
+            // swirl arms rotating one step per pose, white-hot eye.
+            fill(cg, x: 25, y: 13 + lift, w: 9, h: 8, deep)
+            fill(cg, x: 26, y: 14 + lift, w: 7, h: 1, storm)
+            fill(cg, x: 26, y: 19 + lift, w: 7, h: 1, storm)
+            fill(cg, x: 26, y: 15 + lift, w: 1, h: 4, storm)
+            fill(cg, x: 32, y: 15 + lift, w: 1, h: 4, storm)
+            // Swirl arms chase each other around the eye, one step a pose.
+            switch pose {
+            case 0:
+                fill(cg, x: 28, y: 15 + lift, w: 1, h: 1, stormHi)
+                fill(cg, x: 27, y: 16 + lift, w: 1, h: 1, storm)
+                fill(cg, x: 31, y: 17 + lift, w: 1, h: 1, storm)
+                fill(cg, x: 30, y: 18 + lift, w: 1, h: 1, stormHi)
+            case 1:
+                fill(cg, x: 30, y: 15 + lift, w: 1, h: 1, stormHi)
+                fill(cg, x: 31, y: 16 + lift, w: 1, h: 1, storm)
+                fill(cg, x: 27, y: 17 + lift, w: 1, h: 1, storm)
+                fill(cg, x: 28, y: 18 + lift, w: 1, h: 1, stormHi)
+            case 2:
+                fill(cg, x: 29, y: 15 + lift, w: 1, h: 1, stormHi)
+                fill(cg, x: 30, y: 16 + lift, w: 1, h: 1, storm)
+                fill(cg, x: 28, y: 17 + lift, w: 1, h: 1, storm)
+                fill(cg, x: 29, y: 18 + lift, w: 1, h: 1, stormHi)
+            default:
+                fill(cg, x: 27, y: 15 + lift, w: 1, h: 1, stormHi)
+                fill(cg, x: 28, y: 16 + lift, w: 1, h: 1, storm)
+                fill(cg, x: 30, y: 17 + lift, w: 1, h: 1, storm)
+                fill(cg, x: 31, y: 18 + lift, w: 1, h: 1, stormHi)
+            }
+            // White-hot hurricane eye.
+            fill(cg, x: 28, y: 16 + lift, w: 2, h: 2, hot ? .white : stormHi)
+            // Static discharge crackling off the well corners.
+            fill(cg, x: 24, y: 12 + lift, w: 1, h: 1, storm.withAlphaComponent(0.5))
+            fill(cg, x: 34, y: 12 + lift, w: 1, h: 1, storm.withAlphaComponent(0.5))
+            fill(cg, x: 24, y: 21 + lift, w: 1, h: 1, storm.withAlphaComponent(0.4))
+            fill(cg, x: 34, y: 21 + lift, w: 1, h: 1, storm.withAlphaComponent(0.4))
+
+            // --- Swept ventral wing: stepped blade under the aft hull,
+            // lit leading edge, grounding shadow, blinking tip light.
+            let edge = hot ? stormHi : hullHi
+            fill(cg, x: 20, y: 21 + lift, w: 11, h: 1, edge)
+            fill(cg, x: 20, y: 22 + lift, w: 11, h: 1, plate)
+            fill(cg, x: 17, y: 22 + lift, w: 14, h: 1, plate)
+            fill(cg, x: 16, y: 22 + lift, w: 1, h: 1, O)
+            fill(cg, x: 14, y: 23 + lift, w: 15, h: 1, plate)
+            fill(cg, x: 13, y: 23 + lift, w: 1, h: 1, O)
+            fill(cg, x: 14, y: 24 + lift, w: 15, h: 1, O)
+            fill(cg, x: 14, y: 23 + lift, w: 1, h: 1, hot ? .white : storm)
+
+            // --- Chin gun deck + twin arc-lance blocks, muzzles forward.
+            fill(cg, x: 32, y: 21 + lift, w: 17, h: 2, O)
+            fill(cg, x: 33, y: 21 + lift, w: 15, h: 2, hullDk)
+            fill(cg, x: 33, y: 21 + lift, w: 15, h: 1, hullHi.withAlphaComponent(0.5))
+            // Rear block.
+            fill(cg, x: 33, y: 23 + lift, w: 6, h: 5, O)
+            fill(cg, x: 34, y: 24 + lift, w: 4, h: 3, hull)
+            fill(cg, x: 34, y: 24 + lift, w: 4, h: 1, hullHi)
+            fill(cg, x: 38, y: 24 + lift, w: 1, h: 2, hot ? stormHi : storm)
+            // Front block (hero-facing gun).
+            fill(cg, x: 40, y: 22 + lift, w: 7, h: 6, O)
+            fill(cg, x: 41, y: 23 + lift, w: 5, h: 4, plate)
+            fill(cg, x: 41, y: 23 + lift, w: 5, h: 1, hullHi)
+            fill(cg, x: 41, y: 27 + lift, w: 5, h: 1, hullDk)
+            fill(cg, x: 46, y: 23 + lift, w: 1, h: 3, stormHi)
+            fill(cg, x: 47, y: 24 + lift, w: 1, h: 1, hot ? .white : storm)
+        }
+    }
+
+    /// Tesla-coil lance: armored chin mount, triple coil rings
+    /// crackling between the gaps, a short jacketed barrel and a forked
+    /// arc muzzle. Mounts on the chin gun mount and steers at targets
+    /// like a gun-arm — the scene spins up one heavy bolt through it.
+    private static func tempestArm() -> SKTexture {
+        canvas(w: armW, h: armH, key: "arm-tempest") { cg in
+            let hull = UIColor(red: 0.23, green: 0.30, blue: 0.42, alpha: 1)
+            let hullHi = UIColor(red: 0.62, green: 0.78, blue: 0.95, alpha: 1)
+            let metal = UIColor(red: 0.22, green: 0.24, blue: 0.30, alpha: 1)
+            let metalDk = UIColor(red: 0.10, green: 0.12, blue: 0.17, alpha: 1)
+            let plasma = UIColor(red: 0.35, green: 0.75, blue: 1.0, alpha: 1)
+            let plasmaHi = UIColor(red: 0.85, green: 0.96, blue: 1.0, alpha: 1)
+            let O = outline
+            // Armored mount wrapping the grip (x=5).
+            fill(cg, x: 1, y: 2, w: 8, h: 8, O)
+            fill(cg, x: 2, y: 3, w: 6, h: 6, hull)
+            fill(cg, x: 2, y: 3, w: 6, h: 1, hullHi)
+            fill(cg, x: 2, y: 7, w: 6, h: 3, metalDk)
+            fill(cg, x: 3, y: 8, w: 4, h: 1, plasma)
+            // Triple coil rings with crackling gaps.
+            for cx in [9, 12, 15] {
+                fill(cg, x: cx, y: 2, w: 2, h: 8, O)
+                fill(cg, x: cx, y: 3, w: 2, h: 6, metal)
+                fill(cg, x: cx, y: 2, w: 2, h: 1, hullHi)
+                fill(cg, x: cx, y: 8, w: 2, h: 1, metalDk)
+            }
+            fill(cg, x: 11, y: 4, w: 1, h: 1, plasma)
+            fill(cg, x: 11, y: 7, w: 1, h: 1, plasmaHi)
+            fill(cg, x: 14, y: 5, w: 1, h: 1, plasmaHi)
+            fill(cg, x: 14, y: 6, w: 1, h: 1, plasma)
+            // Jacketed barrel + forked arc muzzle, tips at the tipX (21).
+            fill(cg, x: 17, y: 4, w: 3, h: 4, O)
+            fill(cg, x: 18, y: 5, w: 2, h: 2, metal)
+            fill(cg, x: 18, y: 5, w: 2, h: 1, hullHi)
+            fill(cg, x: 19, y: 4, w: 1, h: 1, plasma)
+            fill(cg, x: 20, y: 3, w: 1, h: 1, plasma)
+            fill(cg, x: 21, y: 3, w: 1, h: 1, plasmaHi)
+            fill(cg, x: 19, y: 7, w: 1, h: 1, plasma)
+            fill(cg, x: 20, y: 8, w: 1, h: 1, plasma)
+            fill(cg, x: 21, y: 8, w: 1, h: 1, plasmaHi)
+        }
+    }
+
     // MARK: - Mech walker (Level 9 heavy robot)
 
     /// Mech torso (48x26): a squat olive siege walker in the reference
@@ -2672,6 +3424,169 @@ enum UnitPixelArt {
             fill(cg, x: 21, y: 2, w: 3, h: 8, O)
             fill(cg, x: 22, y: 3, w: 1, h: 6, metal)
             fill(cg, x: 22, y: 5, w: 1, h: 2, hot)
+        }
+    }
+
+    // MARK: - Player Revrent (Level 32 carrier command ship)
+
+    /// Bluish StarCraft-carrier-style capital hull (72x40), side view
+    /// facing +x: a broad layered carrier — rounded prow with a glowing
+    /// blue sensor eye, stacked flight decks with lit interceptor bays,
+    /// twin side pods with cyan trim, a tall command sail with a blinking
+    /// beacon, and twin blue engine blooms at the stern. The 5
+    /// interceptors themselves are separate drone sprites (see
+    /// revrentDroneTexture) orbiting the hull — the body just carries
+    /// their glowing bay doors.
+    private static func revrent(pose: Int) -> SKTexture {
+        canvas(w: 72, h: 40, key: "body-revrent-\(pose)") { cg in
+            let hull = UIColor(red: 0.24, green: 0.36, blue: 0.58, alpha: 1)
+            let hullHi = UIColor(red: 0.55, green: 0.72, blue: 0.95, alpha: 1)
+            let hullLt = UIColor(red: 0.72, green: 0.86, blue: 1.0, alpha: 1)
+            let hullDk = UIColor(red: 0.11, green: 0.17, blue: 0.32, alpha: 1)
+            let plate = UIColor(red: 0.32, green: 0.46, blue: 0.68, alpha: 1)
+            let deep = UIColor(red: 0.05, green: 0.08, blue: 0.16, alpha: 1)
+            let trim = UIColor(red: 0.35, green: 0.85, blue: 1.0, alpha: 1)
+            let trimHi = UIColor(red: 0.82, green: 0.97, blue: 1.0, alpha: 1)
+            let bay = UIColor(red: 0.08, green: 0.14, blue: 0.26, alpha: 1)
+            let O = outline
+            let lift = [0, 1, 0, -1][pose]
+            let hot = pose % 2 == 0
+            let blink = pose == 0 || pose == 2
+
+            // --- Stern engines: twin armored nozzles with blue blooms.
+            for ey in [13, 22] {
+                fill(cg, x: 1, y: ey + lift, w: 7, h: 6, O)
+                fill(cg, x: 2, y: ey + 1 + lift, w: 5, h: 4, hullDk)
+                fill(cg, x: 2, y: ey + 1 + lift, w: 5, h: 1, hullHi)
+                fill(cg, x: 0, y: ey + 2 + lift, w: 2, h: 2, hot ? trimHi : trim)
+                fill(cg, x: 1, y: ey + 2 + lift, w: 1, h: 2, .white.withAlphaComponent(hot ? 0.9 : 0.4))
+            }
+            // --- Main hull: broad layered carrier body.
+            fill(cg, x: 6, y: 10 + lift, w: 54, h: 20, O)
+            fill(cg, x: 7, y: 11 + lift, w: 52, h: 18, hull)
+            fill(cg, x: 7, y: 11 + lift, w: 52, h: 2, hullHi)
+            fill(cg, x: 7, y: 27 + lift, w: 52, h: 2, hullDk)
+            // Deck plating seams + rivets.
+            for sx in [16, 26, 36, 46] {
+                fill(cg, x: sx, y: 11 + lift, w: 1, h: 18, plate)
+            }
+            for vx in Swift.stride(from: 9, through: 57, by: 4) {
+                fill(cg, x: vx, y: 11 + lift, w: 1, h: 1, hullLt.withAlphaComponent(0.7))
+            }
+            // Cyan keel stripe along the belly.
+            fill(cg, x: 9, y: 25 + lift, w: 48, h: 2, trim)
+            fill(cg, x: 9, y: 25 + lift, w: 30, h: 1, trimHi)
+            // --- Interceptor bays: two lit hangar mouths along the flank.
+            for by in [14, 20] {
+                fill(cg, x: 20, y: by + lift, w: 22, h: 5, O)
+                fill(cg, x: 21, y: by + 1 + lift, w: 20, h: 3, bay)
+                // Five glowing bay doors — one per interceptor.
+                for d in 0..<5 {
+                    let dx = 22 + d * 4
+                    fill(cg, x: dx, y: by + 1 + lift, w: 2, h: 1, blink ? trimHi : trim)
+                    fill(cg, x: dx, y: by + 3 + lift, w: 2, h: 1, hullDk)
+                }
+            }
+            // --- Side pods: twin armored sponsons above + below the bays.
+            fill(cg, x: 12, y: 6 + lift, w: 34, h: 5, O)
+            fill(cg, x: 13, y: 7 + lift, w: 32, h: 3, plate)
+            fill(cg, x: 13, y: 7 + lift, w: 32, h: 1, hullHi)
+            fill(cg, x: 13, y: 9 + lift, w: 8, h: 1, trim)
+            fill(cg, x: 12, y: 29 + lift, w: 34, h: 5, O)
+            fill(cg, x: 13, y: 30 + lift, w: 32, h: 3, plate)
+            fill(cg, x: 13, y: 32 + lift, w: 32, h: 1, hullDk)
+            fill(cg, x: 37, y: 30 + lift, w: 8, h: 1, trim)
+            // --- Command sail: tall fin rising off the dorsal deck + beacon.
+            fill(cg, x: 30, y: 0 + lift, w: 8, h: 11, O)
+            fill(cg, x: 31, y: 1 + lift, w: 6, h: 9, hull)
+            fill(cg, x: 31, y: 1 + lift, w: 6, h: 1, hullHi)
+            fill(cg, x: 31, y: 4 + lift, w: 6, h: 1, trim)
+            fill(cg, x: 33, y: 2 + lift, w: 2, h: 2, deep)
+            fill(cg, x: 33, y: 2 + lift, w: 1, h: 1, hot ? .white : trim)
+            fill(cg, x: 33, y: -1 + lift, w: 2, h: 2, O)
+            fill(cg, x: 33, y: 0 + lift, w: 2, h: 1, blink ? trimHi : trimDkSafe())
+            // --- Armored prow + glowing blue sensor eye.
+            fill(cg, x: 59, y: 12 + lift, w: 11, h: 16, O)
+            fill(cg, x: 60, y: 13 + lift, w: 9, h: 14, hull)
+            fill(cg, x: 60, y: 13 + lift, w: 9, h: 1, hullHi)
+            fill(cg, x: 60, y: 26 + lift, w: 9, h: 1, hullDk)
+            fill(cg, x: 63, y: 17 + lift, w: 5, h: 6, O)
+            fill(cg, x: 64, y: 18 + lift, w: 3, h: 4, deep)
+            fill(cg, x: 64, y: 19 + lift, w: 3, h: 2, hot ? .white : trim)
+            fill(cg, x: 64, y: 18 + lift, w: 3, h: 1, trimHi)
+            // Prow prongs splitting around the eye (carrier fork silhouette).
+            fill(cg, x: 68, y: 12 + lift, w: 3, h: 7, O)
+            fill(cg, x: 68, y: 13 + lift, w: 2, h: 5, plate)
+            fill(cg, x: 68, y: 21 + lift, w: 3, h: 7, O)
+            fill(cg, x: 68, y: 22 + lift, w: 2, h: 5, plate)
+            fill(cg, x: 69, y: 13 + lift, w: 1, h: 1, hullHi)
+            // --- Bow running lights blinking along the sheer.
+            for (lx, on) in [(52, hot), (56, blink)] {
+                fill(cg, x: lx, y: 11 + lift, w: 1, h: 1, on ? trimHi : trim)
+            }
+        }
+    }
+
+    private static func trimDkSafe() -> UIColor {
+        UIColor(red: 0.12, green: 0.30, blue: 0.62, alpha: 1)
+    }
+
+    /// Revrent sensor relay: a compact armored mount with a small dish
+    /// that tracks targets — the carrier's own gun is a formality, the
+    /// interceptors do the killing. Mounts on the prow sensor socket.
+    private static func revrentArm() -> SKTexture {
+        canvas(w: armW, h: armH, key: "arm-revrent") { cg in
+            let hull = UIColor(red: 0.24, green: 0.36, blue: 0.58, alpha: 1)
+            let hullHi = UIColor(red: 0.62, green: 0.78, blue: 0.95, alpha: 1)
+            let metalDk = UIColor(red: 0.10, green: 0.12, blue: 0.17, alpha: 1)
+            let plasma = UIColor(red: 0.35, green: 0.85, blue: 1.0, alpha: 1)
+            let plasmaHi = UIColor(red: 0.85, green: 0.96, blue: 1.0, alpha: 1)
+            let O = outline
+            // Armored mount wrapping the grip (x=5).
+            fill(cg, x: 1, y: 2, w: 8, h: 8, O)
+            fill(cg, x: 2, y: 3, w: 6, h: 6, hull)
+            fill(cg, x: 2, y: 3, w: 6, h: 1, hullHi)
+            fill(cg, x: 2, y: 7, w: 6, h: 3, metalDk)
+            fill(cg, x: 3, y: 8, w: 4, h: 1, plasma)
+            // Short relay mast + dish fork, tips at the tipX (21).
+            fill(cg, x: 9, y: 4, w: 8, h: 4, O)
+            fill(cg, x: 10, y: 5, w: 6, h: 2, hull)
+            fill(cg, x: 10, y: 5, w: 6, h: 1, hullHi)
+            fill(cg, x: 17, y: 3, w: 2, h: 6, O)
+            fill(cg, x: 17, y: 4, w: 2, h: 4, metalDk)
+            fill(cg, x: 20, y: 3, w: 1, h: 1, plasma)
+            fill(cg, x: 21, y: 3, w: 1, h: 1, plasmaHi)
+            fill(cg, x: 20, y: 8, w: 1, h: 1, plasma)
+            fill(cg, x: 21, y: 8, w: 1, h: 1, plasmaHi)
+        }
+    }
+
+    /// One Revrent interceptor: a tiny bluish StarCraft-style flyer —
+    /// arrowhead hull, swept fins, glowing cyan eye. Five of these orbit
+    /// the carrier (see AllyNode) and each looses its own bolt.
+    static func revrentDroneTexture() -> SKTexture {
+        canvas(w: 14, h: 10, key: "drone-revrent") { cg in
+            let hull = UIColor(red: 0.30, green: 0.48, blue: 0.78, alpha: 1)
+            let hullHi = UIColor(red: 0.65, green: 0.82, blue: 1.0, alpha: 1)
+            let hullDk = UIColor(red: 0.12, green: 0.18, blue: 0.36, alpha: 1)
+            let eye = UIColor(red: 0.45, green: 0.92, blue: 1.0, alpha: 1)
+            let O = outline
+            // Arrowhead hull facing +x.
+            fill(cg, x: 2, y: 3, w: 8, h: 4, O)
+            fill(cg, x: 3, y: 4, w: 6, h: 2, hull)
+            fill(cg, x: 3, y: 4, w: 6, h: 1, hullHi)
+            fill(cg, x: 9, y: 3, w: 3, h: 4, O)
+            fill(cg, x: 10, y: 4, w: 2, h: 2, hullDk)
+            // Glowing cyan eye at the nose.
+            fill(cg, x: 11, y: 4, w: 2, h: 2, eye)
+            // Swept fins top + bottom.
+            fill(cg, x: 4, y: 1, w: 4, h: 2, O)
+            fill(cg, x: 5, y: 2, w: 2, h: 1, hullHi)
+            fill(cg, x: 4, y: 7, w: 4, h: 2, O)
+            fill(cg, x: 5, y: 7, w: 2, h: 1, hullHi)
+            // Engine tick at the stern.
+            fill(cg, x: 1, y: 4, w: 2, h: 2, O)
+            fill(cg, x: 1, y: 5, w: 1, h: 1, eye)
         }
     }
 }

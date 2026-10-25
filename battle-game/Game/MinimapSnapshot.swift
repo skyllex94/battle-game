@@ -23,6 +23,12 @@ struct MinimapSnapshot: Equatable {
     /// Health-pack button state (booster add-on): armed this run + heal.
     var packReady: Bool = false
     var packAmount: Int = 0
+    /// Bomber strike button state (Level 25+ ability): hidden pre-25,
+    /// counts down the recharge, flags zone-select mode.
+    var bomberLocked: Bool = true
+    var bomberReady: Bool = false
+    var bomberCooldown: Double = 0
+    var bomberTargeting: Bool = false
     var money: Int
     // Unit dots: player army (blue) + enemy marchers (red).
     var allyXs: [CGFloat] = []

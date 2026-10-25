@@ -87,6 +87,10 @@ enum TwilightRuinsBG {
             FrostbiteBG.buildSky(in: layer, sceneSize: sceneSize)
             return
         }
+        if Balance.active.theme == .mordor {
+            MordorBG.buildSky(in: layer, sceneSize: sceneSize)
+            return
+        }
         let theme = Balance.active.theme
         let overgrown = theme == .overgrown
         let bastion = theme == .bastion
@@ -517,6 +521,10 @@ enum TwilightRuinsBG {
             FrostbiteBG.buildFar(in: layer, sceneSize: sceneSize)
             return
         }
+        if Balance.active.theme == .mordor {
+            MordorBG.buildFar(in: layer, sceneSize: sceneSize)
+            return
+        }
         let travel = Balance.levelWidth * Balance.parallaxFar
         let panoW: CGFloat = sceneSize.width + travel + 500
         // Low-res canvas -> chunky pixels when stretched with .nearest.
@@ -821,6 +829,11 @@ enum TwilightRuinsBG {
         // Frozen approach (Level 21+): the whole mid ground is snow drifts.
         if Balance.iceField {
             FrostbiteBG.buildMid(in: layer, sceneSize: sceneSize)
+            return
+        }
+        // Umbral Outskirts (Level 28+): rolling ash wastes, not treeline.
+        if Balance.active.theme == .mordor {
+            MordorBG.buildMid(in: layer, sceneSize: sceneSize)
             return
         }
         // Duskfall theme: dark sand ridges under a burning sky.
@@ -2814,7 +2827,8 @@ enum TwilightRuinsBG {
     }
 
     static func updateMidParallax(in layer: SKNode, camX: CGFloat) {
-        guard Balance.alpinePass || Balance.iceField else { return }
+        guard Balance.alpinePass || Balance.iceField
+            || Balance.active.theme == .mordor else { return }
         for child in layer.children {
             guard let p = child as? MidParallaxNode else { continue }
             p.position.x = p.baseX
@@ -3291,6 +3305,10 @@ enum TwilightRuinsBG {
     /// contact AO + washes + unique scatter (stones, vines, shroom glows, pollen).
     /// Dune levels branch to the rolling dune-sea renderer instead.
     static func buildGround(in world: SKNode) {
+        if Balance.active.theme == .mordor {
+            MordorBG.buildGround(in: world)
+            return
+        }
         if Balance.iceField {
             FrostbiteBG.buildGround(in: world)
             return
@@ -3604,6 +3622,10 @@ enum TwilightRuinsBG {
     /// swaying) -> near silhouettes (large, dark, bottom-anchored rocks and
     /// out-of-focus bokeh spores drifting on their own).
     static func buildForeground(in layer: SKNode) {
+        if Balance.active.theme == .mordor {
+            MordorBG.buildForeground(in: layer)
+            return
+        }
         if Balance.iceField {
             FrostbiteBG.buildForeground(in: layer)
             return

@@ -37,7 +37,9 @@ enum Balance {
     /// the lane itself is bare alpine rock — no sand, no dunes.
     /// Riven Pass (Level 18): the same alpine shelf at evening, just before
     /// sunset — deep evening blue above, amber-gold horizon, low warm sun.
-    enum BGTheme { case twilight, overgrown, bastion, dawn, sunscorch, sandhold, dunesea, oasis, duskdesert, nightdesert, sunrise, dusk, frost }
+    /// Mordor (Level 28+): the dark core — blood-red Mordor wastes under
+    /// a burning sky: black peaks, a smoking volcano, ember-lit ash.
+    enum BGTheme { case twilight, overgrown, bastion, dawn, sunscorch, sandhold, dunesea, oasis, duskdesert, nightdesert, sunrise, dusk, frost, mordor }
 
     // MARK: - Per-level battlefield layout
     struct LevelLayout {
@@ -124,6 +126,10 @@ enum Balance {
         /// Summon numbers (1-based) that get an EXTRA Mech walker on top of
         /// the normal gate batch. Empty = no bonus Mechs.
         var extraMechSummons: [Int] = []
+        /// Summon numbers (1-based) that get an EXTRA Gnasher on top of
+        /// the normal gate batch. Empty = no Gnashers (only Level 27
+        /// fields them, off the Pale Abyss floor).
+        var extraGnasherSummons: [Int] = []
         /// Pine density for the alpine levels: 1 = the standard stands
         /// (far-range conifers, foreground pines, ground scrub), higher
         /// values thicken the treeline.
@@ -144,6 +150,11 @@ enum Balance {
         /// shows). Heavy high-altitude saucer: cruises above the gunships
         /// and holds station to fire twin-blaster bursts (Level 24+).
         var saucerEvery: Int = 0
+        /// Every Nth summon dives in a Phoenix strike-fighter (0 = never
+        /// shows). Fast red graviton fighter debuting in Level 30: cruises
+        /// above even the saucers and holds station to loose 3-round
+        /// red-plasma bursts.
+        var phoenixEvery: Int = 0
         /// DEV playground (Level 999): tiny arena, one player tower, no
         /// enemy tower, and the enemy gate releases only the unit under
         /// inspection. The PLAYGROUND button on the briefing screen is
@@ -192,6 +203,49 @@ enum Balance {
         /// ember-gold at the horizon. FrostbiteBG.buildSky reads this.
         var frostEvening: Bool = false
 
+        /// Frost night grade (Level 27 Pale Abyss): the same frozen
+        /// theater after dark — near-black indigo zenith, pale moonlit
+        /// horizon, stronger aurora. FrostbiteBG.buildSky reads this.
+        var frostNight: Bool = false
+
+        /// Pale Abyss ground (Level 27): small pixel-art whispers
+        /// frozen into the snow field — glowing abyss fissures, pale
+        /// sentinel monoliths, rime shards, wind-carved drifts and
+        /// pale-flame braziers (see LevelDressing.buildPaleAbyss).
+        var paleAbyss: Bool = false
+
+        /// Umbral Outskirts ground (Level 28): small pixel-art whispers
+        /// baked into the ash field — glowing ember fissures, obsidian
+        /// shards, dead black trees and ember braziers
+        /// (see LevelDressing.buildUmbralOutskirts).
+        var umbralOutskirts: Bool = false
+
+        /// Ashen March ground (Level 29): small pixel-art whispers
+        /// baked into the ash field — scorched war debris, shattered
+        /// helms, broken banners, denser obsidian + taller braziers
+        /// (see LevelDressing.buildAshenMarch).
+        var ashenMarch: Bool = false
+
+        /// Blackroot Vale ground (Level 30): small pixel-art whispers
+        /// baked into the ash field — blackened root wreaths breaking
+        /// through the basalt, ember sap glowing in the splits, pale
+        /// root-bound cairns and taller braziers
+        /// (see LevelDressing.buildBlackrootVale).
+        var blackrootVale: Bool = false
+
+        /// Cinder Gate ground (Level 31): small pixel-art whispers
+        /// baked into the ash field — scorched iron gate shards, glowing
+        /// ember channels, piled cinder slag and tall gate-braziers
+        /// (see LevelDressing.buildCinderGate).
+        var cinderGate: Bool = false
+
+        /// Shadowrift ground (Level 32): small pixel-art whispers baked
+        /// into the ash field — a burning rift scar splitting the lane,
+        /// a black bridge span carrying the army's road, rift-edge
+        /// obsidian teeth and hanging ember braziers
+        /// (see LevelDressing.buildShadowRift).
+        var shadowRift: Bool = false
+
         /// The enemy kinds this level can actually summon, in roster order.
         /// Briefings use this instead of campaign unlock levels, so a level
         /// that disables a unit (e.g. Level 13 has no Reavers) doesn't list it.
@@ -206,6 +260,8 @@ enum Balance {
             if truckEvery > 0 { kinds.append(.missileTruck) }
             if immortalEvery > 0 { kinds.append(.immortal) }
             if saucerEvery > 0 { kinds.append(.saucer) }
+            if phoenixEvery > 0 { kinds.append(.phoenix) }
+            if !extraGnasherSummons.isEmpty { kinds.append(.gnasher) }
             return kinds
         }
     }
@@ -250,6 +306,9 @@ enum Balance {
         var hp = startingTowerHP * enemyStructureHPMultiplier(for: levelId)
         if levelId >= upgradedTowerLevel, levelId != playgroundLevelId {
             hp += upgradedTowerHPBonus
+        }
+        if levelId >= megaUpgradedTowerLevel, levelId != playgroundLevelId {
+            hp += megaUpgradedTowerHPBonus
         }
         return hp
     }
@@ -297,6 +356,12 @@ enum Balance {
         case 24: return layout24
         case 25: return layout25
         case 26: return layout26
+        case 27: return layout27
+        case 28: return layout28
+        case 29: return layout29
+        case 30: return layout30
+        case 31: return layout31
+        case 32: return layout32
         default: return layout1
         }
     }
@@ -330,6 +395,20 @@ enum Balance {
     static var rimevault: Bool { active.rimevault }
     /// Frost evening grade (Level 26): amber dusk over the ice.
     static var frostEvening: Bool { active.frostEvening }
+    /// Frost night grade (Level 27): pale moonlit night over the abyss.
+    static var frostNight: Bool { active.frostNight }
+    /// Pale Abyss ground (Level 27): abyss fissures + pale sentinels.
+    static var paleAbyss: Bool { active.paleAbyss }
+    /// Umbral Outskirts ash ground (Level 28): ember fissures + obsidian.
+    static var umbralOutskirts: Bool { active.umbralOutskirts }
+    /// Ashen March ash ground (Level 29): war debris + denser obsidian.
+    static var ashenMarch: Bool { active.ashenMarch }
+    /// Blackroot Vale ash ground (Level 30): black root wreaths + cairns.
+    static var blackrootVale: Bool { active.blackrootVale }
+    /// Cinder Gate ash ground (Level 31): gate shards + ember channels.
+    static var cinderGate: Bool { active.cinderGate }
+    /// Shadowrift ash ground (Level 32): burning rift scar + black bridge.
+    static var shadowRift: Bool { active.shadowRift }
     static var groundTopY: CGFloat = 120        // y of the walkable surface
     /// True on desert themes (dune sand + sand dressing; Levels 7-13).
     static var dunes: Bool {
@@ -431,6 +510,26 @@ enum Balance {
     /// on BOTH teams. The enemy volley lands at tower-bolt damage; the
     /// player's fires at roughly half (safer to keep the defense fair).
     static let towerMissileCount = 3
+    /// From this roster level on, towers on BOTH teams field the heavy
+    /// Mk-III siege design (taller armored shell + quad missile-pod
+    /// turret) — see TowerNode. Debuts on Level 31 (Cinder Gate).
+    static let megaUpgradedTowerLevel = 31
+    /// One-time enemy refit at the Mk-III tier: enemy tower shells carry
+    /// this flat bonus from Level 31 onward (stacks once on top of the
+    /// Mk-II +400, never per level).
+    static let megaUpgradedTowerHPBonus: CGFloat = 300
+    /// Mk-III turret (Level 31+): a 4-missile volley replaces the 3-missile
+    /// Mk-II salvo on BOTH teams. Same per-missile payload, one extra
+    /// homer per volley — the tower line hits noticeably harder.
+    static let towerMissileCountMkIII = 4
+    /// True when a level fields Mk-III siege towers (both teams).
+    static func isMegaTower(levelId: Int) -> Bool {
+        levelId != playgroundLevelId && levelId >= megaUpgradedTowerLevel
+    }
+    /// Missiles per tower volley on a level (3 Mk-II, 4 Mk-III).
+    static func towerMissileCount(forLevel levelId: Int) -> Int {
+        isMegaTower(levelId: levelId) ? towerMissileCountMkIII : towerMissileCount
+    }
     static let towerMissileSpeed: CGFloat = 520
     static let towerMissileLife: Double = 1.7
     static let towerMissileSpread: CGFloat = 0.12
@@ -478,6 +577,7 @@ enum Balance {
     static var mechPairDelay: Double { active.mechPairDelay }
     static var extraBruteSummons: [Int] { active.extraBruteSummons }
     static var extraMechSummons: [Int] { active.extraMechSummons }
+    static var extraGnasherSummons: [Int] { active.extraGnasherSummons }
     /// Multiplier for the alpine treeline (pines + scrub).
     static var pineDensity: CGFloat { active.pineDensity }
     /// Bolts per tower volley (1 early, 3 from Level 10 on).
@@ -490,6 +590,8 @@ enum Balance {
     static var immortalEvery: Int { active.immortalEvery }
     /// Every Nth summon is a Saucer gun-drone (0 = never).
     static var saucerEvery: Int { active.saucerEvery }
+    /// Every Nth summon is a Phoenix strike-fighter (0 = never).
+    static var phoenixEvery: Int { active.phoenixEvery }
     static let firstSummonDelay: Double = 5.0
     /// Raider (the classic marcher — Levels 1+). Base 40; Level 5+ scales
     /// via the layout's enemyHPScale (L5 = ×1.05, L6 = ×1.1025).
@@ -641,8 +743,64 @@ enum Balance {
     static let saucerBoltSpeed: CGFloat = 680
     /// Blue-plasma splash: small AoE around each saucer impact (px radius).
     static let saucerBlast: CGFloat = 70
+    /// Phoenix (red graviton strike-fighter — Level 30+): a fast sleek
+    /// interceptor built off the StarCraft Phoenix read — crimson
+    /// arrowhead hull, twin curved wing-sails, glowing cockpit eye and a
+    /// graviton emitter slung below the prow firing red plasma. It cruises
+    /// higher than anything hostile yet (above the saucers) and holds
+    /// station to loose 3-round red-plasma bursts with a small splash.
+    /// Quicker and meaner than the saucer, thinner-skinned than its bulk
+    /// suggests. Base 360, scaled — it pays a premium as the Level 30
+    /// sky terror.
+    static var phoenixHP: CGFloat { 360 * active.enemyHPScale }
+    static let phoenixSpeed: CGFloat = 130
+    static let phoenixReward: Int = 350
+    static let phoenixSightRange: CGFloat = 760
+    static let phoenixShootRange: CGFloat = 500
+    static let phoenixFireCooldown: Double = 2.4
+    static let phoenixBoltDamage: CGFloat = 13
+    static let phoenixHoverHeight: CGFloat = 260  // above the saucers (225)
+    static let phoenixBurstCount: Int = 3
+    static let phoenixBurstGap: Double = 0.12
+    static let phoenixBoltSpeed: CGFloat = 740
+    /// Red-plasma splash: small AoE around each phoenix impact (px radius).
+    static let phoenixBlast: CGFloat = 60
+    /// Gnasher (pale volatile rusher — Level 27): fast melee crawler off
+    /// the abyss floor. Chops hard up close and detonates when killed —
+    /// clear it at range or eat the burst. Base 120, scaled.
+    static var gnasherHP: CGFloat { 120 * active.enemyHPScale }
+    static let gnasherSpeed: CGFloat = 170
+    static let gnasherReward: Int = 220
+    static let gnasherSightRange: CGFloat = 600
+    static let gnasherMeleeRange: CGFloat = 68
+    static let gnasherSwingCooldown: Double = 1.6
+    static let gnasherMeleeDamage: CGFloat = 30
+    /// Death detonation: pale blast that splashes the hero + allies.
+    static let gnasherDeathBlast: CGFloat = 90
+    static let gnasherDeathDamage: CGFloat = 25
     static let enemyBoltSpeed: CGFloat = 520
     static let enemyBoltLife: Double = 1.2     // range ≈ 624: outranged by the hero
+
+    // MARK: - Bomber support strike (Level 25+ special ability)
+    /// HUD button after the health pack: tap it, tap the field, and a
+    /// bomber strings a stick of bombs across the zone. One-shots L25
+    /// raiders, jets and skitters (240); brutes fall to two overlapping
+    /// hits, mechs to three.
+    static let bomberUnlockLevel = 25
+    /// Recharge between strikes (seconds). The HUD counts it down.
+    static let bomberCooldown: Double = 45
+    /// Bombs per strike run.
+    static let bomberBombCount = 6
+    static let bomberBombDamage: CGFloat = 240
+    static let bomberBombBlast: CGFloat = 130
+    /// Cruise height: above everything hostile (saucer 225).
+    static let bomberAltitude: CGFloat = 420
+    static let bomberSpeed: CGFloat = 620
+    /// Seconds between bomb releases on the run.
+    static let bomberDropGap: Double = 0.11
+    /// Drops start this far ahead of the tapped point so the stick
+    /// straddles the selected zone.
+    static let bomberDropLead: CGFloat = 170
 
     // MARK: - Drops (dead enemies randomly leave ammo/health for the hero)
     static let dropChance: Double = 0.4      // roll per enemy kill
@@ -738,6 +896,73 @@ enum Balance {
     static let gunshipBurstCount: Int = 3
     static let gunshipBurstGap: Double = 0.09
     static let gunshipBoltSpeed: CGFloat = 720
+    // Storm: Level 26 rocket-artillery tank. Tracked pod-turret chassis
+    // that fires a 4-round volley of small wavy missiles — the top
+    // army card: priciest, sturdy, slow, and the widest volley.
+    static let stormCost: Int = 800
+    static let stormHP: CGFloat = 380
+    static let stormSpeed: CGFloat = 70
+    static let stormDamage: CGFloat = 26
+    static let stormFireCooldown: Double = 2.6
+    static let stormRange: CGFloat = 560
+    static let stormSightRange: CGFloat = 780
+    static let stormMissileCount = 4
+    static let stormMissileSpeed: CGFloat = 560
+    static let stormMissileLife: Double = 1.3
+    static let stormMissileSpread: CGFloat = 0.05
+    static let stormMissileWeaveAmp: CGFloat = 40
+    static let stormMissileWeaveFreq: Double = 6.5
+    static let stormMissileBlast: CGFloat = 30
+    /// Tempest: Level 29 arc-artillery drone — the player's first flying
+    /// siege unit. A lean quad-rotor frame hovering above even the
+    /// gunship, spinning up each shot over a long charge before loosing
+    /// one slow heavy arc-bolt. Longest reach and widest splash of any
+    /// army card; the price is patience — the cycle is the slowest too.
+    static let tempestCost: Int = 950
+    static let tempestHP: CGFloat = 320
+    static let tempestSpeed: CGFloat = 130
+    static let tempestDamage: CGFloat = 170
+    static let tempestFireCooldown: Double = 5.5
+    static let tempestRange: CGFloat = 900
+    static let tempestSightRange: CGFloat = 1020
+    static let tempestHoverHeight: CGFloat = 205  // above the gunship (165)
+    /// Seconds the drone visibly spins up before releasing its bolt.
+    static let tempestChargeTime: Double = 1.4
+    /// Arc-blast: the widest splash in the army (px radius).
+    static let tempestBlast: CGFloat = 150
+    static let tempestBoltSpeed: CGFloat = 420
+    /// Revrent: Level 32 carrier command ship — the player's first
+    /// carrier. A big bluish StarCraft-style capital hull cruising above
+    /// even the Tempest, ringed by 5 small interceptor droids that each
+    /// loose their own blue bolt. No single big gun: the power is the
+    /// 5-way volley — steady combined DPS on par with the Tempest, spread
+    /// across five tracers. The priciest army card; slow, sturdy, patient.
+    static let revrentCost: Int = 1000
+    static let revrentHP: CGFloat = 520
+    static let revrentSpeed: CGFloat = 100
+    static let revrentDamage: CGFloat = 14
+    static let revrentFireCooldown: Double = 2.4
+    static let revrentRange: CGFloat = 620
+    static let revrentSightRange: CGFloat = 860
+    static let revrentHoverHeight: CGFloat = 235  // above the tempest (205)
+    /// Interceptors in the ring (always 5).
+    static let revrentDroneCount = 5
+    /// Stagger between interceptor shots in one volley (seconds).
+    static let revrentVolleyGap: Double = 0.08
+    static let revrentBoltSpeed: CGFloat = 700
+    /// Interceptor droids: independent flyers with their own life. They
+    /// deploy off the carrier when enemies are in sight, fly ahead of the
+    /// hull and shoot, then fall back to the ring when the sky is clear.
+    /// A killed droid takes `revrentBuildTime` to be rebuilt.
+    static let revrentInterceptorHP: CGFloat = 80
+    static let revrentInterceptorDamage: CGFloat = 12
+    static let revrentInterceptorFireCooldown: Double = 1.1
+    static let revrentInterceptorRange: CGFloat = 440
+    static let revrentInterceptorSight: CGFloat = 700
+    static let revrentInterceptorSpeed: CGFloat = 280
+    static let revrentBuildTime: Double = 5.0
+    /// How far ahead of the carrier the deployed screen flies (pts).
+    static let revrentScreenAhead: CGFloat = 130
 
     // MARK: - Parallax scroll factors (ported from your Unity Parallaxing.cs idea:
     // background moves slower than the camera; factor 1.0 = locked to world)

@@ -122,6 +122,10 @@ final class GameScene: SKScene {
     private var summonCount: Int = 0
     // MARK: - Player army (summoned from cards, marches toward the enemy base)
     private var allies: [AllyNode] = []
+    /// Revrent interceptors: independent flying droids owned by carriers.
+    /// They have their own HP, deploy ahead of the hull to shoot, dock
+    /// back when clear, and rebuild 5s after dying.
+    private var interceptors: [RevrentInterceptorNode] = []
     /// Per-unit deploy cooldowns (seconds left; pricier units wait longer).
     private var summonCooldowns: [ArmyKind: TimeInterval] = [:]
     // MARK: - Droid companion (owned battle buddy over the back shoulder)
@@ -139,6 +143,24 @@ final class GameScene: SKScene {
     /// Health pack armed this attempt (booster add-on). One HUD-tapped
     /// heal per run; rearmed every attempt, not every respawn.
     private var heroPackArmed: Bool = false
+    // MARK: - Bomber support strike (Level 25+ HUD ability)
+    /// Recharge left (0 = a strike is ready).
+    private var bomberCooldownLeft: Double = 0
+    /// Targeting mode: the next right-half touch picks the strike zone
+    /// instead of aiming the hero's gun.
+    private var bomberTargeting = false
+    private var bomberTouch: UITouch?
+    /// Pulsing strike-zone reticle while targeting.
+    private var bomberReticle: SKNode?
+    /// Live bombing run: the plane node, the tapped zone, drops left.
+    private struct BomberRun {
+        var node: SKNode
+        var targetX: CGFloat
+        var bombsLeft: Int
+        var dropAcc: Double
+        var trailAcc: Double
+    }
+    private var bomberRun: BomberRun?
     // MARK: - Victory (enemy HQ destroyed -> level won)
     /// sceneTime of the winning blow; nil until the enemy HQ falls.
     private(set) var wonAt: TimeInterval?
@@ -273,6 +295,7 @@ final class GameScene: SKScene {
         bases = []
         enemies = []
         allies = []
+        interceptors = []
         summonCooldowns = [:]
         droid = nil // world teardown removed its node; buildHero re-fields it
         drops = []
@@ -333,6 +356,12 @@ final class GameScene: SKScene {
         if Balance.rimewatchCrag { LevelDressing.buildRimewatchCrag(in: world) }
         if Balance.frozenNarrows { LevelDressing.buildFrozenNarrows(in: world) }
         if Balance.rimevault { LevelDressing.buildRimevault(in: world) }
+        if Balance.paleAbyss { LevelDressing.buildPaleAbyss(in: world) }
+        if Balance.umbralOutskirts { LevelDressing.buildUmbralOutskirts(in: world) }
+        if Balance.ashenMarch { LevelDressing.buildAshenMarch(in: world) }
+        if Balance.blackrootVale { LevelDressing.buildBlackrootVale(in: world) }
+        if Balance.cinderGate { LevelDressing.buildCinderGate(in: world) }
+        if Balance.shadowRift { LevelDressing.buildShadowRift(in: world) }
         if Balance.active.theme == .dawn { LevelDressing.buildDuneWash(in: world) }
         if Balance.active.theme == .sunscorch { LevelDressing.buildSunscorchField(in: world) }
         if Balance.active.theme == .sandhold { LevelDressing.buildSandholdKeep(in: world) }
@@ -431,10 +460,13 @@ final class GameScene: SKScene {
     /// Muzzle is the barrel tip; shots originate there.
     private func addTower(at x: CGFloat, team: Team) {
         // Mk-II tower shells from the refit roster tier on (both teams);
-        // the DEV playground keeps the classic Mk-I turret.
+        // Mk-III siege shells from Level 31 on; the DEV playground keeps
+        // the classic Mk-I turret.
+        let mega = Balance.isMegaTower(levelId: levelId)
         let tower = TowerNode(team: team,
                               upgraded: levelId != Balance.playgroundLevelId
-                                  && levelId >= Balance.upgradedTowerLevel)
+                                  && levelId >= Balance.upgradedTowerLevel,
+                              mkIII: mega)
         tower.position = CGPoint(x: x, y: Balance.groundY(at: x))
         world.addChild(tower)
         // Stagger first shots round-robin so the line doesn't volley
@@ -624,11 +656,13 @@ final class GameScene: SKScene {
         updateBases(dt: dt)
         updateEnemies(dt: dt)
         updateAllies(dt: dt)
+        updateInterceptors(dt: dt)
         for kind in Array(summonCooldowns.keys) {
             summonCooldowns[kind] = max(0, (summonCooldowns[kind] ?? 0) - dt)
         }
         updateDrops(dt: dt)
         updateDroid(dt: dt)
+        stepBomber(dt: dt)
         stepProjectiles(dt: dt)
         updateGraceBlink()
         updateShield(dt: dt)
@@ -682,6 +716,14 @@ final class GameScene: SKScene {
         for touch in touches where aimTouch == nil {
             let loc = touch.location(in: view)
             guard loc.x > view.bounds.width / 2 else { continue }
+            // Bomber targeting eats the touch: place the zone reticle,
+            // release confirms the strike (moved drags the zone).
+            if bomberTargeting {
+                guard bomberTouch == nil else { continue }
+                bomberTouch = touch
+                moveBomberReticle(to: convertPoint(fromView: loc))
+                return
+            }
             aimTouch = touch
             fireCooldown = 0 // first tap fires instantly
             trackAim(touch)
@@ -689,15 +731,30 @@ final class GameScene: SKScene {
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if bomberTargeting, let bomberTouch, touches.contains(bomberTouch),
+           let view {
+            moveBomberReticle(to: convertPoint(fromView: bomberTouch.location(in: view)))
+            return
+        }
         guard let aimTouch else { return }
         if touches.contains(aimTouch) { trackAim(aimTouch) }
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if bomberTargeting, let bomberTouch, touches.contains(bomberTouch) {
+            self.bomberTouch = nil
+            confirmBomberStrike()
+            return
+        }
         releaseAim(touches)
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if bomberTargeting, let bomberTouch, touches.contains(bomberTouch) {
+            self.bomberTouch = nil
+            cancelBomberTargeting()
+            return
+        }
         releaseAim(touches)
     }
 
@@ -930,6 +987,14 @@ final class GameScene: SKScene {
                     best = a.position
                 }
             }
+            for d in interceptors where d.alive {
+                let dist = hypot(d.position.x - tower.node.position.x,
+                                d.position.y - muzzleY)
+                if dist <= bestDist {
+                    bestDist = dist
+                    best = d.position
+                }
+            }
         }
         // Opposing tower: both towers fire toward each other once in range.
         for other in towers where other.team != tower.team && other.alive {
@@ -959,7 +1024,8 @@ final class GameScene: SKScene {
     /// Tower volley: one bolt on the early levels, a 3-bolt fan from Level
     /// 10 on (per-level `towerFanCount`). Bolt team matches the firing
     /// tower so hits land on the right side.
-    /// Mk-II turrets (Level 18+ both teams) fire a 3-missile volley instead:
+    /// Mk-II turrets (Level 18+ both teams) fire a 3-missile volley instead;
+    /// Mk-III siege turrets (Level 31+ both teams) fire a 4-missile volley:
     /// each missile rides a slight angle fan and weaves. The player's
     /// volley carries a much lighter payload than the enemy refit's.
     private func fireTowerBolt(from tower: Tower, to target: CGPoint) {
@@ -973,10 +1039,11 @@ final class GameScene: SKScene {
             let damage = tower.team == .enemy
                 ? Balance.towerDamage
                 : Balance.playerTowerMissileDamage
-            for k in 0..<Balance.towerMissileCount {
-                // Common launch line, one missile above / on / below center.
+            let missileCount = Balance.towerMissileCount(forLevel: levelId)
+            for k in 0..<missileCount {
+                // Common launch line, fanned symmetrically around center.
                 let a = baseAngle
-                    + (CGFloat(k) - CGFloat(Balance.towerMissileCount - 1) / 2)
+                    + (CGFloat(k) - CGFloat(missileCount - 1) / 2)
                     * Balance.towerMissileSpread
                 let dir = CGVector(dx: cos(a), dy: sin(a))
                 let missile = ProjectileFactory.makeMissile(team: tower.team)
@@ -996,7 +1063,7 @@ final class GameScene: SKScene {
                                               trail: .smoke))
             }
             let flash = ProjectileFactory.makeMuzzleFlash()
-            flash.setScale(1.1)
+            flash.setScale(Balance.isMegaTower(levelId: levelId) ? 1.35 : 1.1)
             flash.position = muzzle
             world.addChild(flash)
             return
@@ -1058,6 +1125,7 @@ final class GameScene: SKScene {
             // Summon marchers toward the player base, capped. Levels with a
             // doubleChance sometimes pop a PAIR out of the gate together.
             // Priority order on a shared summon number: Heli Gunship (heliEvery),
+            // then the Phoenix strike-fighter (phoenixEvery, Level 30+),
             // then Saucer gun-drones (saucerEvery, Level 24+), then Brute
             // (bruteEvery), Reaver (reaverEvery), Mech (mechEvery,
             // only while none is alive), Skitter (skitterEvery), Jet (jetEvery).
@@ -1091,6 +1159,11 @@ final class GameScene: SKScene {
                         kind = .immortal
                     } else if Balance.heliEvery > 0, summonCount % Balance.heliEvery == 0 {
                         kind = .heli
+                    } else if Balance.phoenixEvery > 0, summonCount % Balance.phoenixEvery == 0 {
+                        // Phoenix wave: the red interceptor dives in — checked
+                        // ahead of the saucer cadence so the debut cadence is
+                        // never swallowed by it.
+                        kind = .phoenix
                     } else if Balance.saucerEvery > 0, summonCount % Balance.saucerEvery == 0 {
                         kind = .saucer
                     } else if Balance.bruteEvery > 0, summonCount % Balance.bruteEvery == 0 {
@@ -1172,6 +1245,13 @@ final class GameScene: SKScene {
                         summonEnemy(from: bases[i], slot: slot, kind: .mech)
                         slot += 1
                     }
+                    // Level-specific bonus: an extra Gnasher crawls out on
+                    // top of this wave's normal batch (Pale Abyss, L27).
+                    if Balance.extraGnasherSummons.contains(summonCount),
+                       enemies.count < Balance.maxEnemies {
+                        summonEnemy(from: bases[i], slot: slot, kind: .gnasher)
+                        slot += 1
+                    }
                     batch -= 1
                 }
             }
@@ -1206,6 +1286,13 @@ final class GameScene: SKScene {
             if d < bestDist {
                 bestDist = d
                 best = a.position
+            }
+        }
+        for d in interceptors where d.alive {
+            let dist = hypot(d.position.x - base.node.position.x, d.position.y - muzzleY)
+            if dist < bestDist {
+                bestDist = dist
+                best = d.position
             }
         }
         return best
@@ -1372,6 +1459,8 @@ final class GameScene: SKScene {
                 updateHeliFlight(e, dt: dt)
             } else if e.kind == .saucer {
                 updateSaucerFlight(e, dt: dt)
+            } else if e.kind == .phoenix {
+                updatePhoenixFlight(e, dt: dt)
             }
 
             // Target priority: closest exposed body in sight (hero or ally)
@@ -1393,6 +1482,16 @@ final class GameScene: SKScene {
                 if d < bestDist {
                     bestDist = d
                     target = a.position
+                }
+            }
+            // Revrent interceptors: shootable flyers — melee skips them,
+            // gunners treat them like any other ally in sight.
+            for d in interceptors where d.alive {
+                if e.kind.isMelee { continue }
+                let dist = hypot(d.position.x - e.position.x, d.position.y - e.position.y)
+                if dist < bestDist {
+                    bestDist = dist
+                    target = d.position
                 }
             }
             if target == nil {
@@ -1478,6 +1577,8 @@ final class GameScene: SKScene {
                         fireHeliBurst(from: e, to: aim)
                     } else if e.kind == .saucer {
                         fireSaucerBurst(from: e, to: aim)
+                    } else if e.kind == .phoenix {
+                        firePhoenixBurst(from: e, to: aim)
                     } else if e.kind == .missileTruck {
                         fireMissile(from: e, to: aim)
                     } else if e.kind == .immortal {
@@ -1771,6 +1872,57 @@ final class GameScene: SKScene {
         world.addChild(flash)
     }
 
+    /// Phoenix wing-wash: retriggers the rotor loop while the red
+    /// interceptor is on the field (positional, so it fades with range).
+    /// Quicker than the saucer's lumbering wash — a darting buzz for a
+    /// smaller, faster airframe.
+    private func updatePhoenixFlight(_ e: EnemyNode, dt: TimeInterval) {
+        e.rotorSoundTimer -= dt
+        if e.rotorSoundTimer <= 0 {
+            e.rotorSoundTimer = 2.1
+            SoundEngine.shared.heliRotor(at: e.position.x)
+        }
+    }
+
+    /// Phoenix graviton burst: three ember-orange plasma darts from the
+    /// prow emitter. A tight 3-round snap to dodge — the fastest hostile
+    /// volley yet.
+    private func firePhoenixBurst(from e: EnemyNode, to target: CGPoint) {
+        for r in 0..<Balance.phoenixBurstCount {
+            let delay = Double(r) * Balance.phoenixBurstGap
+            if delay == 0 {
+                firePhoenixRound(from: e, to: target)
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    guard let self, e.alive else { return }
+                    self.firePhoenixRound(from: e, to: target)
+                }
+            }
+        }
+    }
+
+    /// One phoenix dart: a slim ember-orange plasma round + muzzle flash.
+    /// Small splash on impact (see splashPlayer) so grouped troops feel it.
+    private func firePhoenixRound(from e: EnemyNode, to target: CGPoint) {
+        let muzzle = e.muzzle()
+        var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
+        let len = max(1, hypot(dir.dx, dir.dy))
+        dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
+        SoundEngine.shared.enemyFire(at: muzzle.x)
+        let dart = ProjectileFactory.makePhoenixPlasma()
+        dart.position = muzzle
+        dart.zRotation = atan2(dir.dy, dir.dx)
+        world.addChild(dart)
+        projectiles.append(Projectile(node: dart, dir: dir, life: Balance.enemyBoltLife,
+                                      speed: Balance.phoenixBoltSpeed, damage: e.boltDamage,
+                                      team: .enemy,
+                                      contactBlast: Balance.phoenixBlast))
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.setScale(0.9)
+        flash.position = muzzle
+        world.addChild(flash)
+    }
+
     // MARK: - Player army: summon + march toward the enemy base
     /// Called by the SwiftUI cards. Returns false when broke, capped,
     /// or the unit isn't fielded on this level yet (Ranger = Level 2+,
@@ -1796,6 +1948,9 @@ final class GameScene: SKScene {
         a.position = CGPoint(x: ax, y: restY)
         world.addChild(a)
         allies.append(a)
+        if kind == .revrent {
+            spawnRevrentInterceptors(for: a)
+        }
         homeBase.node.spawnPulse()
         SoundEngine.shared.summon(at: a.position.x)
         let puff = ProjectileFactory.makeImpactPuff()
@@ -1805,7 +1960,7 @@ final class GameScene: SKScene {
     }
 
     /// Rest height for a player unit: deck level for ground units, cruise
-    /// altitude (+ gentle hover sway) for the dual-rotor gunship.
+    /// altitude (+ gentle hover sway) for flying army units.
     private func allyRestY(_ a: AllyNode) -> CGFloat {
         let deck = Balance.groundY(at: a.position.x)
         guard a.kind.isFlying else { return deck + a.size.height / 2 }
@@ -1826,7 +1981,7 @@ final class GameScene: SKScene {
         for a in allies {
             guard a.alive else { continue }
             a.fireCooldown -= dt
-            if a.kind == .gunship {
+            if a.kind == .gunship || a.kind == .tempest || a.kind == .revrent {
                 updateAllyHeliFlight(a, dt: dt)
             }
 
@@ -1849,8 +2004,17 @@ final class GameScene: SKScene {
             } else if let base = enemyBase, base.alive {
                 target = CGPoint(x: base.node.position.x, y: Balance.groundTopY + 100)
             }
+            // Revrent screen management runs even with no hull target:
+            // droids deploy on their own sight, dock back when clear.
+            if a.kind == .revrent {
+                updateRevrentCarrier(a, dt: dt, hasTarget: target != nil)
+            }
             guard let aim = target else {
                 a.aimAt(nil)
+                // A Tempest with nothing to shoot at drops its spin-up.
+                if a.kind == .tempest {
+                    clearTempestCharge(a)
+                }
                 // ...unless the enemy HQ is rubble: victory march past it
                 // until out of the camera view, then leave the field.
                 if enemyBase?.alive == false {
@@ -1864,6 +2028,9 @@ final class GameScene: SKScene {
                         || a.position.x >= Balance.levelWidth - 50 {
                         a.marchedOff = true
                         a.removeFromParent()
+                        if a.kind == .revrent {
+                            retireInterceptors(of: a)
+                        }
                     }
                     continue
                 }
@@ -1880,15 +2047,27 @@ final class GameScene: SKScene {
                 a.position.x = min(Balance.levelWidth - 40,
                                    a.position.x + dir * a.kind.speed * CGFloat(dt))
                 a.animateMarch(dt: dt, advancing: true)
+                // Marching drops a half-spun charge — the Tempest only
+                // spins up while holding station in range.
+                if a.kind == .tempest {
+                    clearTempestCharge(a)
+                }
                 truckDust(a, dt: dt)
             } else {
                 a.animateMarch(dt: dt, advancing: false)
-                if a.fireCooldown <= 0 {
+                if a.kind == .revrent {
+                    // The hull holds station — its interceptor screen does
+                    // the shooting (see updateInterceptors).
+                } else if a.kind == .tempest {
+                    updateTempestCharge(a, dt: dt, aim: aim)
+                } else if a.fireCooldown <= 0 {
                     a.fireCooldown = a.kind.fireCooldown
                     if a.kind == .bombard {
                         fireAllyBomb(from: a, to: aim)
                     } else if a.kind == .tank {
                         fireAllyTankMissile(from: a, to: aim)
+                    } else if a.kind == .storm {
+                        fireAllyStormVolley(from: a, to: aim)
                     } else if a.kind == .gunship {
                         fireAllyGunshipBurst(from: a, to: aim)
                     } else {
@@ -1910,7 +2089,7 @@ final class GameScene: SKScene {
 
     /// Wheeled vehicles kick up dust behind the rear wheel while rolling.
     private func truckDust(_ a: AllyNode, dt: TimeInterval) {
-        guard a.kind == .truck || a.kind == .bombard || a.kind == .tank else { return }
+        guard a.kind == .truck || a.kind == .bombard || a.kind == .tank || a.kind == .storm else { return }
         a.dustTimer -= dt
         guard a.dustTimer <= 0 else { return }
         a.dustTimer = 0.22
@@ -2007,6 +2186,41 @@ final class GameScene: SKScene {
         world.addChild(flash)
     }
 
+    /// Storm pod volley: 4 smaller missiles out of the battery in a tight
+    /// angle fan, each snaking on its own weave phase with a small splash.
+    /// Player-team so they hurt marchers + enemy structures.
+    private func fireAllyStormVolley(from a: AllyNode, to target: CGPoint) {
+        let muzzle = a.muzzle()
+        let baseAngle = atan2(target.y - muzzle.y, target.x - muzzle.x)
+        SoundEngine.shared.missileLaunch(at: muzzle.x)
+        for k in 0..<Balance.stormMissileCount {
+            let spread = (CGFloat(k) - CGFloat(Balance.stormMissileCount - 1) / 2)
+                * Balance.stormMissileSpread
+            let dir = CGVector(dx: cos(baseAngle + spread),
+                               dy: sin(baseAngle + spread))
+            let missile = ProjectileFactory.makeMissile(team: .player)
+            missile.setScale(0.75)
+            missile.position = muzzle
+            missile.zRotation = baseAngle + spread
+            world.addChild(missile)
+            projectiles.append(Projectile(node: missile, dir: dir,
+                                          life: Balance.stormMissileLife,
+                                          speed: Balance.stormMissileSpeed,
+                                          damage: a.kind.damage,
+                                          team: .player,
+                                          weaveAmp: Balance.stormMissileWeaveAmp,
+                                          weaveFreq: Balance.stormMissileWeaveFreq,
+                                          weavePhase: Double(k) * 1.7,
+                                          weaveSteers: true,
+                                          contactBlast: Balance.stormMissileBlast,
+                                          trail: .smoke))
+        }
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.setScale(1.5)
+        flash.position = muzzle
+        world.addChild(flash)
+    }
+
     /// Dual-rotor gunship burst: a tight three-round chatter from the chin
     /// rotary cannon aimed at the enemy target.
     private func fireAllyGunshipBurst(from a: AllyNode, to target: CGPoint) {
@@ -2044,12 +2258,304 @@ final class GameScene: SKScene {
         world.addChild(flash)
     }
 
+    // MARK: - Revrent interceptors (independent droids with their own life)
+
+    /// Spawn the full 5-droid screen docked on a fresh carrier.
+    private func spawnRevrentInterceptors(for carrier: AllyNode) {
+        for slot in 0..<Balance.revrentDroneCount {
+            let d = RevrentInterceptorNode(owner: carrier, slotIndex: slot)
+            let off = carrier.interceptorDockOffset(slot)
+            d.position = CGPoint(x: carrier.position.x + off.x, y: carrier.position.y + off.y)
+            world.addChild(d)
+            interceptors.append(d)
+        }
+        // Launch puff so the screen visibly deploys from the hull.
+        let puff = ProjectileFactory.makeImpactPuff()
+        puff.position = carrier.position
+        puff.setScale(1.4)
+        world.addChild(puff)
+    }
+
+    /// Per-frame carrier screen management: tick rebuild timers, deploy
+    /// the screen when enemies are in sight, recall it when clear.
+    private func updateRevrentCarrier(_ a: AllyNode, dt: TimeInterval, hasTarget: Bool) {
+        // Dead droids rebuild one per slot after 5s, launching from the hull.
+        for slot in 0..<a.interceptorBuildTimers.count {
+            guard a.interceptorBuildTimers[slot] > 0 else { continue }
+            a.interceptorBuildTimers[slot] -= dt
+            if a.interceptorBuildTimers[slot] <= 0 {
+                a.interceptorBuildTimers[slot] = 0
+                guard a.alive, !a.marchedOff else { continue }
+                let d = RevrentInterceptorNode(owner: a, slotIndex: slot)
+                let off = a.interceptorDockOffset(slot)
+                d.position = CGPoint(x: a.position.x + off.x, y: a.position.y + off.y)
+                world.addChild(d)
+                interceptors.append(d)
+                let puff = ProjectileFactory.makeImpactPuff()
+                puff.position = d.position
+                puff.setScale(0.9)
+                world.addChild(puff)
+                SoundEngine.shared.summon(at: d.position.x)
+            }
+        }
+        // No live screen to command without a hull.
+        guard a.alive, !a.marchedOff else { return }
+        let screen = interceptors.filter { $0.owner === a && $0.alive }
+        if hasTarget {
+            for d in screen where d.mode == .docked {
+                d.mode = .deployed
+            }
+        } else {
+            for d in screen where d.mode == .deployed {
+                d.mode = .returning
+            }
+        }
+    }
+
+    /// Remove a carrier's whole screen (carrier died / marched off).
+    private func retireInterceptors(of carrier: AllyNode) {
+        for d in interceptors where d.owner === carrier && d.alive {
+            let puff = ProjectileFactory.makeImpactPuff()
+            puff.position = d.position
+            world.addChild(puff)
+            d.hp = 0
+            d.removeFromParent()
+        }
+        interceptors.removeAll { $0.owner === carrier }
+    }
+
+    /// Interceptor flight + combat: docked droids ride the carrier ring,
+    /// deployed droids fly ahead of the hull, wobble, and shoot; returning
+    /// droids fly home and re-dock. Dead carriers' screens are retired.
+    private func updateInterceptors(dt: TimeInterval) {
+        // Carrier gone (killed this frame): retire its screen first.
+        for a in allies where !a.alive && a.kind == .revrent {
+            retireInterceptors(of: a)
+        }
+        for d in interceptors {
+            guard d.alive else { continue }
+            guard let carrier = d.owner, carrier.alive, !carrier.marchedOff else {
+                d.hp = 0
+                d.removeFromParent()
+                continue
+            }
+            d.fireCooldown -= dt
+            switch d.mode {
+            case .docked:
+                let off = carrier.interceptorDockOffset(d.slotIndex)
+                d.position = CGPoint(x: carrier.position.x + off.x,
+                                     y: carrier.position.y + off.y + carrier.yBob * 0.5)
+                d.zRotation = sin(carrier.interceptorOrbitPhase * 2 + CGFloat(d.slotIndex)) * 0.15
+            case .deployed:
+                // Screen anchor: ahead of the hull toward the enemy, fanned
+                // per slot + a lively wobble so they feel airborne.
+                let ahead: CGFloat = carrier.facing * Balance.revrentScreenAhead
+                let fan = (CGFloat(d.slotIndex) - CGFloat(Balance.revrentDroneCount - 1) / 2) * 34
+                let t = sceneTime * 2.2 + Double(d.slotIndex) * 1.3 + Double(d.wobbleSeed)
+                let anchor = CGPoint(
+                    x: carrier.position.x + ahead + fan * 0.6 + CGFloat(sin(t * 0.9)) * 18,
+                    y: carrier.position.y + 26 + fan * 0.35 + CGFloat(cos(t * 1.3)) * 14)
+                moveInterceptor(d, toward: anchor, dt: dt)
+                d.zRotation = sin(CGFloat(t)) * 0.2
+                // Shoot the nearest enemy in interceptor range.
+                if d.fireCooldown <= 0, let aim = nearestFoe(to: d.position, within: Balance.revrentInterceptorSight) {
+                    let dist = hypot(aim.x - d.position.x, aim.y - d.position.y)
+                    if dist <= Balance.revrentInterceptorRange {
+                        d.fireCooldown = Balance.revrentInterceptorFireCooldown
+                        fireInterceptorBolt(from: d, to: aim)
+                    }
+                }
+            case .returning:
+                let off2 = carrier.interceptorDockOffset(d.slotIndex)
+                let want = CGPoint(x: carrier.position.x + off2.x, y: carrier.position.y + off2.y)
+                let dist = hypot(want.x - d.position.x, want.y - d.position.y)
+                if dist < 12 {
+                    d.mode = .docked
+                } else {
+                    moveInterceptor(d, toward: want, dt: dt)
+                }
+            }
+        }
+        interceptors.removeAll { !$0.alive }
+    }
+
+    /// Eased interceptor flight: fast top speed, quick to position.
+    private func moveInterceptor(_ d: RevrentInterceptorNode, toward: CGPoint, dt: TimeInterval) {
+        let dx = toward.x - d.position.x, dy = toward.y - d.position.y
+        let dist = max(1, hypot(dx, dy))
+        let step = min(dist, Balance.revrentInterceptorSpeed * CGFloat(dt))
+        d.position.x += dx / dist * step
+        d.position.y += dy / dist * step
+    }
+
+    /// Nearest shootable foe for one interceptor: enemy marcher > tower > base.
+    private func nearestFoe(to pos: CGPoint, within sight: CGFloat) -> CGPoint? {
+        var best: CGPoint?
+        var bestDist = sight
+        for e in enemies where e.alive {
+            let d = hypot(e.position.x - pos.x, e.position.y - pos.y)
+            if d < bestDist {
+                bestDist = d
+                best = e.position
+            }
+        }
+        if let best { return best }
+        if let tower = nearestTower(team: .enemy, toX: pos.x) {
+            return CGPoint(x: tower.node.position.x, y: Balance.groundTopY + 100)
+        }
+        if let base = bases.first(where: { $0.team == .enemy }), base.alive {
+            return CGPoint(x: base.node.position.x, y: Balance.groundTopY + 100)
+        }
+        return nil
+    }
+
+    /// One interceptor round: a fast blue tracer + small muzzle flash.
+    private func fireInterceptorBolt(from d: RevrentInterceptorNode, to target: CGPoint) {
+        let muzzle = d.muzzle()
+        var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
+        let len = max(1, hypot(dir.dx, dir.dy))
+        dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
+        SoundEngine.shared.allyFire(at: muzzle.x)
+        let bolt = ProjectileFactory.makeTowerBolt(team: .player)
+        bolt.setScale(0.8)
+        bolt.position = muzzle
+        bolt.zRotation = atan2(dir.dy, dir.dx)
+        world.addChild(bolt)
+        projectiles.append(Projectile(node: bolt, dir: dir, life: Balance.enemyBoltLife,
+                                      speed: Balance.revrentBoltSpeed,
+                                      damage: Balance.revrentInterceptorDamage,
+                                      team: .player))
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.setScale(0.6)
+        flash.position = muzzle
+        world.addChild(flash)
+    }
+
+    /// Shared interceptor damage: drains HP, bursts + starts the 5s
+    /// rebuild on death. Removal happens in updateInterceptors' sweep.
+    private func damageInterceptor(_ d: RevrentInterceptorNode, amount: CGFloat) {
+        guard d.alive else { return }
+        d.hp = max(0, d.hp - amount)
+        d.refreshHPBar()
+        if !d.alive {
+            let boom = ProjectileFactory.makeJetExplosion()
+            boom.position = d.position
+            world.addChild(boom)
+            SoundEngine.shared.troopDown(at: d.position.x)
+            if let carrier = d.owner {
+                if slotHasLiveInterceptor(carrier: carrier, slot: d.slotIndex) == false {
+                    carrier.interceptorBuildTimers[d.slotIndex] = Balance.revrentBuildTime
+                }
+            }
+            d.removeFromParent()
+        }
+    }
+
+    /// True when another live droid already covers this slot (double-kill
+    /// in one frame must not double-start the rebuild timer).
+    private func slotHasLiveInterceptor(carrier: AllyNode, slot: Int) -> Bool {
+        interceptors.contains { $0.owner === carrier && $0.slotIndex == slot && $0.alive }
+    }
+
+    /// Tempest spin-up: holds station, grows a crackling arc-charge at the
+    /// muzzle over `tempestChargeTime`, then releases one slow heavy bolt
+    /// with the widest splash in the army. The long wind-up is the price
+    /// of the 900-range reach and the 150px blast.
+    private func updateTempestCharge(_ a: AllyNode, dt: TimeInterval, aim: CGPoint) {
+        if a.chargeTime > 0 {
+            a.chargeTime -= dt
+            let frac = max(0, min(1, 1 - a.chargeTime / max(0.01, a.chargeTotal)))
+            if a.chargeNode == nil {
+                a.chargeNode = makeTempestChargeNode()
+                world.addChild(a.chargeNode!)
+                SoundEngine.shared.allyFire(at: a.position.x)
+            }
+            if let node = a.chargeNode {
+                node.position = a.muzzle()
+                node.setScale(0.4 + frac * 1.3)
+                node.alpha = 0.6 + frac * 0.4
+            }
+            if a.chargeTime <= 0 {
+                clearTempestCharge(a)
+                fireAllyTempestOrb(from: a, to: aim)
+                a.fireCooldown = a.kind.fireCooldown
+            }
+        } else if a.fireCooldown <= 0 {
+            a.chargeTime = Balance.tempestChargeTime
+            a.chargeTotal = Balance.tempestChargeTime
+        }
+    }
+
+    /// Drop the spin-up glow without firing (target lost, marching on, dead).
+    private func clearTempestCharge(_ a: AllyNode) {
+        a.chargeTime = 0
+        a.chargeNode?.removeFromParent()
+        a.chargeNode = nil
+    }
+
+    /// Crackling arc-charge: cyan halo + hot pulsing core. The scene
+    /// scales it with spin-up progress and parks it at the muzzle.
+    private func makeTempestChargeNode() -> SKNode {
+        let root = SKNode()
+        root.zPosition = 15
+        let halo = SKShapeNode(ellipseOf: CGSize(width: 30, height: 30))
+        halo.fillColor = SKColor(red: 0.35, green: 0.75, blue: 1.0, alpha: 0.25)
+        halo.strokeColor = .clear
+        root.addChild(halo)
+        let core = SKShapeNode(circleOfRadius: 7)
+        core.fillColor = SKColor(red: 0.85, green: 0.96, blue: 1.0, alpha: 1)
+        core.strokeColor = .clear
+        root.addChild(core)
+        core.run(.repeatForever(.sequence([
+            .fadeAlpha(to: 0.5, duration: 0.12),
+            .fadeAlpha(to: 1.0, duration: 0.12),
+        ])))
+        return root
+    }
+
+    /// One heavy arc-bolt: slow straight flight at the aim point with a
+    /// timed fuse backstop, detonating into the army's widest blast.
+    /// Player-team so it hurts marchers + enemy structures.
+    private func fireAllyTempestOrb(from a: AllyNode, to target: CGPoint) {
+        let muzzle = a.muzzle()
+        var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
+        let len = max(1, hypot(dir.dx, dir.dy))
+        dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
+        SoundEngine.shared.missileLaunch(at: muzzle.x)
+        let orb = ProjectileFactory.makeTempestOrb()
+        orb.position = muzzle
+        orb.zRotation = atan2(dir.dy, dir.dx)
+        world.addChild(orb)
+        let flight = len / Balance.tempestBoltSpeed
+        var shell = Projectile(node: orb, dir: dir,
+                               life: TimeInterval(flight) + 1.0,
+                               speed: Balance.tempestBoltSpeed,
+                               damage: a.kind.damage,
+                               team: .player)
+        shell.blast = Balance.tempestBlast
+        shell.fuse = TimeInterval(flight) + 0.1
+        shell.trail = .ember
+        projectiles.append(shell)
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.setScale(1.6)
+        flash.position = muzzle
+        world.addChild(flash)
+    }
+
     /// Enemy-bolt vs player army. Returns true when it struck an ally.
+    /// Interceptors are small but hittable — each droid soaks its own hit.
     private func hitAlly(at pt: CGPoint, amount: CGFloat) -> Bool {
         for a in allies where a.alive {
             if abs(pt.x - a.position.x) < a.size.width / 2 + 12,
                abs(pt.y - a.position.y) < a.size.height / 2 + 8 {
                 damageAlly(a, amount: amount)
+                return true
+            }
+        }
+        for d in interceptors where d.alive {
+            if abs(pt.x - d.position.x) < d.size.width / 2 + 10,
+               abs(pt.y - d.position.y) < d.size.height / 2 + 8 {
+                damageInterceptor(d, amount: amount)
                 return true
             }
         }
@@ -2063,12 +2569,20 @@ final class GameScene: SKScene {
         a.hp = max(0, a.hp - amount)
         a.refreshHPBar()
         if !a.alive {
+            // A dying Tempest drops its half-spun charge with it.
+            if a.kind == .tempest {
+                clearTempestCharge(a)
+            }
+            // A dead carrier's screen goes down with it — no orphan droids.
+            if a.kind == .revrent {
+                retireInterceptors(of: a)
+            }
             if a.kind.isFlying {
                 // Aircraft down: mid-air fireball + falling wreck.
                 let boom = ProjectileFactory.makeJetExplosion()
                 boom.position = a.position
                 world.addChild(boom)
-            } else if a.kind == .truck || a.kind == .bombard || a.kind == .tank {
+            } else if a.kind == .truck || a.kind == .bombard || a.kind == .tank || a.kind == .storm {
                 // Armor kill: full vehicle explosion (flash + fire + smoke
                 // + debris + sparks) instead of the trooper puff.
                 let boom = ProjectileFactory.makeTruckExplosion()
@@ -2178,6 +2692,343 @@ final class GameScene: SKScene {
         puff.setScale(1.4)
         world.addChild(puff)
         return true
+    }
+
+    // MARK: - Bomber support strike (Level 25+ HUD ability)
+    /// True on bomber levels (never in the playground).
+    var bomberUnlocked: Bool {
+        levelId != Balance.playgroundLevelId && levelId >= Balance.bomberUnlockLevel
+    }
+
+    /// Enter zone-select: the next right-half touch picks the strike zone.
+    /// No-op unless a strike is actually ready. Returns true when armed.
+    @discardableResult
+    func startBomberTargeting() -> Bool {
+        guard bomberUnlocked, bomberCooldownLeft <= 0, !bomberTargeting,
+              wonAt == nil, lostAt == nil else { return false }
+        bomberTargeting = true
+        releaseAimTouch()
+        floatText("TAP THE FIELD — PICK THE STRIKE ZONE",
+                  color: SKColor(red: 1.0, green: 0.65, blue: 0.25, alpha: 1),
+                  at: CGPoint(x: hero.position.x, y: hero.position.y + 190))
+        SoundEngine.shared.uiTap()
+        return true
+    }
+
+    /// Leave zone-select without spending the strike.
+    func cancelBomberTargeting() {
+        bomberTargeting = false
+        bomberTouch = nil
+        bomberReticle?.removeFromParent()
+        bomberReticle = nil
+    }
+
+    /// Drag the pulsing zone reticle (clamped to the lane).
+    private func moveBomberReticle(to worldPt: CGPoint) {
+        let x = min(max(worldPt.x, 100), Balance.levelWidth - 100)
+        let base = CGPoint(x: x, y: Balance.groundY(at: x) + 12)
+        if bomberReticle == nil {
+            bomberReticle = makeBomberReticle()
+            world.addChild(bomberReticle!)
+        }
+        bomberReticle?.position = base
+    }
+
+    /// Strike-zone marker: orange blast ring + crosshair, breathing loop.
+    private func makeBomberReticle() -> SKNode {
+        let root = SKNode()
+        let r = Balance.bomberBombBlast
+        let ring = SKShapeNode(circleOfRadius: r)
+        ring.fillColor = SKColor(red: 1.0, green: 0.45, blue: 0.15, alpha: 0.10)
+        ring.strokeColor = SKColor(red: 1.0, green: 0.55, blue: 0.2, alpha: 0.9)
+        ring.lineWidth = 3
+        root.addChild(ring)
+        let inner = SKShapeNode(circleOfRadius: 10)
+        inner.fillColor = SKColor(red: 1.0, green: 0.55, blue: 0.2, alpha: 0.9)
+        inner.strokeColor = .clear
+        root.addChild(inner)
+        for a in [0.0, Double.pi / 2] {
+            let arm = SKSpriteNode(color: SKColor(red: 1.0, green: 0.55, blue: 0.2, alpha: 0.9),
+                                   size: CGSize(width: r * 2, height: 2))
+            arm.zRotation = a
+            root.addChild(arm)
+        }
+        root.zPosition = 14
+        root.run(.repeatForever(.sequence([
+            .scale(to: 1.06, duration: 0.45), .scale(to: 1.0, duration: 0.45),
+        ])))
+        return root
+    }
+
+    /// Release confirms: spend the strike, launch the bomber at the zone.
+    private func confirmBomberStrike() {
+        guard bomberTargeting, bomberCooldownLeft <= 0 else {
+            cancelBomberTargeting()
+            return
+        }
+        guard let zone = bomberReticle?.position else {
+            cancelBomberTargeting()
+            return
+        }
+        bomberTargeting = false
+        bomberReticle?.removeFromParent()
+        bomberReticle = nil
+        bomberCooldownLeft = Balance.bomberCooldown
+        // Bomber enters from the west, high above the gunships.
+        let startX = min(zone.x - 1100, Balance.levelWidth - 200) - 200
+        let plane = makeBomberNode()
+        plane.position = CGPoint(x: max(-300, startX),
+                                 y: Balance.groundTopY + Balance.bomberAltitude)
+        plane.zPosition = 30
+        world.addChild(plane)
+        bomberRun = BomberRun(node: plane, targetX: zone.x,
+                              bombsLeft: Balance.bomberBombCount,
+                              dropAcc: Balance.bomberDropGap, trailAcc: 0)
+        SoundEngine.shared.missileLaunch(at: zone.x)
+        floatText("BOMBER INBOUND",
+                  color: SKColor(red: 1.0, green: 0.65, blue: 0.25, alpha: 1),
+                  at: CGPoint(x: zone.x, y: Balance.groundTopY + 200))
+    }
+
+    /// Side-view heavy bomber in player blue: long stepped hull with a
+    /// glass nose office, swept wings (near + far), four glowing engine
+    /// pods, open bomb bay with a round peeking out, marked tail and
+    /// strobes. Faces +x.
+    private func makeBomberNode() -> SKNode {
+        let root = SKNode()
+        let blue = SKColor(red: 0.16, green: 0.38, blue: 0.82, alpha: 1)
+        let blueD = SKColor(red: 0.08, green: 0.20, blue: 0.50, alpha: 1)
+        let blueDD = SKColor(red: 0.04, green: 0.10, blue: 0.28, alpha: 1)
+        let sky = SKColor(red: 0.55, green: 0.82, blue: 1.0, alpha: 1)
+        let glass = SKColor(red: 0.78, green: 0.95, blue: 1.0, alpha: 1)
+        // Long hull + pale spine + navy belly.
+        let body = SKSpriteNode(color: blue, size: CGSize(width: 118, height: 20))
+        root.addChild(body)
+        let spine = SKSpriteNode(color: sky, size: CGSize(width: 108, height: 3))
+        spine.position = CGPoint(x: 0, y: 9)
+        spine.alpha = 0.75
+        root.addChild(spine)
+        let belly = SKSpriteNode(color: blueDD, size: CGSize(width: 108, height: 6))
+        belly.position = CGPoint(x: 0, y: -11)
+        root.addChild(belly)
+        // Glass nose office: stepped panes + frames + shine.
+        let noseGlass = SKSpriteNode(color: glass, size: CGSize(width: 18, height: 12))
+        noseGlass.position = CGPoint(x: 58, y: 2)
+        root.addChild(noseGlass)
+        let noseFrame = SKSpriteNode(color: blueD, size: CGSize(width: 3, height: 13))
+        noseFrame.position = CGPoint(x: 58, y: 2)
+        root.addChild(noseFrame)
+        let noseShine = SKSpriteNode(color: .white, size: CGSize(width: 5, height: 3))
+        noseShine.position = CGPoint(x: 55, y: 5)
+        noseShine.alpha = 0.9
+        root.addChild(noseShine)
+        let radome = SKSpriteNode(color: blueD, size: CGSize(width: 8, height: 9))
+        radome.position = CGPoint(x: 70, y: 1)
+        root.addChild(radome)
+        // Cockpit hump with twin panes behind the nose office.
+        let hump = SKSpriteNode(color: blueD, size: CGSize(width: 30, height: 13))
+        hump.position = CGPoint(x: 34, y: 14)
+        root.addChild(hump)
+        for px in [28, 40] as [CGFloat] {
+            let pane = SKSpriteNode(color: glass, size: CGSize(width: 9, height: 8))
+            pane.position = CGPoint(x: px, y: 15)
+            root.addChild(pane)
+        }
+        let humpShine = SKSpriteNode(color: .white, size: CGSize(width: 6, height: 2))
+        humpShine.position = CGPoint(x: 28, y: 18)
+        humpShine.alpha = 0.85
+        root.addChild(humpShine)
+        // Hull panel seams + rivet dots.
+        for px in [-40, -16, 8, 48] as [CGFloat] {
+            let seam = SKSpriteNode(color: blueDD, size: CGSize(width: 2, height: 18))
+            seam.position = CGPoint(x: px, y: 0)
+            seam.alpha = 0.8
+            root.addChild(seam)
+        }
+        for px in [-34, -10, 14, 42] as [CGFloat] {
+            let rivet = SKSpriteNode(color: sky, size: CGSize(width: 1, height: 1))
+            rivet.position = CGPoint(x: px, y: 6)
+            rivet.alpha = 0.7
+            root.addChild(rivet)
+        }
+        // Player roundel on the flank.
+        let roundel = SKShapeNode(circleOfRadius: 7)
+        roundel.fillColor = SKColor(red: 0.25, green: 0.55, blue: 1.0, alpha: 1)
+        roundel.strokeColor = .white
+        roundel.lineWidth = 2
+        roundel.position = CGPoint(x: -26, y: 1)
+        root.addChild(roundel)
+        let roundelDot = SKShapeNode(circleOfRadius: 2.5)
+        roundelDot.fillColor = .white
+        roundelDot.strokeColor = .clear
+        roundelDot.position = roundel.position
+        root.addChild(roundelDot)
+        // Far wing (darker, behind) + near swept wing with lit leading
+        // edge and tip fence.
+        let farWing = SKSpriteNode(color: blueDD, size: CGSize(width: 58, height: 9))
+        farWing.position = CGPoint(x: -4, y: 22)
+        farWing.zRotation = 0.52
+        root.addChild(farWing)
+        let wing = SKSpriteNode(color: blueD, size: CGSize(width: 64, height: 11))
+        wing.position = CGPoint(x: -2, y: 15)
+        wing.zRotation = 0.42
+        root.addChild(wing)
+        let leading = SKSpriteNode(color: sky, size: CGSize(width: 60, height: 2))
+        leading.position = CGPoint(x: 2, y: 11)
+        leading.zRotation = 0.42
+        leading.alpha = 0.85
+        root.addChild(leading)
+        let fence = SKSpriteNode(color: sky, size: CGSize(width: 4, height: 12))
+        fence.position = CGPoint(x: -27, y: 26)
+        fence.zRotation = 0.42
+        root.addChild(fence)
+        // Wing-root fairing hump over the hull.
+        let fairing = SKSpriteNode(color: blue, size: CGSize(width: 34, height: 8))
+        fairing.position = CGPoint(x: -2, y: 8)
+        root.addChild(fairing)
+        // Four engine pods: pylon + pod + glowing fan face + dark nozzle.
+        for ex in [-24, -8, 10, 26] as [CGFloat] {
+            let pylon = SKSpriteNode(color: blueD, size: CGSize(width: 4, height: 10))
+            pylon.position = CGPoint(x: ex, y: -6)
+            root.addChild(pylon)
+            let pod = SKSpriteNode(color: blueDD, size: CGSize(width: 17, height: 13))
+            pod.position = CGPoint(x: ex, y: -14)
+            root.addChild(pod)
+            let lip = SKSpriteNode(color: sky, size: CGSize(width: 3, height: 11))
+            lip.position = CGPoint(x: ex + 8, y: -14)
+            root.addChild(lip)
+            let fan = SKShapeNode(circleOfRadius: 3.5)
+            fan.fillColor = SKColor(red: 0.4, green: 0.9, blue: 1.0, alpha: 1)
+            fan.strokeColor = .clear
+            fan.position = CGPoint(x: ex + 8, y: -14)
+            root.addChild(fan)
+            fan.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.5, duration: 0.28), .fadeAlpha(to: 1.0, duration: 0.28),
+            ])))
+            let nozzle = SKSpriteNode(color: SKColor(white: 0, alpha: 0.9),
+                                      size: CGSize(width: 4, height: 9))
+            nozzle.position = CGPoint(x: ex - 9, y: -14)
+            root.addChild(nozzle)
+        }
+        // Open bomb bay: dark interior, angled doors, one round peeking.
+        let bayInner = SKSpriteNode(color: SKColor(white: 0, alpha: 0.9),
+                                    size: CGSize(width: 34, height: 6))
+        bayInner.position = CGPoint(x: 0, y: -14)
+        root.addChild(bayInner)
+        for s in [-1, 1] as [CGFloat] {
+            let door = SKSpriteNode(color: blueD, size: CGSize(width: 17, height: 3))
+            door.position = CGPoint(x: s * 20, y: -16)
+            door.zRotation = s * -0.35
+            root.addChild(door)
+        }
+        let loaded = SKSpriteNode(color: SKColor(red: 0.25, green: 0.28, blue: 0.33, alpha: 1),
+                                  size: CGSize(width: 8, height: 6))
+        loaded.position = CGPoint(x: 0, y: -15)
+        root.addChild(loaded)
+        // Tall tail fin with sky tip, squadron stripe and hull number.
+        let fin = SKSpriteNode(color: blueD, size: CGSize(width: 13, height: 34))
+        fin.position = CGPoint(x: -54, y: 20)
+        root.addChild(fin)
+        let finTip = SKSpriteNode(color: sky, size: CGSize(width: 13, height: 7))
+        finTip.position = CGPoint(x: -54, y: 34)
+        root.addChild(finTip)
+        let stripe = SKSpriteNode(color: .white, size: CGSize(width: 13, height: 3))
+        stripe.position = CGPoint(x: -54, y: 25)
+        stripe.alpha = 0.9
+        root.addChild(stripe)
+        let numeral = SKLabelNode(fontNamed: "Menlo-Bold")
+        numeral.text = "25"
+        numeral.fontSize = 9
+        numeral.fontColor = .white
+        numeral.position = CGPoint(x: -54, y: 12)
+        root.addChild(numeral)
+        // Tailplanes with lit tips.
+        let tailplane = SKSpriteNode(color: blue, size: CGSize(width: 34, height: 7))
+        tailplane.position = CGPoint(x: -56, y: 4)
+        root.addChild(tailplane)
+        for tx in [-70, -42] as [CGFloat] {
+            let tipLight = SKSpriteNode(color: sky, size: CGSize(width: 3, height: 7))
+            tipLight.position = CGPoint(x: tx, y: 4)
+            root.addChild(tipLight)
+        }
+        // Beacons: red fin tip, green nose, double-flash white strobe on
+        // the wing fence.
+        let tailLight = SKShapeNode(circleOfRadius: 3)
+        tailLight.fillColor = SKColor(red: 1, green: 0.2, blue: 0.2, alpha: 1)
+        tailLight.strokeColor = .clear
+        tailLight.position = CGPoint(x: -54, y: 39)
+        root.addChild(tailLight)
+        tailLight.run(.repeatForever(.sequence([
+            .fadeAlpha(to: 0.15, duration: 0.4), .fadeAlpha(to: 1.0, duration: 0.4),
+        ])))
+        let noseLight = SKShapeNode(circleOfRadius: 3)
+        noseLight.fillColor = SKColor(red: 0.3, green: 1, blue: 0.4, alpha: 1)
+        noseLight.strokeColor = .clear
+        noseLight.position = CGPoint(x: 75, y: 1)
+        root.addChild(noseLight)
+        noseLight.run(.repeatForever(.sequence([
+            .fadeAlpha(to: 1.0, duration: 0.4), .fadeAlpha(to: 0.15, duration: 0.4),
+        ])))
+        let strobe = SKShapeNode(circleOfRadius: 2.5)
+        strobe.fillColor = .white
+        strobe.strokeColor = .clear
+        strobe.position = CGPoint(x: -27, y: 31)
+        root.addChild(strobe)
+        strobe.run(.repeatForever(.sequence([
+            .fadeAlpha(to: 1.0, duration: 0.08),
+            .fadeAlpha(to: 0.1, duration: 0.12),
+            .fadeAlpha(to: 1.0, duration: 0.08),
+            .fadeAlpha(to: 0.1, duration: 1.1),
+        ])))
+        return root
+    }
+
+    /// One bomb off the rack: straight down off the wing, gravity does the
+    /// rest — the normal projectile sim detonates it on the turf with AoE.
+    private func dropBomberBomb(from pos: CGPoint) {
+        let bomb = ProjectileFactory.makeMortarBomb()
+        bomb.position = pos
+        bomb.setScale(1.25)
+        world.addChild(bomb)
+        var shell = Projectile(node: bomb, dir: CGVector(dx: 0, dy: -1),
+                               life: 4.0,
+                               speed: 150,
+                               damage: Balance.bomberBombDamage,
+                               team: .player)
+        shell.gravity = 1100
+        shell.blast = Balance.bomberBombBlast
+        shell.trail = .smoke
+        projectiles.append(shell)
+    }
+
+    /// Bomber sim: recharge tick, west→east run, bomb stick across the
+    /// zone, engine smoke, cleanup past the east edge.
+    private func stepBomber(dt: TimeInterval) {
+        bomberCooldownLeft = max(0, bomberCooldownLeft - dt)
+        guard var run = bomberRun else { return }
+        run.node.position.x += Balance.bomberSpeed * CGFloat(dt)
+        run.trailAcc += dt
+        if run.trailAcc >= 0.08 {
+            run.trailAcc = 0
+            let puff = ProjectileFactory.makeTrailPuff(.smoke)
+            puff.position = CGPoint(x: run.node.position.x - 52,
+                                    y: run.node.position.y - 6)
+            world.addChild(puff)
+        }
+        if run.bombsLeft > 0,
+           run.node.position.x >= run.targetX - Balance.bomberDropLead {
+            run.dropAcc += dt
+            while run.bombsLeft > 0, run.dropAcc >= Balance.bomberDropGap {
+                run.dropAcc -= Balance.bomberDropGap
+                dropBomberBomb(from: run.node.position)
+                run.bombsLeft -= 1
+            }
+        }
+        bomberRun = run
+        if run.node.position.x > Balance.levelWidth + 400 {
+            run.node.removeFromParent()
+            bomberRun = nil
+        }
     }
 
     private func killHero() {
@@ -2373,7 +3224,10 @@ final class GameScene: SKScene {
     /// every enemy marcher in the radius, splash to towers/HQ in reach.
     private func explode(_ p: Projectile, at pos: CGPoint) {
         let r = p.blast
-        let boom = ProjectileFactory.makeExplosion(radius: r)
+        // The Tempest's arc-blast renders its own cyan detonation; smaller
+        // shells keep the standard orange boom.
+        let boom = r >= 140 ? ProjectileFactory.makeTempestBlast(radius: r)
+            : ProjectileFactory.makeExplosion(radius: r)
         boom.position = pos
         world.addChild(boom)
         if r >= 80 {
@@ -2480,7 +3334,13 @@ final class GameScene: SKScene {
                                   heroWeapon.startReserve * 2)
             }
             maybeSpawnDrop(at: e.position)
-            if e.kind == .immortal {
+            if e.kind == .gnasher {
+                // Volatile rusher dies bursting: pale blast splashes the
+                // hero + nearby allies — kill it at range, not in the line.
+                splashPlayer(at: e.position,
+                             radius: Balance.gnasherDeathBlast,
+                             damage: Balance.gnasherDeathDamage)
+            } else if e.kind == .immortal {
                 // The phase walker dies big: shield pop + crimson flare.
                 let boom = ProjectileFactory.makeImmortalExplosion()
                 boom.position = e.position
@@ -2558,6 +3418,12 @@ final class GameScene: SKScene {
                 return true
             }
         }
+        for d in interceptors where d.alive {
+            if abs(pt.x - d.position.x) < d.size.width / 2 + 10,
+               abs(pt.y - d.position.y) < d.size.height / 2 + 8 {
+                return true
+            }
+        }
         if towerIndex(at: pt, team: .player) != nil { return true }
         if baseIndex(at: pt, team: .player) != nil { return true }
         if !heroProtected,
@@ -2578,6 +3444,11 @@ final class GameScene: SKScene {
         for a in allies where a.alive {
             if hypot(a.position.x - pt.x, a.position.y - pt.y) <= radius + a.size.width / 2 {
                 damageAlly(a, amount: damage)
+            }
+        }
+        for d in interceptors where d.alive {
+            if hypot(d.position.x - pt.x, d.position.y - pt.y) <= radius + d.size.width / 2 {
+                damageInterceptor(d, amount: damage)
             }
         }
         if !heroProtected,
@@ -2737,6 +3608,10 @@ final class GameScene: SKScene {
             packReady: heroPackArmed && hero.alive && heroHP < heroMaxHP,
             packAmount: HeroAddons.boosterHeal(
                 tier: HeroAddons.boosterTier(heroId: heroId)),
+            bomberLocked: !bomberUnlocked,
+            bomberReady: bomberUnlocked && bomberCooldownLeft <= 0 && bomberRun == nil,
+            bomberCooldown: bomberCooldownLeft,
+            bomberTargeting: bomberTargeting,
             money: money,
             allyXs: allies.filter { $0.alive }.map { $0.position.x },
             enemyXs: enemies.filter { $0.alive }.map { $0.position.x },

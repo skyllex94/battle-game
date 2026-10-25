@@ -3,6 +3,30 @@ import SpriteKit
 import SwiftUI
 import UIKit // UIImage portraits from UnitPixelArt
 
+/// One card in the level-entry intel queue. Each debut on a level gets its
+/// own modal so nothing is ever skipped: structural cards (tower / citadel
+/// HQ / bomber / Mk-III siege) first, then one card per new enemy unit,
+/// then one per new army unit.
+private enum LevelIntroStep: Identifiable, Hashable {
+    case foe(EnemyKind)
+    case unit(ArmyKind)
+    case tower
+    case base
+    case bomber
+    case towerMkIII
+
+    var id: String {
+        switch self {
+        case .foe(let kind): return "foe-\(kind.rawValue)"
+        case .unit(let kind): return "unit-\(kind.rawValue)"
+        case .tower: return "tower"
+        case .base: return "base"
+        case .bomber: return "bomber"
+        case .towerMkIII: return "towerMkIII"
+        }
+    }
+}
+
 /// GameView — hosts the Level 1 SpriteKit battlefield + movement HUD.
 /// Joystick (bottom-left) runs the hero; push the stick up to jump.
 /// Tap/drag the right side to aim + shoot (handled in GameScene).
@@ -76,15 +100,16 @@ struct GameView: View {
     @State private var showAdOverlay = false
     @State private var adProgress: Double = 0
     @ObservedObject private var wallet = WalletStore.shared
-    /// New-unit intel card: levels that debut a unit pause 1s after entry
-    /// and brief the player (stats + portrait) until dismissed.
-    @State private var showUnitIntro = false
-    /// Fortress-line intel: Level 11 introduces the fourth tower per base,
-    /// Level 23 the fifth. Freezes the field until the player dismisses it.
-    @State private var showTowerIntro = false
-    /// Level 20 HQ refit intel: announces the Mk-II citadel main buildings
-    /// and their 4-missile rooftop volley on both sides.
-    @State private var showBaseIntro = false
+    /// Ordered level-entry intel queue: every debut on this level gets its
+    /// own modal, shown one after another (tower/base/bomber structural
+    /// cards first, then each new hostile, then each new army unit).
+    /// Fixes levels that debut two things at once (L3 Heavy+Brute, L6
+    /// Truck+Skitter, L15 Missile Truck+Bulwark, L11 Bombard+towers):
+    /// previously the two 1s timers raced and the loser never showed.
+    @State private var introQueue: [LevelIntroStep] = []
+    @State private var currentIntro: LevelIntroStep? = nil
+    /// Frozen card count for the "INTEL i OF N" header (queue drains live).
+    @State private var introTotalCount: Int = 0
     /// Level 5 grant sequence: 1 = free gun slot, 2 = Scatter gun.
     /// Shown one modal after another on battle entry; each CLAIM grants.
     @State private var grantStep: Int?
@@ -145,6 +170,20 @@ struct GameView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 8)
+                // Bomber zone-select banner: confirms targeting mode + how
+                // to back out (tap STRIKE again). No hit-testing: taps pass
+                // through to the field so the zone lands where aimed.
+                if minimap.bomberTargeting {
+                    Text("TAP THE FIELD TO CALL THE STRIKE — STRIKE AGAIN TO CANCEL")
+                        .font(.system(size: 10, weight: .black, design: .monospaced))
+                        .tracking(1)
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 12).padding(.vertical, 5)
+                        .background(.black.opacity(0.65))
+                        .overlay(Rectangle().stroke(.orange.opacity(0.6), lineWidth: 1))
+                        .padding(.top, 6)
+                        .allowsHitTesting(false)
+                }
                 Spacer()
                     .allowsHitTesting(false)
             }
@@ -457,14 +496,16 @@ struct GameView: View {
                 .overlay(PixelPanelShape(cut: 10).stroke(.cyan.opacity(0.5), lineWidth: 3))
             }
 
-            // New-unit intel: debut unit for THIS level (portrait + stats).
-            // Close button or tap outside dismisses and resumes the sim.
-            if showUnitIntro, let debut = debutUnit {
+            // Queued level-entry intel: each debut on this level gets its
+            // own modal, one after another (NEXT steps through the queue).
+            // Close button or tap outside advances and resumes when drained.
+            if let step = currentIntro, case .unit(let debut) = step {
                 Color.black.opacity(0.6)
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
-                    .onTapGesture { closeUnitIntro() }
+                    .onTapGesture { advanceIntro() }
                 VStack(spacing: 10) {
+                    introProgressHeader(total: introTotal, index: introIndex)
                     Text("NEW UNIT")
                         .font(.system(size: 11, weight: .black, design: .monospaced))
                         .tracking(3)
@@ -493,9 +534,9 @@ struct GameView: View {
                         UnitStatChip(label: "SPD", value: "\(Int(debut.speed))")
                         UnitStatChip(label: "COST", value: "\(debut.cost)")
                     }
-                    PixelMenuButton(title: "Close", style: .primary) {
+                    PixelMenuButton(title: introNextTitle, style: .primary) {
                         SoundEngine.shared.uiTap()
-                        closeUnitIntro()
+                        advanceIntro()
                     }
                 }
                 .padding(.horizontal, 26)
@@ -506,14 +547,70 @@ struct GameView: View {
                 .shadow(color: .yellow.opacity(0.2), radius: 18)
             }
 
+            // New-hostile intel: each enemy debut for THIS level gets its
+            // own modal (portrait + stats + threat read). Fires once per
+            // hostile — replays skip whatever was already briefed.
+            if let step = currentIntro, case .foe(let foe) = step {
+                Color.black.opacity(0.6)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { advanceIntro() }
+                VStack(spacing: 10) {
+                    introProgressHeader(total: introTotal, index: introIndex)
+                    Text("NEW HOSTILE")
+                        .font(.system(size: 11, weight: .black, design: .monospaced))
+                        .tracking(3)
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 10).padding(.vertical, 3)
+                        .background(.red)
+                    Image(uiImage: UnitPixelArt.portraitImage(for: foe.pixelKind))
+                        .interpolation(.none)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 120, height: 80)
+                        .background(.black.opacity(0.6))
+                        .clipShape(PixelPanelShape(cut: 8))
+                        .overlay(PixelPanelShape(cut: 8).stroke(.red, lineWidth: 2))
+                        .shadow(color: .red.opacity(0.4), radius: 10)
+                    Text(foe.displayName.uppercased())
+                        .font(.system(size: 20, weight: .black, design: .monospaced))
+                        .tracking(2)
+                        .foregroundStyle(.white)
+                    Text(foe.threatBlurb)
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.75))
+                    if let note = foe.debutNote {
+                        Text(note)
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(.cyan)
+                            .frame(maxWidth: 290)
+                    }
+                    HStack(spacing: 14) {
+                        UnitStatChip(label: "HP", value: "\(Int(foe.hp))")
+                        UnitStatChip(label: "DMG", value: "\(Int(foe.attackDamage))")
+                        UnitStatChip(label: "SPD", value: "\(Int(foe.moveSpeed))")
+                    }
+                    PixelMenuButton(title: introNextTitle, style: .primary) {
+                        SoundEngine.shared.uiTap()
+                        advanceIntro()
+                    }
+                }
+                .padding(.horizontal, 26)
+                .padding(.vertical, 22)
+                .background(.black.opacity(0.9))
+                .clipShape(PixelPanelShape(cut: 10))
+                .overlay(PixelPanelShape(cut: 10).stroke(.red.opacity(0.6), lineWidth: 3))
+                .shadow(color: .red.opacity(0.2), radius: 18)
+            }
+
             // Fortress-line intel: announces the new tower count anchoring
-            // each base (4 on Level 11, 5 on Level 23). Close/tap outside
-            // resumes the sim.
-            if showTowerIntro {
+            // each base (4 on Level 11, 5 on Level 23). Part of the queue.
+            if currentIntro == .tower {
                 Color.black.opacity(0.68)
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
-                    .onTapGesture { closeTowerIntro() }
+                    .onTapGesture { advanceIntro() }
 
                 // Fits as-is on normal screens; on very short viewports the
                 // fallback scrolls so the whole card stays reachable.
@@ -529,16 +626,52 @@ struct GameView: View {
 
             // Level 20 HQ refit intel: announces the Mk-II citadel HQs and
             // their 4-missile rooftop volley on both sides.
-            if showBaseIntro {
+            if currentIntro == .base {
                 Color.black.opacity(0.68)
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
-                    .onTapGesture { closeBaseIntro() }
+                    .onTapGesture { advanceIntro() }
 
                 ViewThatFits(in: .vertical) {
                     baseIntroCard
                     ScrollView(.vertical, showsIndicators: false) {
                         baseIntroCard
+                    }
+                    .frame(maxWidth: 360)
+                }
+                .padding(.vertical, 12)
+            }
+
+            // Level 31 siege-tower intel: announces the Mk-III refit and
+            // its 4-missile volley on both sides. Part of the queue.
+            if currentIntro == .towerMkIII {
+                Color.black.opacity(0.68)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { advanceIntro() }
+
+                ViewThatFits(in: .vertical) {
+                    towerMkIIIIntroCard
+                    ScrollView(.vertical, showsIndicators: false) {
+                        towerMkIIIIntroCard
+                    }
+                    .frame(maxWidth: 360)
+                }
+                .padding(.vertical, 12)
+            }
+
+            // Level 25 air-support intel: announces the bomber strike
+            // button + tap-the-field zone select. Part of the queue.
+            if currentIntro == .bomber {
+                Color.black.opacity(0.68)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { advanceIntro() }
+
+                ViewThatFits(in: .vertical) {
+                    bomberIntroCard
+                    ScrollView(.vertical, showsIndicators: false) {
+                        bomberIntroCard
                     }
                     .frame(maxWidth: 360)
                 }
@@ -755,66 +888,29 @@ struct GameView: View {
             scene.heroJumpHeld = false
             weapon = scene.heroWeapon
             revivedThisRun = false
-            // New-unit briefing: let the battle breathe 1s, then freeze and brief.
-            // Levels 11 / 23 sequence this AFTER the fortress-line card instead.
-            if debutUnit != nil, level.id != 11, level.id != 23 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    guard debutUnit != nil, !showUnitIntro,
-                          !minimap.won, !minimap.lost else { return }
-                    showUnitIntro = true
-                    showMenu = false
-                    scene.isPaused = true
-                }
+            // Retire past hostile debuts silently: only the frontier
+            // level ever raises NEW HOSTILE, and only once per hostile.
+            for kind in EnemyKind.allCases where kind.unlockLevel < level.id {
+                EnemyIntroSeen.mark(kind)
             }
-            // Fortress-line briefing: let the field settle, then freeze
-            // it and announce the new tower line at each base (4 on
-            // Level 11, 5 on Level 23 — the new standard from 23 on).
-            if level.id == 11 || level.id == 23 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                    guard !showTowerIntro, !showUnitIntro, grantStep == nil,
-                          heroUnlock == nil, !minimap.won, !minimap.lost else { return }
-                    showTowerIntro = true
-                    showMenu = false
-                    scene.isPaused = true
-                }
-            }
-            // Level 20 HQ refit briefing: let the field settle, then freeze
-            // it and announce the Mk-II citadel HQs + 4-missile rooftop volley.
-            if level.id == Balance.upgradedBaseLevel {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                    guard !showBaseIntro, !showTowerIntro, !showUnitIntro,
-                          grantStep == nil, heroUnlock == nil,
+            // Queued level-entry intel: let the battle breathe ~1s, then
+            // freeze and step through every debut on this level — one
+            // modal per new enemy unit (plus tower/base/bomber/army cards).
+            // Grants + milestone hero follow after the queue drains.
+            let queue = buildIntroQueue()
+            if !queue.isEmpty || level.id == 5 || milestoneHero != nil {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
+                    guard currentIntro == nil, grantStep == nil, heroUnlock == nil,
                           !minimap.won, !minimap.lost else { return }
-                    showBaseIntro = true
-                    showMenu = false
-                    scene.isPaused = true
-                }
-            }
-            // Level 5 grants: free slot 2, then the Scatter — one modal
-            // after another, 1.2s after entry so the field reads first.
-            // Grants persist, so replays skip whatever is already owned.
-            if level.id == 5 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                    guard grantStep == nil, !showUnitIntro,
-                          !minimap.won, !minimap.lost else { return }
-                    if LoadoutStore.slotCount < 2 {
-                        grantStep = 1
-                    } else if !UnlockStore.owns(.scatter) {
-                        grantStep = 2
-                    } else { return }
-                    showMenu = false
-                    scene.isPaused = true
-                }
-            }
-            // Hero milestone unlock: freeze the field and hand the player their
-            // new hero, then deploy them for the rest of this run.
-            if let fresh = milestoneHero {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                    guard heroUnlock == nil, !showUnitIntro, grantStep == nil,
-                          !minimap.won, !minimap.lost else { return }
-                    heroUnlock = fresh
-                    showMenu = false
-                    scene.isPaused = true
+                    introQueue = buildIntroQueue()
+                    introTotalCount = introQueue.count
+                    if !introQueue.isEmpty {
+                        currentIntro = introQueue.removeFirst()
+                        showMenu = false
+                        scene.isPaused = true
+                    } else {
+                        presentPostIntelModalIfNeeded()
+                    }
                 }
             }
         }
@@ -948,6 +1044,7 @@ struct GameView: View {
     }
     private var towerIntroCard: some View {
         VStack(spacing: 9) {
+            introProgressHeader(total: introTotal, index: introIndex)
             ZStack {
                 RoundedRectangle(cornerRadius: 3)
                     .fill(LinearGradient(colors: [.red.opacity(0.20),
@@ -1008,6 +1105,10 @@ struct GameView: View {
                 UnitStatChip(label: "TOWER HP", value: "\(Int(Balance.enemyTowerHealth(forLevel: level.id)))")
                 UnitStatChip(label: "RANGE", value: "\(Int(Balance.towerRange))")
             }
+            PixelMenuButton(title: introNextTitle, style: .primary) {
+                SoundEngine.shared.uiTap()
+                advanceIntro()
+            }
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 16)
@@ -1021,6 +1122,7 @@ struct GameView: View {
     /// calling out the bigger fortified structure and 4-missile rooftop volley.
     private var baseIntroCard: some View {
         VStack(spacing: 9) {
+            introProgressHeader(total: introTotal, index: introIndex)
             ZStack {
                 RoundedRectangle(cornerRadius: 3)
                     .fill(LinearGradient(colors: [.red.opacity(0.22),
@@ -1089,9 +1191,9 @@ struct GameView: View {
                 UnitStatChip(label: "ENEMY HQ", value: "\(Int(Balance.enemyBaseHealth(forLevel: level.id).rounded()))")
                 UnitStatChip(label: "RANGE", value: "\(Int(Balance.baseRange))")
             }
-            PixelMenuButton(title: "Close", style: .primary) {
+            PixelMenuButton(title: introNextTitle, style: .primary) {
                 SoundEngine.shared.uiTap()
-                closeBaseIntro()
+                advanceIntro()
             }
         }
         .padding(.horizontal, 22)
@@ -1102,10 +1204,238 @@ struct GameView: View {
         .shadow(color: .orange.opacity(0.25), radius: 20)
     }
 
-    /// Unit debuting on this level, if any (Ranger on Level 2, Heavy on
-    /// Level 3). Nil keeps entry instant — no modal, no pause.
-    private var debutUnit: ArmyKind? {
-        ArmyKind.allCases.first(where: { $0.unlockLevel == level.id })
+    /// Level 31 card: both teams' towers rendered in the new Mk-III siege
+    /// pixel art — taller, bulkier shells with a quad-missile pod turret,
+    /// calling out the 4-missile volley on both sides of the lane.
+    private var towerMkIIIIntroCard: some View {
+        VStack(spacing: 9) {
+            introProgressHeader(total: introTotal, index: introIndex)
+            ZStack {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(LinearGradient(colors: [.red.opacity(0.22),
+                                                 .black.opacity(0.80)],
+                                         startPoint: .top, endPoint: .bottom))
+                    .frame(width: 244, height: 152)
+                Rectangle()
+                    .fill(.red.opacity(0.26))
+                    .frame(width: 244, height: 1)
+                    .offset(y: 56)
+                HStack(spacing: 14) {
+                    Image(uiImage: TowerNode.previewImage(for: .player, upgraded: true, mkIII: true))
+                        .interpolation(.none)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 98, height: 122)
+                        .shadow(color: .cyan.opacity(0.45), radius: 10)
+                    Image(uiImage: TowerNode.previewImage(for: .enemy, upgraded: true, mkIII: true))
+                        .interpolation(.none)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 98, height: 122)
+                        .shadow(color: .red.opacity(0.55), radius: 12)
+                }
+            }
+            .frame(width: 244, height: 152)
+            .clipShape(PixelPanelShape(cut: 8))
+            .overlay(PixelPanelShape(cut: 8).stroke(.red.opacity(0.8), lineWidth: 2))
+            .overlay(alignment: .topTrailing) {
+                Text("MK-III")
+                    .font(.system(size: 10, weight: .black, design: .monospaced))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(.red)
+                    .padding(6)
+            }
+            .overlay(alignment: .bottomLeading) {
+                HStack(spacing: 3) {
+                    ForEach(0..<Balance.towerMissileCountMkIII, id: \.self) { _ in
+                        Rectangle()
+                            .fill(.red)
+                            .frame(width: 5, height: 5)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+            }
+
+            Text("MK-III SIEGE TOWER")
+                .font(.system(size: 19, weight: .black, design: .monospaced))
+                .tracking(2)
+                .foregroundStyle(.white)
+            Text("UPGRADED TOWERS · 4-MISSILE VOLLEY")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .tracking(1.5)
+                .foregroundStyle(.red)
+            Text("Both tower lines have been refitted into taller, bulkier Mk-III siege towers with twin barrels and quad missile pods — every tower on the lane now answers with a 4-rocket salvo.")
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.75))
+                .lineLimit(3)
+                .minimumScaleFactor(0.85)
+                .frame(maxWidth: 290)
+            HStack(spacing: 10) {
+                UnitStatChip(label: "SALVO", value: "4 MISSILES")
+                UnitStatChip(label: "TOWER HP", value: "\(Int(Balance.enemyTowerHealth(forLevel: level.id)))")
+                UnitStatChip(label: "RANGE", value: "\(Int(Balance.towerRange))")
+            }
+            PixelMenuButton(title: introNextTitle, style: .primary) {
+                SoundEngine.shared.uiTap()
+                advanceIntro()
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 16)
+        .background(.black.opacity(0.92))
+        .clipShape(PixelPanelShape(cut: 10))
+        .overlay(PixelPanelShape(cut: 10).stroke(.red.opacity(0.65), lineWidth: 3))
+        .shadow(color: .red.opacity(0.25), radius: 20)
+    }
+
+    /// Level 25 air-support intel: announces the bomber strike button
+    /// (next to the health pack) + tap-the-field zone select.
+    private var bomberIntroCard: some View {
+        VStack(spacing: 9) {
+            introProgressHeader(total: introTotal, index: introIndex)
+            Text("AIR SUPPORT")
+                .font(.system(size: 11, weight: .black, design: .monospaced))
+                .tracking(3)
+                .foregroundStyle(.black)
+                .padding(.horizontal, 10).padding(.vertical, 3)
+                .background(.orange)
+            PixelBomberView(pixel: 4)
+                .background(.black.opacity(0.6))
+                .clipShape(PixelPanelShape(cut: 8))
+                .overlay(PixelPanelShape(cut: 8).stroke(.orange, lineWidth: 2))
+                .shadow(color: .orange.opacity(0.4), radius: 10)
+            Text("BOMBER STRIKE")
+                .font(.system(size: 19, weight: .black, design: .monospaced))
+                .tracking(2)
+                .foregroundStyle(.white)
+            Text("NEW HUD ABILITY · TAP STRIKE, TAP THE FIELD")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .tracking(1.5)
+                .foregroundStyle(.orange)
+            Text("HQ loans you a heavy bomber. Tap STRIKE next to the health pack, then tap the field to pick the zone — the bomber strings a stick of bombs across it. Recharges after every run.")
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.75))
+                .lineLimit(4)
+                .minimumScaleFactor(0.85)
+                .frame(maxWidth: 290)
+            HStack(spacing: 10) {
+                UnitStatChip(label: "BOMBS", value: "\(Balance.bomberBombCount)")
+                UnitStatChip(label: "DMG", value: "\(Int(Balance.bomberBombDamage))")
+                UnitStatChip(label: "RECHARGE", value: "\(Int(Balance.bomberCooldown))S")
+            }
+            PixelMenuButton(title: introNextTitle, style: .primary) {
+                SoundEngine.shared.uiTap()
+                advanceIntro()
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 16)
+        .background(.black.opacity(0.92))
+        .clipShape(PixelPanelShape(cut: 10))
+        .overlay(PixelPanelShape(cut: 10).stroke(.orange.opacity(0.65), lineWidth: 3))
+        .shadow(color: .orange.opacity(0.25), radius: 20)
+    }
+
+    /// Every army unit debuting on this level (usually one — array so a
+    /// future level can field two at once and each gets its own modal).
+    private var debutUnits: [ArmyKind] {
+        ArmyKind.allCases.filter { $0.unlockLevel == level.id }
+    }
+
+    /// Every hostile debuting on this level that hasn't been briefed yet.
+    /// Usually one; the queue shows each in turn. Replays skip briefed.
+    private var foeDebuts: [EnemyKind] {
+        EnemyKind.allCases.filter { $0.unlockLevel == level.id && !EnemyIntroSeen.seen($0) }
+    }
+
+    /// Total intel cards in the current run (for the "1 OF N" header).
+    private var introTotal: Int {
+        max(1, introTotalCount)
+    }
+
+    /// 1-based index of the card on screen (for the "1 OF N" header).
+    private var introIndex: Int {
+        max(1, introTotal - introQueue.count)
+    }
+
+    /// NEXT on every card but the last, CLOSE on the last one.
+    private var introNextTitle: String {
+        introQueue.isEmpty ? "Close" : "Next"
+    }
+
+    /// Small "INTEL 1 OF N" strip above each queued card.
+    @ViewBuilder
+    private func introProgressHeader(total: Int, index: Int) -> some View {
+        if total > 1 {
+            Text("INTEL \(index) OF \(total)")
+                .font(.system(size: 9, weight: .black, design: .monospaced))
+                .tracking(2)
+                .foregroundStyle(.white.opacity(0.55))
+        }
+    }
+
+    /// Builds the ordered intel queue for this level: structural cards
+    /// first (tower line / citadel HQ / bomber / Mk-III siege), then each
+    /// new hostile, then each new army unit. Empty = instant entry, no pause.
+    private func buildIntroQueue() -> [LevelIntroStep] {
+        var q: [LevelIntroStep] = []
+        if level.id == 11 || level.id == 23 { q.append(.tower) }
+        if level.id == Balance.upgradedBaseLevel { q.append(.base) }
+        if level.id == Balance.bomberUnlockLevel { q.append(.bomber) }
+        if level.id == Balance.megaUpgradedTowerLevel { q.append(.towerMkIII) }
+        for foe in foeDebuts { q.append(.foe(foe)) }
+        for unit in debutUnits { q.append(.unit(unit)) }
+        return q
+    }
+
+    /// Shows the next queued intel card (pausing the sim). When the queue
+    /// drains, hands off to the Level 5 grants / milestone hero if pending,
+    /// otherwise resumes the battle.
+    private func advanceIntro() {
+        // Persist hostile briefings the moment their card is dismissed so
+        // replays never re-modal.
+        if case .foe(let foe) = currentIntro {
+            EnemyIntroSeen.mark(foe)
+        }
+        if introQueue.isEmpty {
+            currentIntro = nil
+            introTotalCount = 0
+            presentPostIntelModalIfNeeded()
+        } else {
+            currentIntro = introQueue.removeFirst()
+            showMenu = false
+            scene.isPaused = true
+        }
+    }
+
+    /// After the intel queue drains: Level 5 grants first, then the
+    /// milestone hero. Either pauses the sim on its own modal.
+    private func presentPostIntelModalIfNeeded() {
+        if minimap.won || minimap.lost { scene.isPaused = false; return }
+        if level.id == 5 {
+            if LoadoutStore.slotCount < 2 {
+                grantStep = 1
+                showMenu = false
+                scene.isPaused = true
+                return
+            } else if !UnlockStore.owns(.scatter) {
+                grantStep = 2
+                showMenu = false
+                scene.isPaused = true
+                return
+            }
+        }
+        if let fresh = milestoneHero {
+            heroUnlock = fresh
+            showMenu = false
+            scene.isPaused = true
+            return
+        }
+        scene.isPaused = false
     }
 
     /// Deploy-cooldown veil fraction for a summon tile (0 = ready).
@@ -1122,6 +1452,30 @@ struct GameView: View {
     /// never re-modal.
     private var milestoneHero: HeroDef? {
         HeroRoster.heroes.first { $0.unlockLevel == level.id && !HeroRoster.isUnlocked($0) }
+    }
+
+    /// Bomber HUD readout: cancel hint while aiming, strike call when
+    /// ready, blank while the sideways sweep shows the recharge.
+    private var bomberLabel: String {
+        if minimap.bomberTargeting { return "CANCEL" }
+        if minimap.bomberReady { return "STRIKE" }
+        return ""
+    }
+
+    /// True while the strike is recharging (veil sweep visible).
+    private var bomberCooling: Bool {
+        !minimap.bomberLocked && !minimap.bomberReady && !minimap.bomberTargeting
+    }
+
+    /// Recharge left as a 0...1 fraction (1 = just spent, drains to 0).
+    private var bomberCooldownFrac: Double {
+        min(1, max(0, minimap.bomberCooldown / Balance.bomberCooldown))
+    }
+
+    private var bomberColor: Color {
+        if minimap.bomberTargeting { return .red }
+        if minimap.bomberReady { return .orange }
+        return .gray
     }
 
     /// CLAIM the milestone hero: persist the unlock, auto-equip it for the
@@ -1146,36 +1500,10 @@ struct GameView: View {
         scene.isPaused = false
     }
 
-    private func closeUnitIntro() {
-        showUnitIntro = false
-        scene.isPaused = false
-    }
-
-    /// Dismiss the fortress-line intel, then hand off to the NEW UNIT card
-    /// when both debut together (Level 11: Bombard). Level 23 has no unit
-    /// debut, so it resumes straight away.
-    private func closeTowerIntro() {
-        showTowerIntro = false
-        if debutUnit != nil, !minimap.won, !minimap.lost {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                guard !showUnitIntro, !showTowerIntro,
-                      !minimap.won, !minimap.lost else { return }
-                showUnitIntro = true
-                scene.isPaused = true
-            }
-        } else {
-            scene.isPaused = false
-        }
-    }
-
-    private func closeBaseIntro() {
-        showBaseIntro = false
-        scene.isPaused = false
-    }
-
     /// Level 5 grant CLAIM: step 1 grants the free slot (if still missing)
     /// then advances to step 2; step 2 grants + slots the Scatter, then
-    /// resumes. Grants persist so replays never re-offer them.
+    /// hands off to the milestone hero if pending, else resumes.
+    /// Grants persist so replays never re-offer them.
     private func claimGrantStep() {
         guard let step = grantStep else { return }
         if step == 1 {
@@ -1190,7 +1518,15 @@ struct GameView: View {
             SoundEngine.shared.pickup()
             grantStep = nil
         }
-        if grantStep == nil { scene.isPaused = false }
+        if grantStep == nil {
+            if let fresh = milestoneHero, heroUnlock == nil {
+                heroUnlock = fresh
+                showMenu = false
+                scene.isPaused = true
+            } else {
+                scene.isPaused = false
+            }
+        }
     }
 
     /// Ad revive: raises the overlay, plays the stub ad with a 3s pixel
@@ -1333,6 +1669,49 @@ struct GameView: View {
                     ? .green.opacity(0.6) : .white.opacity(0.15), lineWidth: 1))
             }
             .disabled(!minimap.packReady)
+
+            // Bomber strike (Level 25+ ability): tap to arm zone-select,
+            // tap the field to call the run. Recharge reads like the unit
+            // cards — a dark veil draining sideways with an orange sweep
+            // line riding its leading edge.
+            if !minimap.bomberLocked {
+                Button {
+                    if minimap.bomberTargeting {
+                        scene.cancelBomberTargeting()
+                    } else {
+                        _ = scene.startBomberTargeting()
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        PixelBomberView()
+                        Text(bomberLabel)
+                            .monospacedDigit()
+                    }
+                    .font(.system(size: 11, weight: .black, design: .monospaced))
+                    .foregroundStyle(bomberColor)
+                    .padding(.horizontal, 7).padding(.vertical, 5)
+                    .background(bomberColor.opacity(minimap.bomberReady || minimap.bomberTargeting ? 0.16 : 0.06))
+                    .overlay {
+                        // Recharge sweep: dark veil draining left -> right
+                        // with an orange line riding its leading edge.
+                        if bomberCooling {
+                            GeometryReader { geo in
+                                HStack(spacing: 0) {
+                                    Rectangle()
+                                        .fill(.black.opacity(0.68))
+                                        .frame(width: geo.size.width * bomberCooldownFrac)
+                                    Rectangle()
+                                        .fill(.orange)
+                                        .frame(width: 2)
+                                    Spacer(minLength: 0)
+                                }
+                            }
+                        }
+                    }
+                    .overlay(Rectangle().stroke(bomberColor.opacity(minimap.bomberReady || minimap.bomberTargeting ? 0.6 : 0.15), lineWidth: 1))
+                }
+                .disabled(!minimap.bomberReady && !minimap.bomberTargeting)
+            }
 
             Spacer(minLength: 2)
                 .allowsHitTesting(false)
@@ -1904,8 +2283,7 @@ private struct PixelHeartView: View {
 
 /// Pixel-art medkit for the health-pack button: green cross with a
 /// white-hot core on a dark pad. Matches the booster add-on icon.
-private struct PixelMedkitView: View {
-    private let grid = [
+private struct PixelMedkitView: View {    private let grid = [
         "..OO..",
         ".OGGO.",
         "OGWWGO",
@@ -1919,6 +2297,29 @@ private struct PixelMedkitView: View {
             "W": .white,
         ], pixel: 1.75)
         .shadow(color: .green.opacity(0.35), radius: 2)
+    }
+}
+
+/// Pixel-art bomber for the strike button: side-view heavy bomber —
+/// blue fuselage, glass cockpit, tail fin — in player blue war paint.
+private struct PixelBomberView: View {
+    var pixel: CGFloat = 1.75
+    private let grid = [
+        "......OO....",
+        ".....OggO...",
+        ".O..OggggOO.",
+        "OOOOOOOOOOOO",
+        ".OOOoooooOO.",
+        "....O.OO.O..",
+        "....OO..OO..",
+    ]
+    var body: some View {
+        PixelSpriteView(grid: grid, palette: [
+            "O": Color(red: 0.30, green: 0.60, blue: 1.0),
+            "o": Color(red: 0.12, green: 0.28, blue: 0.62),
+            "g": Color(red: 0.75, green: 0.95, blue: 1.0),
+        ], pixel: pixel)
+        .shadow(color: .blue.opacity(0.45), radius: 2)
     }
 }
 

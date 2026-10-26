@@ -230,7 +230,7 @@ enum MordorBG {
         // Ashen March grade (Level 29+): the storm thickens — dark ash
         // streaks tear sideways across the embers and a second hot band
         // breathes low over the peaks. The Vale keeps the March's storm.
-        if Balance.ashenMarch || Balance.blackrootVale || Balance.cinderGate || Balance.shadowRift {
+        if Balance.ashenMarch || Balance.blackrootVale || Balance.cinderGate || Balance.shadowRift || Balance.dreadHollow || Balance.obsidianGate || Balance.embralCore {
             for i in 0..<7 {
                 let streak = SKSpriteNode(
                     color: SKColor(red: 0.10, green: 0.04, blue: 0.04, alpha: 0.5),
@@ -506,7 +506,7 @@ enum MordorBG {
         // Ashen March grade (Level 29+): the volcano burns a second mouth —
         // a smaller bloom pulsing left of the crater, slightly out of phase.
         // The Vale keeps the March's twin fire.
-        if Balance.ashenMarch || Balance.blackrootVale || Balance.cinderGate || Balance.shadowRift {
+        if Balance.ashenMarch || Balance.blackrootVale || Balance.cinderGate || Balance.shadowRift || Balance.dreadHollow || Balance.obsidianGate || Balance.embralCore {
             let second = SKSpriteNode(texture: emberGlowTexture())
             second.size = CGSize(width: 110, height: 56)
             second.position = CGPoint(x: glowX - panoW * 0.09, y: glowY - 8)
@@ -627,6 +627,122 @@ enum MordorBG {
                 rim.position = CGPoint(x: 0, y: 3)
                 span.addChild(rim)
             }
+        }
+
+        // Dread Hollow grade (Level 33): the hollow's far silhouette — a
+        // ring of jagged black spires rising off the far range, war banners
+        // hung between them, ember light breathing up from the bowl below.
+        if Balance.dreadHollow {
+            let hollowX = -sceneSize.width * 0.6 + panoW * 0.41
+            let hollowY = -sceneSize.height * 0.07 - panoH * 0.12
+            let rockDk = SKColor(red: 0.07, green: 0.045, blue: 0.05, alpha: 1)
+            let cloth = SKColor(red: 0.55, green: 0.08, blue: 0.07, alpha: 1)
+            // Jagged spire teeth along the range line.
+            for (dx, hgt) in [(-52 as CGFloat, 0.20), (-26, 0.26), (0, 0.17), (28, 0.24), (54, 0.18)] as [(CGFloat, CGFloat)] {
+                let h = panoH * hgt
+                var py: CGFloat = 0
+                var w: CGFloat = 12
+                while py < h {
+                    let seg = SKSpriteNode(color: rockDk, size: CGSize(width: w, height: 9))
+                    seg.position = CGPoint(x: hollowX + dx + (py / max(h, 1)) * 6, y: hollowY + py)
+                    seg.zPosition = 1
+                    layer.addChild(seg)
+                    py += 9
+                    w = max(3, w - 1.6)
+                }
+            }
+            // War banners strung between the spires.
+            for dx in [-39, -13, 14, 41] as [CGFloat] {
+                let banner = SKSpriteNode(color: cloth, size: CGSize(width: 16, height: 24))
+                banner.position = CGPoint(x: hollowX + dx, y: hollowY + panoH * 0.17)
+                banner.zPosition = 1
+                layer.addChild(banner)
+                let sigil = SKSpriteNode(color: SKColor(red: 1.0, green: 0.45, blue: 0.10, alpha: 0.8),
+                                         size: CGSize(width: 4, height: 4))
+                sigil.position = CGPoint(x: 0, y: -2)
+                banner.addChild(sigil)
+                sigil.run(.repeatForever(.sequence([
+                    .fadeAlpha(to: 0.3, duration: 1.4), .fadeAlpha(to: 0.9, duration: 1.4),
+                ])))
+            }
+            // Ember breath rising out of the hollow bowl.
+            let bowlGlow = SKSpriteNode(color: SKColor(red: 1.0, green: 0.40, blue: 0.10, alpha: 0.45),
+                                        size: CGSize(width: 120, height: 6))
+            bowlGlow.position = CGPoint(x: hollowX, y: hollowY + 4)
+            bowlGlow.zPosition = 1
+            layer.addChild(bowlGlow)
+            bowlGlow.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.45, duration: 2.2), .fadeAlpha(to: 1.0, duration: 2.2),
+            ])))
+        }
+
+        // Obsidian Gate grade (Level 34): the gate's far silhouette — a
+        // row of black-glass monolith blades rising off the far range,
+        // violet void-light breathing up between them from the gate below.
+        // The Embral Core (Level 35 finale) keeps the same blades on its
+        // horizon, crowned by the Core's own ember glow (added below).
+        if Balance.obsidianGate || Balance.embralCore {
+            let gateX = -sceneSize.width * 0.6 + panoW * 0.41
+            let gateY = -sceneSize.height * 0.07 - panoH * 0.12
+            let glassDk = SKColor(red: 0.05, green: 0.02, blue: 0.10, alpha: 1)
+            let voidLt = SKColor(red: 0.62, green: 0.30, blue: 1.0, alpha: 1)
+            // Monolith blades along the range line.
+            for (dx, hgt) in [(-56 as CGFloat, 0.24), (-28, 0.31), (0, 0.21), (28, 0.28), (56, 0.22)] as [(CGFloat, CGFloat)] {
+                let h = panoH * hgt
+                var py: CGFloat = 0
+                var w: CGFloat = 14
+                while py < h {
+                    let seg = SKSpriteNode(color: glassDk, size: CGSize(width: w, height: 9))
+                    seg.position = CGPoint(x: gateX + dx + (py / max(h, 1)) * -5, y: gateY + py)
+                    seg.zPosition = 1
+                    layer.addChild(seg)
+                    py += 9
+                    w = max(3, w - 1.6)
+                }
+            }
+            // Violet breath rising between the blades.
+            let voidGlow = SKSpriteNode(color: SKColor(red: 0.62, green: 0.30, blue: 1.0, alpha: 0.45),
+                                        size: CGSize(width: 150, height: 6))
+            voidGlow.position = CGPoint(x: gateX, y: gateY + 4)
+            voidGlow.zPosition = 1
+            layer.addChild(voidGlow)
+            voidGlow.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.45, duration: 2.0), .fadeAlpha(to: 1.0, duration: 2.0),
+            ])))
+            // Cold rim ticks on the two tallest blades.
+            for dx in [-28, 28] as [CGFloat] {
+                let tick = SKSpriteNode(color: voidLt, size: CGSize(width: 3, height: 5))
+                tick.position = CGPoint(x: gateX + dx - 5, y: gateY + panoH * 0.27)
+                tick.zPosition = 1
+                layer.addChild(tick)
+                tick.run(.repeatForever(.sequence([
+                    .fadeAlpha(to: 0.3, duration: 1.5), .fadeAlpha(to: 0.95, duration: 1.5),
+                ])))
+            }
+        }
+
+        // Embral Core grade (Level 35 finale): the Core's ember crown
+        // burning behind the monolith blades — a hot ember band breathing
+        // over the far range, marking the last fortress on Emra.
+        if Balance.embralCore {
+            let coreX = -sceneSize.width * 0.6 + panoW * 0.41
+            let coreY = -sceneSize.height * 0.07 - panoH * 0.12
+            let crown = SKSpriteNode(color: SKColor(red: 1.0, green: 0.38, blue: 0.08, alpha: 0.5),
+                                     size: CGSize(width: 210, height: 8))
+            crown.position = CGPoint(x: coreX, y: coreY + panoH * 0.30)
+            crown.zPosition = 1
+            layer.addChild(crown)
+            crown.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.4, duration: 1.8), .fadeAlpha(to: 1.0, duration: 1.8),
+            ])))
+            let heart = SKSpriteNode(color: SKColor(red: 1.0, green: 0.62, blue: 0.15, alpha: 0.85),
+                                     size: CGSize(width: 26, height: 10))
+            heart.position = crown.position
+            heart.zPosition = 1
+            layer.addChild(heart)
+            heart.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.5, duration: 1.1), .fadeAlpha(to: 1.0, duration: 1.1),
+            ])))
         }
 
         // Thin hot veil so the panorama reads as distant burning air.
@@ -879,7 +995,7 @@ enum MordorBG {
         // Ashen March grade (Level 29+): the march kicks up the waste — an
         // extra low sheet of fast ash drifts scouring the dune feet.
         // The Vale keeps the March's churned air.
-        if Balance.ashenMarch || Balance.blackrootVale || Balance.cinderGate || Balance.shadowRift {
+        if Balance.ashenMarch || Balance.blackrootVale || Balance.cinderGate || Balance.shadowRift || Balance.dreadHollow || Balance.obsidianGate || Balance.embralCore {
             for i in 0..<5 {
                 let band = SKSpriteNode(texture: mistTex)
                 band.size = CGSize(width: panoW * rng.cgFloat(in: 0.10...0.18),
@@ -1270,7 +1386,7 @@ enum MordorBG {
         // Ashen March grade (Level 29+): the lane runs hotter — extra ember
         // veins breathing under the lip and a deeper red wash mid-field.
         // The Vale keeps the March's hot lane under its roots.
-        if Balance.ashenMarch || Balance.blackrootVale || Balance.cinderGate || Balance.shadowRift {
+        if Balance.ashenMarch || Balance.blackrootVale || Balance.cinderGate || Balance.shadowRift || Balance.dreadHollow || Balance.obsidianGate || Balance.embralCore {
             let marchWash = SKSpriteNode(
                 color: SKColor(red: 0.85, green: 0.18, blue: 0.06, alpha: 0.08),
                 size: CGSize(width: width, height: tileH))

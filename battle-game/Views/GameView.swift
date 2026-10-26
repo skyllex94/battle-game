@@ -14,6 +14,7 @@ private enum LevelIntroStep: Identifiable, Hashable {
     case base
     case bomber
     case towerMkIII
+    case coreFinale
 
     var id: String {
         switch self {
@@ -23,6 +24,7 @@ private enum LevelIntroStep: Identifiable, Hashable {
         case .base: return "base"
         case .bomber: return "bomber"
         case .towerMkIII: return "towerMkIII"
+        case .coreFinale: return "coreFinale"
         }
     }
 }
@@ -660,6 +662,24 @@ struct GameView: View {
                 .padding(.vertical, 12)
             }
 
+            // Level 35 finale intel: the huge enemy core-fortress vs our
+            // same Mk-II citadel. Part of the queue, shown first.
+            if currentIntro == .coreFinale {
+                Color.black.opacity(0.68)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { advanceIntro() }
+
+                ViewThatFits(in: .vertical) {
+                    coreFinaleIntroCard
+                    ScrollView(.vertical, showsIndicators: false) {
+                        coreFinaleIntroCard
+                    }
+                    .frame(maxWidth: 360)
+                }
+                .padding(.vertical, 12)
+            }
+
             // Level 25 air-support intel: announces the bomber strike
             // button + tap-the-field zone select. Part of the queue.
             if currentIntro == .bomber {
@@ -1291,6 +1311,112 @@ struct GameView: View {
         .shadow(color: .red.opacity(0.25), radius: 20)
     }
 
+    /// Level 35 finale intel: the enemy's huge Mordor-style main-main
+    /// building — the Embral Core core-fortress with its Burning Eye and a
+    /// 5-missile rooftop salvo — against our same Mk-II citadel HQ.
+    private var coreFinaleIntroCard: some View {
+        VStack(spacing: 9) {
+            introProgressHeader(total: introTotal, index: introIndex)
+            Text("FINAL BATTLE")
+                .font(.system(size: 11, weight: .black, design: .monospaced))
+                .tracking(3)
+                .foregroundStyle(.black)
+                .padding(.horizontal, 10).padding(.vertical, 3)
+                .background(.yellow)
+            ZStack {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(LinearGradient(colors: [.red.opacity(0.28),
+                                                 .black.opacity(0.85)],
+                                         startPoint: .top, endPoint: .bottom))
+                    .frame(width: 264, height: 168)
+                Rectangle()
+                    .fill(.red.opacity(0.26))
+                    .frame(width: 264, height: 1)
+                    .offset(y: 62)
+                HStack(spacing: 10) {
+                    VStack(spacing: 2) {
+                        Image(uiImage: BaseNode.previewImage(for: .player, upgraded: true))
+                            .interpolation(.none)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 84, height: 104)
+                            .shadow(color: .cyan.opacity(0.45), radius: 10)
+                        Text("OURS · MK-II")
+                            .font(.system(size: 8, weight: .black, design: .monospaced))
+                            .foregroundStyle(.cyan)
+                    }
+                    Text("VS")
+                        .font(.system(size: 16, weight: .black, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.7))
+                    VStack(spacing: 2) {
+                        Image(uiImage: BaseNode.previewImage(for: .enemy, upgraded: true, finale: true))
+                            .interpolation(.none)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 104, height: 128)
+                            .shadow(color: .red.opacity(0.6), radius: 14)
+                        Text("THEIRS · CORE")
+                            .font(.system(size: 8, weight: .black, design: .monospaced))
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .frame(width: 264, height: 168)
+            .clipShape(PixelPanelShape(cut: 8))
+            .overlay(PixelPanelShape(cut: 8).stroke(.yellow.opacity(0.85), lineWidth: 2))
+            .overlay(alignment: .topTrailing) {
+                Text("FINALE")
+                    .font(.system(size: 10, weight: .black, design: .monospaced))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(.yellow)
+                    .padding(6)
+            }
+            .overlay(alignment: .bottomLeading) {
+                HStack(spacing: 3) {
+                    ForEach(0..<Balance.baseMissileCountFinale, id: \.self) { _ in
+                        Rectangle()
+                            .fill(.red)
+                            .frame(width: 5, height: 5)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+            }
+
+            Text("EMBRAL CORE")
+                .font(.system(size: 19, weight: .black, design: .monospaced))
+                .tracking(2)
+                .foregroundStyle(.white)
+            Text("FINALE HQ · 5-MISSILE SALVO")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .tracking(1.5)
+                .foregroundStyle(.yellow)
+            Text("This is it — the heart of the enemy on Emra. Their HQ rises as a huge Mordor core-fortress crowned by the Burning Eye, answering every push with a 5-rocket salvo. Ours stands as the same Mk-II citadel. Bring the Core down and take humanity home.")
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.78))
+                .lineLimit(4)
+                .minimumScaleFactor(0.85)
+                .frame(maxWidth: 300)
+            HStack(spacing: 10) {
+                UnitStatChip(label: "SALVO", value: "5 MISSILES")
+                UnitStatChip(label: "ENEMY HQ", value: "\(Int(Balance.enemyBaseHealth(forLevel: level.id).rounded()))")
+                UnitStatChip(label: "RANGE", value: "\(Int(Balance.baseRange))")
+            }
+            PixelMenuButton(title: introNextTitle, style: .primary) {
+                SoundEngine.shared.uiTap()
+                advanceIntro()
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 16)
+        .background(.black.opacity(0.92))
+        .clipShape(PixelPanelShape(cut: 10))
+        .overlay(PixelPanelShape(cut: 10).stroke(.yellow.opacity(0.65), lineWidth: 3))
+        .shadow(color: .yellow.opacity(0.25), radius: 20)
+    }
+
     /// Level 25 air-support intel: announces the bomber strike button
     /// (next to the health pack) + tap-the-field zone select.
     private var bomberIntroCard: some View {
@@ -1379,10 +1505,12 @@ struct GameView: View {
     }
 
     /// Builds the ordered intel queue for this level: structural cards
-    /// first (tower line / citadel HQ / bomber / Mk-III siege), then each
-    /// new hostile, then each new army unit. Empty = instant entry, no pause.
+    /// first (finale core / tower line / citadel HQ / bomber / Mk-III
+    /// siege), then each new hostile, then each new army unit. Empty =
+    /// instant entry, no pause.
     private func buildIntroQueue() -> [LevelIntroStep] {
         var q: [LevelIntroStep] = []
+        if level.id == Balance.finaleBaseLevel { q.append(.coreFinale) }
         if level.id == 11 || level.id == 23 { q.append(.tower) }
         if level.id == Balance.upgradedBaseLevel { q.append(.base) }
         if level.id == Balance.bomberUnlockLevel { q.append(.bomber) }

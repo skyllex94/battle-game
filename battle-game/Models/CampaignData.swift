@@ -133,10 +133,10 @@ struct CampaignData {
                  briefing: "A bowl of black rock ringed by jagged peaks. The enemy's banners hang from the spires, lit by red fire. Objective: enter Dread Hollow and destroy the enemy HQ.",
                  mapArtName: "MapBG", enemyWaves: 17, towerHP: 930, baseHP: 2500),
         LevelDef(id: 34, name: "Obsidian Gate", subtitle: "Break the gate",
-                 briefing: "The last gate is a wall of obsidian and iron, built to stop an army. Stop it instead. Objective: break the Obsidian Gate and destroy the enemy HQ.",
+                 briefing: "The last gate is a wall of obsidian and iron, veined with violet void-light — and something new drifts above it: the Vesper, a void-herald glider raining a fan of weaving void splinters. Objective: break the Obsidian Gate and destroy the enemy HQ.",
                  mapArtName: "MapBG", enemyWaves: 17, towerHP: 970, baseHP: 2600),
         LevelDef(id: 35, name: "Embral Core", subtitle: "Break the enemy core",
-                 briefing: "This is it — the heart of the enemy on Emra. Everything earned, everything unlocked, ends here. Objective: destroy the Embral Core and take humanity home.",
+                 briefing: "This is it — the heart of the enemy on Emra. Their HQ rises as a huge Mordor core-fortress crowned by the Burning Eye, answering every push with a 5-missile salvo while ours holds as the same Mk-II citadel. Everything earned, everything unlocked, ends here. Objective: destroy the Embral Core and take humanity home.",
                  mapArtName: "MapBG", enemyWaves: 18, towerHP: 1020, baseHP: 2750),
     ]
 

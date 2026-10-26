@@ -4128,4 +4128,617 @@ enum LevelDressing {
             ])))
         }
     }
+
+    // MARK: - Dread Hollow (Level 33, banner-spires + hollow teeth)
+
+    /// Small alterations over Shadowrift: the lane keeps the rift's ash
+    /// grade, but the crossing is gone — instead the hollow's jagged black
+    /// spires rise along the road, each flying a tattered enemy war banner
+    /// lit by red fire. Hollow-edge obsidian teeth, ember braziers and
+    /// rising sparks sell the bowl; everything else stays quiet so the
+    /// banners read as the level's one idea.
+    static func buildDreadHollow(in world: SKNode) {
+        let gy = Balance.groundTopY
+        let width = Balance.levelWidth
+        var rng = DressingRNG(seed: 233_033)
+
+        // Blood wash: same deep grade as the rift, a touch deeper red.
+        let wash = SKSpriteNode(color: SKColor(red: 0.72, green: 0.09, blue: 0.11, alpha: 0.13),
+                                size: CGSize(width: width, height: 104))
+        wash.anchorPoint = CGPoint(x: 0, y: 1)
+        wash.position = CGPoint(x: 0, y: gy)
+        wash.zPosition = 2
+        world.addChild(wash)
+
+        // Ember fissures wandering the hollow floor.
+        var placed = 0, guard_ = 0
+        while placed < 5, guard_ < 240 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 130...(width - 130))
+            guard isClear(x, margin: 220) else { continue }
+            let decal = SKSpriteNode(texture: MordorBG.crackTexture(variant: placed % 3))
+            decal.size = CGSize(width: rng.cgFloat(in: 110...170), height: 24)
+            decal.position = CGPoint(x: x, y: gy + 3)
+            decal.zPosition = 2
+            world.addChild(decal)
+            decal.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.65, duration: rng.double(in: 1.2...2.0)),
+                .fadeAlpha(to: 1.0, duration: rng.double(in: 1.2...2.0)),
+            ])))
+            placed += 1
+        }
+
+        // Hollow-edge teeth: jagged obsidian clusters flanking the road.
+        placed = 0; guard_ = 0
+        while placed < 5, guard_ < 220 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 120...(width - 120))
+            guard isClear(x, margin: 190) else { continue }
+            let cluster = SKSpriteNode(texture: MordorBG.obsidianShardTexture(variant: placed % 3))
+            cluster.size = CGSize(width: 56, height: 36)
+            cluster.position = CGPoint(x: x, y: gy + 2)
+            cluster.zPosition = 3
+            world.addChild(cluster)
+            placed += 1
+        }
+
+        // Banner-spires: tall black rock teeth with a tattered enemy war
+        // banner hung from a cross-arm — blood-red cloth with an ember
+        // sigil, breathing in the hollow wind.
+        placed = 0; guard_ = 0
+        while placed < 5, guard_ < 240 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 150...(width - 150))
+            guard isClear(x, margin: 260) else { continue }
+            let spire = SKNode()
+            spire.position = CGPoint(x: x, y: gy + 2)
+            spire.zPosition = 3
+            world.addChild(spire)
+            let rock = SKColor(red: 0.08, green: 0.05, blue: 0.055, alpha: 1)
+            let rockHi = SKColor(red: 0.30, green: 0.14, blue: 0.10, alpha: 1)
+            let spireH: CGFloat = rng.cgFloat(in: 64...92)
+            // Jagged stacked segments tapering to a point.
+            var py: CGFloat = 0
+            var segW: CGFloat = rng.cgFloat(in: 16...22)
+            while py < spireH {
+                let seg = SKSpriteNode(color: rock, size: CGSize(width: segW, height: 9))
+                seg.position = CGPoint(x: rng.cgFloat(in: -2...2), y: py + 4)
+                seg.zRotation = rng.cgFloat(in: -0.08...0.08)
+                spire.addChild(seg)
+                if Int(py) % 18 < 9 {
+                    let rim = SKSpriteNode(color: rockHi, size: CGSize(width: 2, height: 8))
+                    rim.position = CGPoint(x: -segW / 2, y: 0)
+                    seg.addChild(rim)
+                }
+                py += 9
+                segW = max(4, segW - rng.cgFloat(in: 1.5...2.5))
+            }
+            // Cross-arm near the top carrying the banner.
+            let armY = spireH - rng.cgFloat(in: 12...18)
+            let arm = SKSpriteNode(color: rock, size: CGSize(width: 30, height: 4))
+            arm.position = CGPoint(x: 8, y: armY)
+            spire.addChild(arm)
+            // Tattered banner: blood-red cloth + darker hem + ember sigil.
+            let cloth = SKColor(red: 0.55, green: 0.08, blue: 0.07, alpha: 1)
+            let clothDk = SKColor(red: 0.32, green: 0.05, blue: 0.05, alpha: 1)
+            let bannerW: CGFloat = rng.cgFloat(in: 20...26)
+            let bannerH: CGFloat = rng.cgFloat(in: 30...40)
+            let banner = SKSpriteNode(color: cloth, size: CGSize(width: bannerW, height: bannerH))
+            banner.anchorPoint = CGPoint(x: 0.5, y: 1)
+            banner.position = CGPoint(x: 8, y: armY - 2)
+            spire.addChild(banner)
+            let hem = SKSpriteNode(color: clothDk, size: CGSize(width: bannerW, height: 5))
+            hem.anchorPoint = CGPoint(x: 0.5, y: 0)
+            hem.position = CGPoint(x: 0, y: -bannerH)
+            banner.addChild(hem)
+            let sigil = SKSpriteNode(color: SKColor(red: 1.0, green: 0.45, blue: 0.10, alpha: 0.9),
+                                     size: CGSize(width: 5, height: 5))
+            sigil.position = CGPoint(x: 0, y: -bannerH / 2)
+            banner.addChild(sigil)
+            sigil.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.3, duration: rng.double(in: 0.9...1.6)),
+                .fadeAlpha(to: 0.9, duration: rng.double(in: 0.9...1.6)),
+            ])))
+            // Wind sway — the hollow breathes through the cloth.
+            banner.run(.repeatForever(.sequence([
+                .rotate(toAngle: 0.06, duration: rng.double(in: 1.2...2.0)),
+                .rotate(toAngle: -0.06, duration: rng.double(in: 1.2...2.0)),
+            ])))
+            placed += 1
+        }
+
+        // Ember braziers burning between the banners.
+        placed = 0; guard_ = 0
+        while placed < 5, guard_ < 220 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 150...(width - 150))
+            guard isClear(x, margin: 200) else { continue }
+            let brazier = SKNode()
+            brazier.position = CGPoint(x: x, y: gy)
+            brazier.zPosition = 3
+            world.addChild(brazier)
+            let scorch = SKSpriteNode(texture: MordorBG.scorchTexture())
+            scorch.size = CGSize(width: 52, height: 13)
+            scorch.position = CGPoint(x: 0, y: 1)
+            brazier.addChild(scorch)
+            let iron = SKColor(red: 0.15, green: 0.10, blue: 0.10, alpha: 1)
+            let post = SKSpriteNode(color: iron, size: CGSize(width: 5, height: 40))
+            post.anchorPoint = CGPoint(x: 0.5, y: 0)
+            post.position = CGPoint(x: 0, y: 0)
+            brazier.addChild(post)
+            let bowl = SKSpriteNode(color: iron, size: CGSize(width: 24, height: 10))
+            bowl.position = CGPoint(x: 0, y: 40)
+            brazier.addChild(bowl)
+            let flame = SKSpriteNode(color: SKColor(red: 1.0, green: 0.5, blue: 0.13, alpha: 0.95),
+                                     size: CGSize(width: 11, height: 14))
+            flame.position = CGPoint(x: 0, y: 50)
+            brazier.addChild(flame)
+            let halo = SKSpriteNode(texture: MordorBG.emberGlowTexture())
+            halo.size = CGSize(width: 80, height: 48)
+            halo.position = flame.position
+            brazier.addChild(halo)
+            halo.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.4, duration: 0.8), .fadeAlpha(to: 1.0, duration: 0.8),
+            ])))
+            flame.run(.repeatForever(.sequence([
+                .scale(to: 1.15, duration: 0.38), .scale(to: 1.0, duration: 0.38),
+            ])))
+            placed += 1
+        }
+
+        // Drifting ash + rising sparks off the hollow floor.
+        for i in 0..<20 {
+            let hot = rng.int(in: 0...2) != 0
+            let mote = SKSpriteNode(color: hot
+                ? SKColor(red: 1.0, green: 0.5, blue: 0.15, alpha: 0.85)
+                : SKColor(red: 0.40, green: 0.22, blue: 0.18, alpha: 0.7),
+                size: CGSize(width: hot ? 3 : rng.cgFloat(in: 3...6),
+                             height: hot ? 3 : 2))
+            let homeX = rng.cgFloat(in: 0...width)
+            mote.position = CGPoint(x: homeX, y: gy + rng.cgFloat(in: 4...50))
+            mote.zPosition = 3
+            world.addChild(mote)
+            let fly = SKAction.moveBy(x: rng.cgFloat(in: hot ? -24...24 : 80...220),
+                                      y: rng.cgFloat(in: hot ? 60...140 : -4...24),
+                                      duration: rng.double(in: 1.8...3.6))
+            let vanish = SKAction.sequence([
+                SKAction.wait(forDuration: 1.2),
+                SKAction.fadeOut(withDuration: 1.2),
+            ])
+            mote.run(.repeatForever(.sequence([
+                SKAction.wait(forDuration: Double(i) * 0.13),
+                SKAction.group([fly, vanish]),
+                SKAction.run { mote.position = CGPoint(x: homeX, y: gy + 4) },
+                SKAction.fadeIn(withDuration: 0.4),
+            ])))
+        }
+    }
+
+    // MARK: - Obsidian Gate (Level 34, black glass + violet void-fire)
+
+    /// Small alterations over Dread Hollow: the lane keeps the hollow's ash
+    /// grade, but the palette cracks violet — towering obsidian monoliths
+    /// rise like blades from the basalt, violet void veins bleed between
+    /// the slabs, pale shackle-rings hang from the stone, and tall
+    /// void-braziers burn violet along the army's road. The ember red stays
+    /// in the sky; the ground belongs to the void.
+    static func buildObsidianGate(in world: SKNode) {
+        let gy = Balance.groundTopY
+        let width = Balance.levelWidth
+        var rng = DressingRNG(seed: 234_034)
+
+        // Violet wash: the same deep grade as the hollow, shifted toward
+        // the void — less red, a breath of violet over the ash lane.
+        let wash = SKSpriteNode(color: SKColor(red: 0.55, green: 0.10, blue: 0.28, alpha: 0.13),
+                                size: CGSize(width: width, height: 104))
+        wash.anchorPoint = CGPoint(x: 0, y: 1)
+        wash.position = CGPoint(x: 0, y: gy)
+        wash.zPosition = 2
+        world.addChild(wash)
+
+        // Ember fissures wandering the gate floor, thinned — the void
+        // veins below carry the light on this stretch.
+        var placed = 0, guard_ = 0
+        while placed < 3, guard_ < 240 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 130...(width - 130))
+            guard isClear(x, margin: 220) else { continue }
+            let decal = SKSpriteNode(texture: MordorBG.crackTexture(variant: placed % 3))
+            decal.size = CGSize(width: rng.cgFloat(in: 110...170), height: 24)
+            decal.position = CGPoint(x: x, y: gy + 3)
+            decal.zPosition = 2
+            world.addChild(decal)
+            decal.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.65, duration: rng.double(in: 1.2...2.0)),
+                .fadeAlpha(to: 1.0, duration: rng.double(in: 1.2...2.0)),
+            ])))
+            placed += 1
+        }
+
+        // Void veins: short violet runs bleeding between the slabs — the
+        // same beat as the ember channels, cold instead of hot.
+        placed = 0; guard_ = 0
+        while placed < 6, guard_ < 220 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 100...(width - 100))
+            guard isClear(x, margin: 190) else { continue }
+            let vein = SKSpriteNode(color: SKColor(red: 0.62, green: 0.28, blue: 1.0, alpha: 0.55),
+                                    size: CGSize(width: rng.cgFloat(in: 60...110), height: 4))
+            vein.position = CGPoint(x: x, y: gy + 2)
+            vein.zPosition = 2
+            world.addChild(vein)
+            vein.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.3, duration: rng.double(in: 1.0...1.8)),
+                .fadeAlpha(to: 0.65, duration: rng.double(in: 1.0...1.8)),
+            ])))
+            placed += 1
+        }
+
+        // Obsidian monoliths: towering black-glass blades jutting from the
+        // basalt at heavy leans — dark violet-rimmed plates with a pale
+        // seam of void-light down the windward edge.
+        placed = 0; guard_ = 0
+        while placed < 6, guard_ < 240 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 120...(width - 120))
+            guard isClear(x, margin: 230) else { continue }
+            let shard = SKNode()
+            shard.position = CGPoint(x: x, y: gy + 2)
+            shard.zPosition = 3
+            world.addChild(shard)
+            let glass = SKColor(red: 0.07, green: 0.03, blue: 0.13, alpha: 1)
+            let glassHi = SKColor(red: 0.45, green: 0.20, blue: 0.75, alpha: 1)
+            let slabW: CGFloat = rng.cgFloat(in: 22...34)
+            let slabH: CGFloat = rng.cgFloat(in: 52...84)
+            let slab = SKSpriteNode(color: glass, size: CGSize(width: slabW, height: slabH))
+            slab.anchorPoint = CGPoint(x: 0.5, y: 0)
+            slab.position = CGPoint(x: 0, y: 0)
+            slab.zRotation = rng.cgFloat(in: -0.30...0.30)
+            shard.addChild(slab)
+            // Pale void seam down the windward edge + a lit tip.
+            let seam = SKSpriteNode(color: glassHi, size: CGSize(width: 2, height: slabH - 8))
+            seam.anchorPoint = CGPoint(x: 0.5, y: 0)
+            seam.position = CGPoint(x: -slabW / 2 + 1, y: 4)
+            seam.zRotation = slab.zRotation
+            shard.addChild(seam)
+            let tip = SKSpriteNode(color: SKColor(red: 0.85, green: 0.65, blue: 1.0, alpha: 0.95),
+                                   size: CGSize(width: 4, height: 4))
+            tip.position = CGPoint(x: slabW * 0.1, y: slabH - 2)
+            shard.addChild(tip)
+            tip.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.25, duration: rng.double(in: 0.9...1.7)),
+                .fadeAlpha(to: 0.95, duration: rng.double(in: 0.9...1.7)),
+            ])))
+            // Facet glints caught in the glass.
+            for _ in 0..<2 {
+                let glint = SKSpriteNode(color: SKColor(red: 0.70, green: 0.50, blue: 1.0, alpha: 0.8),
+                                         size: CGSize(width: 3, height: 6))
+                glint.position = CGPoint(x: rng.cgFloat(in: -slabW / 4...slabW / 4),
+                                         y: rng.cgFloat(in: 12...slabH - 10))
+                shard.addChild(glint)
+            }
+            placed += 1
+        }
+
+        // Shackle-rings: pale stone loops half-buried in the ash, chained
+        // to nothing — the gate's old bindings, cold and empty.
+        placed = 0; guard_ = 0
+        while placed < 4, guard_ < 220 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 120...(width - 120))
+            guard isClear(x, margin: 190) else { continue }
+            let ring = SKNode()
+            ring.position = CGPoint(x: x, y: gy + 2)
+            ring.zPosition = 3
+            world.addChild(ring)
+            let stone = SKColor(red: 0.55, green: 0.52, blue: 0.60, alpha: 1)
+            let stoneDk = SKColor(red: 0.30, green: 0.28, blue: 0.36, alpha: 1)
+            let r: CGFloat = rng.cgFloat(in: 12...18)
+            for a in stride(from: 0.0, to: 2 * Double.pi, by: Double.pi / 6) {
+                let seg = SKSpriteNode(color: stone, size: CGSize(width: 6, height: 5))
+                seg.position = CGPoint(x: cos(a) * r, y: sin(a) * r * 0.8 + r * 0.8)
+                seg.zRotation = a
+                ring.addChild(seg)
+            }
+            let foot = SKSpriteNode(color: stoneDk, size: CGSize(width: r * 2 + 8, height: 5))
+            foot.position = CGPoint(x: 0, y: 1)
+            ring.addChild(foot)
+            placed += 1
+        }
+
+        // Void-braziers: the tallest watch-fires yet, burning violet —
+        // iron tripods with a triple violet blaze marking the gate road.
+        placed = 0; guard_ = 0
+        while placed < 6, guard_ < 240 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 150...(width - 150))
+            guard isClear(x, margin: 200) else { continue }
+            let brazier = SKNode()
+            brazier.position = CGPoint(x: x, y: gy)
+            brazier.zPosition = 3
+            world.addChild(brazier)
+            let scorch = SKSpriteNode(texture: MordorBG.scorchTexture())
+            scorch.size = CGSize(width: 52, height: 13)
+            scorch.position = CGPoint(x: 0, y: 1)
+            brazier.addChild(scorch)
+            let iron = SKColor(red: 0.10, green: 0.07, blue: 0.14, alpha: 1)
+            for leg in 0..<3 {
+                let a = CGFloat(leg) * 2.1
+                let legNode = SKSpriteNode(color: iron, size: CGSize(width: 4, height: 46))
+                legNode.anchorPoint = CGPoint(x: 0.5, y: 0)
+                legNode.position = CGPoint(x: cos(a) * 7, y: 0)
+                legNode.zRotation = -sin(a) * 0.18
+                brazier.addChild(legNode)
+            }
+            let bowl = SKSpriteNode(color: iron, size: CGSize(width: 28, height: 12))
+            bowl.position = CGPoint(x: 0, y: 46)
+            brazier.addChild(bowl)
+            let flame = SKNode()
+            flame.position = CGPoint(x: 0, y: 56)
+            brazier.addChild(flame)
+            let outer = SKSpriteNode(color: SKColor(red: 0.62, green: 0.30, blue: 1.0, alpha: 0.95),
+                                     size: CGSize(width: 12, height: 16))
+            flame.addChild(outer)
+            let mid = SKSpriteNode(color: SKColor(red: 0.78, green: 0.52, blue: 1.0, alpha: 0.95),
+                                   size: CGSize(width: 8, height: 10))
+            mid.position = CGPoint(x: 0, y: 2)
+            flame.addChild(mid)
+            let core = SKSpriteNode(color: SKColor(red: 0.93, green: 0.86, blue: 1.0, alpha: 0.95),
+                                    size: CGSize(width: 4, height: 6))
+            core.position = CGPoint(x: 0, y: 3)
+            flame.addChild(core)
+            let halo = SKSpriteNode(texture: MordorBG.emberGlowTexture())
+            halo.size = CGSize(width: 88, height: 52)
+            halo.position = CGPoint(x: 0, y: 56)
+            halo.color = SKColor(red: 0.62, green: 0.30, blue: 1.0, alpha: 1)
+            halo.colorBlendFactor = 0.6
+            brazier.addChild(halo)
+            halo.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.4, duration: 0.8), .fadeAlpha(to: 1.0, duration: 0.8),
+            ])))
+            flame.run(.repeatForever(.sequence([
+                .scale(to: 1.15, duration: 0.38), .scale(to: 1.0, duration: 0.38),
+            ])))
+            placed += 1
+        }
+
+        // Drifting ash + rising violet wisps off the veins and the glass.
+        for i in 0..<24 {
+            let hot = rng.int(in: 0...2) != 0
+            let mote = SKSpriteNode(color: hot
+                ? SKColor(red: 0.70, green: 0.48, blue: 1.0, alpha: 0.85)
+                : SKColor(red: 0.36, green: 0.20, blue: 0.30, alpha: 0.7),
+                size: CGSize(width: hot ? 3 : rng.cgFloat(in: 3...6),
+                             height: hot ? 3 : 2))
+            let homeX = rng.cgFloat(in: 0...width)
+            mote.position = CGPoint(x: homeX, y: gy + rng.cgFloat(in: 4...50))
+            mote.zPosition = 3
+            world.addChild(mote)
+            let fly = SKAction.moveBy(x: rng.cgFloat(in: hot ? -24...24 : 80...220),
+                                      y: rng.cgFloat(in: hot ? 60...140 : -4...24),
+                                      duration: rng.double(in: 1.8...3.6))
+            let vanish = SKAction.sequence([
+                SKAction.wait(forDuration: 1.2),
+                SKAction.fadeOut(withDuration: 1.2),
+            ])
+            mote.run(.repeatForever(.sequence([
+                SKAction.wait(forDuration: Double(i) * 0.13),
+                SKAction.group([fly, vanish]),
+                SKAction.run { mote.position = CGPoint(x: homeX, y: gy + 4) },
+                SKAction.fadeIn(withDuration: 0.4),
+            ])))
+        }
+    }
+
+    // MARK: - Embral Core (Level 35 finale, fused obsidian + ember)
+
+    /// Small alterations over the Obsidian Gate: the lane keeps the gate's
+    /// ash grade, but obsidian and ember have fused at the heart of it —
+    /// jagged core shards (black glass split by living ember), burning core
+    /// veins, chained core rings half-buried in the ash, and the tallest
+    /// watch-fires yet: twin-flame core-braziers burning ember + violet
+    /// along the army's last road. The sky stays blood-red; the ground
+    /// burns both colours at once.
+    static func buildEmbralCore(in world: SKNode) {
+        let gy = Balance.groundTopY
+        let width = Balance.levelWidth
+        var rng = DressingRNG(seed: 235_035)
+
+        // Fused wash: the hollow's red grade breathing violet at once.
+        let wash = SKSpriteNode(color: SKColor(red: 0.64, green: 0.10, blue: 0.20, alpha: 0.14),
+                                size: CGSize(width: width, height: 104))
+        wash.anchorPoint = CGPoint(x: 0, y: 1)
+        wash.position = CGPoint(x: 0, y: gy)
+        wash.zPosition = 2
+        world.addChild(wash)
+
+        // Ember fissures wandering the core floor.
+        var placed = 0, guard_ = 0
+        while placed < 4, guard_ < 240 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 130...(width - 130))
+            guard isClear(x, margin: 220) else { continue }
+            let decal = SKSpriteNode(texture: MordorBG.crackTexture(variant: placed % 3))
+            decal.size = CGSize(width: rng.cgFloat(in: 110...170), height: 24)
+            decal.position = CGPoint(x: x, y: gy + 3)
+            decal.zPosition = 2
+            world.addChild(decal)
+            decal.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.65, duration: rng.double(in: 1.2...2.0)),
+                .fadeAlpha(to: 1.0, duration: rng.double(in: 1.2...2.0)),
+            ])))
+            placed += 1
+        }
+
+        // Core veins: alternating ember + violet runs splitting the slabs.
+        placed = 0; guard_ = 0
+        while placed < 8, guard_ < 240 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 100...(width - 100))
+            guard isClear(x, margin: 190) else { continue }
+            let violet = placed % 2 == 0
+            let vein = SKSpriteNode(
+                color: violet
+                    ? SKColor(red: 0.62, green: 0.28, blue: 1.0, alpha: 0.55)
+                    : SKColor(red: 1.0, green: 0.42, blue: 0.10, alpha: 0.6),
+                size: CGSize(width: rng.cgFloat(in: 60...110), height: 4))
+            vein.position = CGPoint(x: x, y: gy + 2)
+            vein.zPosition = 2
+            world.addChild(vein)
+            vein.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.3, duration: rng.double(in: 1.0...1.8)),
+                .fadeAlpha(to: 0.7, duration: rng.double(in: 1.0...1.8)),
+            ])))
+            placed += 1
+        }
+
+        // Core shards: black-glass blades split by a living ember seam —
+        // the fused signature of the finale floor.
+        placed = 0; guard_ = 0
+        while placed < 6, guard_ < 240 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 120...(width - 120))
+            guard isClear(x, margin: 230) else { continue }
+            let shard = SKNode()
+            shard.position = CGPoint(x: x, y: gy + 2)
+            shard.zPosition = 3
+            world.addChild(shard)
+            let glass = SKColor(red: 0.08, green: 0.04, blue: 0.10, alpha: 1)
+            let slabW: CGFloat = rng.cgFloat(in: 22...34)
+            let slabH: CGFloat = rng.cgFloat(in: 52...84)
+            let slab = SKSpriteNode(color: glass, size: CGSize(width: slabW, height: slabH))
+            slab.anchorPoint = CGPoint(x: 0.5, y: 0)
+            slab.zRotation = rng.cgFloat(in: -0.30...0.30)
+            shard.addChild(slab)
+            // Ember split down the middle + violet rim on the windward edge.
+            let split = SKSpriteNode(color: SKColor(red: 1.0, green: 0.45, blue: 0.10, alpha: 0.9),
+                                     size: CGSize(width: 2, height: slabH - 10))
+            split.anchorPoint = CGPoint(x: 0.5, y: 0)
+            split.position = CGPoint(x: 0, y: 5)
+            split.zRotation = slab.zRotation
+            shard.addChild(split)
+            let rim = SKSpriteNode(color: SKColor(red: 0.45, green: 0.20, blue: 0.75, alpha: 0.9),
+                                   size: CGSize(width: 2, height: slabH - 8))
+            rim.anchorPoint = CGPoint(x: 0.5, y: 0)
+            rim.position = CGPoint(x: -slabW / 2 + 1, y: 4)
+            rim.zRotation = slab.zRotation
+            shard.addChild(rim)
+            let tip = SKSpriteNode(color: SKColor(red: 1.0, green: 0.65, blue: 0.20, alpha: 0.95),
+                                   size: CGSize(width: 4, height: 4))
+            tip.position = CGPoint(x: 0, y: slabH - 2)
+            shard.addChild(tip)
+            tip.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.25, duration: rng.double(in: 0.9...1.7)),
+                .fadeAlpha(to: 0.95, duration: rng.double(in: 0.9...1.7)),
+            ])))
+            placed += 1
+        }
+
+        // Chained core rings: pale stone loops with an ember link glowing
+        // in the circle — the Core's old bindings, still warm.
+        placed = 0; guard_ = 0
+        while placed < 4, guard_ < 220 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 120...(width - 120))
+            guard isClear(x, margin: 190) else { continue }
+            let ring = SKNode()
+            ring.position = CGPoint(x: x, y: gy + 2)
+            ring.zPosition = 3
+            world.addChild(ring)
+            let stone = SKColor(red: 0.55, green: 0.52, blue: 0.60, alpha: 1)
+            let stoneDk = SKColor(red: 0.30, green: 0.28, blue: 0.36, alpha: 1)
+            let r: CGFloat = rng.cgFloat(in: 12...18)
+            for a in stride(from: 0.0, to: 2 * Double.pi, by: Double.pi / 6) {
+                let seg = SKSpriteNode(color: stone, size: CGSize(width: 6, height: 5))
+                seg.position = CGPoint(x: cos(a) * r, y: sin(a) * r * 0.8 + r * 0.8)
+                seg.zRotation = a
+                ring.addChild(seg)
+            }
+            let link = SKSpriteNode(color: SKColor(red: 1.0, green: 0.45, blue: 0.10, alpha: 0.95),
+                                    size: CGSize(width: 5, height: 5))
+            link.position = CGPoint(x: 0, y: r * 0.8)
+            ring.addChild(link)
+            link.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.3, duration: 1.0), .fadeAlpha(to: 0.95, duration: 1.0),
+            ])))
+            let foot = SKSpriteNode(color: stoneDk, size: CGSize(width: r * 2 + 8, height: 5))
+            foot.position = CGPoint(x: 0, y: 1)
+            ring.addChild(foot)
+            placed += 1
+        }
+
+        // Core-braziers: the tallest watch-fires of the campaign, burning
+        // twin flames — ember below, violet above — on iron tripods.
+        placed = 0; guard_ = 0
+        while placed < 6, guard_ < 240 {
+            guard_ += 1
+            let x = rng.cgFloat(in: 150...(width - 150))
+            guard isClear(x, margin: 200) else { continue }
+            let brazier = SKNode()
+            brazier.position = CGPoint(x: x, y: gy)
+            brazier.zPosition = 3
+            world.addChild(brazier)
+            let scorch = SKSpriteNode(texture: MordorBG.scorchTexture())
+            scorch.size = CGSize(width: 56, height: 14)
+            scorch.position = CGPoint(x: 0, y: 1)
+            brazier.addChild(scorch)
+            let iron = SKColor(red: 0.10, green: 0.07, blue: 0.12, alpha: 1)
+            for leg in 0..<3 {
+                let a = CGFloat(leg) * 2.1
+                let legNode = SKSpriteNode(color: iron, size: CGSize(width: 4, height: 50))
+                legNode.anchorPoint = CGPoint(x: 0.5, y: 0)
+                legNode.position = CGPoint(x: cos(a) * 7, y: 0)
+                legNode.zRotation = -sin(a) * 0.18
+                brazier.addChild(legNode)
+            }
+            let bowl = SKSpriteNode(color: iron, size: CGSize(width: 30, height: 12))
+            bowl.position = CGPoint(x: 0, y: 50)
+            brazier.addChild(bowl)
+            let emberFlame = SKSpriteNode(color: SKColor(red: 1.0, green: 0.5, blue: 0.13, alpha: 0.95),
+                                          size: CGSize(width: 12, height: 15))
+            emberFlame.position = CGPoint(x: 0, y: 60)
+            brazier.addChild(emberFlame)
+            let voidFlame = SKSpriteNode(color: SKColor(red: 0.70, green: 0.40, blue: 1.0, alpha: 0.95),
+                                         size: CGSize(width: 7, height: 10))
+            voidFlame.position = CGPoint(x: 0, y: 68)
+            brazier.addChild(voidFlame)
+            let halo = SKSpriteNode(texture: MordorBG.emberGlowTexture())
+            halo.size = CGSize(width: 92, height: 54)
+            halo.position = CGPoint(x: 0, y: 62)
+            brazier.addChild(halo)
+            halo.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.4, duration: 0.8), .fadeAlpha(to: 1.0, duration: 0.8),
+            ])))
+            emberFlame.run(.repeatForever(.sequence([
+                .scale(to: 1.15, duration: 0.38), .scale(to: 1.0, duration: 0.38),
+            ])))
+            placed += 1
+        }
+
+        // Drifting ash + rising twin wisps (ember + violet) off the core.
+        for i in 0..<26 {
+            let violet = i % 3 == 0
+            let mote = SKSpriteNode(color: violet
+                ? SKColor(red: 0.70, green: 0.48, blue: 1.0, alpha: 0.85)
+                : SKColor(red: 1.0, green: 0.5, blue: 0.15, alpha: 0.85),
+                size: CGSize(width: 3, height: 3))
+            let homeX = rng.cgFloat(in: 0...width)
+            mote.position = CGPoint(x: homeX, y: gy + rng.cgFloat(in: 4...50))
+            mote.zPosition = 3
+            world.addChild(mote)
+            let fly = SKAction.moveBy(x: rng.cgFloat(in: -24...24),
+                                      y: rng.cgFloat(in: 60...140),
+                                      duration: rng.double(in: 1.8...3.6))
+            let vanish = SKAction.sequence([
+                SKAction.wait(forDuration: 1.2),
+                SKAction.fadeOut(withDuration: 1.2),
+            ])
+            mote.run(.repeatForever(.sequence([
+                SKAction.wait(forDuration: Double(i) * 0.13),
+                SKAction.group([fly, vanish]),
+                SKAction.run { mote.position = CGPoint(x: homeX, y: gy + 4) },
+                SKAction.fadeIn(withDuration: 0.4),
+            ])))
+        }
+    }
 }

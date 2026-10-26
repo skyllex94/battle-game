@@ -24,6 +24,9 @@ import SpriteKit
 /// .phoenix is the red graviton strike-fighter debuting in Level 30 —
 /// a fast crimson interceptor cruising above even the saucers, loosing
 /// 3-round red-plasma bursts.
+/// .vesper is the violet void-herald debuting in Level 34 — a slow
+/// crescent-winged glider cruising above everything hostile, loosing a
+/// 3-shard fan of weaving void splinters with a small splash.
 enum EnemyKind: Int, CaseIterable {
     case raider
     case brute
@@ -37,11 +40,12 @@ enum EnemyKind: Int, CaseIterable {
     case saucer
     case gnasher
     case phoenix
+    case vesper
 
     /// True for claw/axe fighters (swing + direct damage); false for shooters.
     var isMelee: Bool { self == .reaver || self == .skitter || self == .gnasher }
     /// True for airborne units (hover cruise; jets also dodge-juke).
-    var isFlying: Bool { self == .jet || self == .heli || self == .saucer || self == .phoenix }
+    var isFlying: Bool { self == .jet || self == .heli || self == .saucer || self == .phoenix || self == .vesper }
     /// True for the heavy mech walker (huge, slow, burst-firing).
     var isMech: Bool { self == .mech }
     /// True for the high-altitude attack helicopter.
@@ -55,6 +59,7 @@ enum EnemyKind: Int, CaseIterable {
         case .heli: return 9.8
         case .saucer: return 9.9
         case .phoenix: return 10.0
+        case .vesper: return 10.1
         case .raider, .skitter: return 9.6
         case .reaver, .jet, .gnasher: return 9.2
         case .brute, .mech, .missileTruck, .immortal: return 8.0
@@ -68,6 +73,7 @@ enum EnemyKind: Int, CaseIterable {
         case .heli: return Balance.heliHoverHeight
         case .saucer: return Balance.saucerHoverHeight
         case .phoenix: return Balance.phoenixHoverHeight
+        case .vesper: return Balance.vesperHoverHeight
         default: return 0
         }
     }
@@ -84,6 +90,7 @@ enum EnemyKind: Int, CaseIterable {
         case .heli: return "Heli Gunship"
         case .saucer: return "Saucer Drone"
         case .phoenix: return "Phoenix"
+        case .vesper: return "Vesper"
         case .missileTruck: return "Missile Truck"
         case .immortal: return "Immortal"
         case .gnasher: return "Gnasher"
@@ -106,6 +113,7 @@ enum EnemyKind: Int, CaseIterable {
         case .immortal: return 19
         case .gnasher: return 27
         case .phoenix: return 30
+        case .vesper: return 34
         }
     }
 
@@ -121,6 +129,7 @@ enum EnemyKind: Int, CaseIterable {
         case .heli: return "Attack helicopter. High hover, 3-round gun bursts."
         case .saucer: return "Heavy gun-drone. High hover, twin-blaster bursts."
         case .phoenix: return "Red strike-fighter. Highest hover, 3-round plasma bursts."
+        case .vesper: return "Void-herald. Highest hover, weaving shard fan."
         case .missileTruck: return "Missile launcher truck. Short range, weaving missiles."
         case .immortal: return "White-armored tracked platform. Straight mortar shells."
         case .gnasher: return "Pale rusher. Chops hard, detonates when killed."
@@ -147,6 +156,7 @@ enum EnemyKind: Int, CaseIterable {
         case .heli: return Balance.heliHP
         case .saucer: return Balance.saucerHP
         case .phoenix: return Balance.phoenixHP
+        case .vesper: return Balance.vesperHP
         case .missileTruck: return Balance.missileTruckHP
         case .immortal: return Balance.immortalHP
         case .gnasher: return Balance.gnasherHP
@@ -164,6 +174,7 @@ enum EnemyKind: Int, CaseIterable {
         case .heli: return Balance.heliSpeed
         case .saucer: return Balance.saucerSpeed
         case .phoenix: return Balance.phoenixSpeed
+        case .vesper: return Balance.vesperSpeed
         case .missileTruck: return Balance.missileTruckSpeed
         case .immortal: return Balance.immortalSpeed
         case .gnasher: return Balance.gnasherSpeed
@@ -181,6 +192,7 @@ enum EnemyKind: Int, CaseIterable {
         case .heli: return Balance.heliSightRange
         case .saucer: return Balance.saucerSightRange
         case .phoenix: return Balance.phoenixSightRange
+        case .vesper: return Balance.vesperSightRange
         case .missileTruck: return Balance.missileTruckSightRange
         case .immortal: return Balance.immortalSightRange
         case .gnasher: return Balance.gnasherSightRange
@@ -199,6 +211,7 @@ enum EnemyKind: Int, CaseIterable {
         case .heli: return Balance.heliShootRange
         case .saucer: return Balance.saucerShootRange
         case .phoenix: return Balance.phoenixShootRange
+        case .vesper: return Balance.vesperShootRange
         case .missileTruck: return Balance.missileTruckShootRange
         case .immortal: return Balance.immortalShootRange
         case .gnasher: return Balance.gnasherMeleeRange
@@ -216,6 +229,7 @@ enum EnemyKind: Int, CaseIterable {
         case .heli: return Balance.heliFireCooldown
         case .saucer: return Balance.saucerFireCooldown
         case .phoenix: return Balance.phoenixFireCooldown
+        case .vesper: return Balance.vesperFireCooldown
         case .missileTruck: return Balance.missileTruckFireCooldown
         case .immortal: return Balance.immortalFireCooldown
         case .gnasher: return Balance.gnasherSwingCooldown
@@ -233,6 +247,7 @@ enum EnemyKind: Int, CaseIterable {
         case .heli: return Balance.heliBoltDamage
         case .saucer: return Balance.saucerBoltDamage
         case .phoenix: return Balance.phoenixBoltDamage
+        case .vesper: return Balance.vesperBoltDamage
         case .missileTruck: return Balance.missileTruckMissileDamage
         case .immortal: return Balance.immortalShellDamage
         case .gnasher: return 0
@@ -245,7 +260,7 @@ enum EnemyKind: Int, CaseIterable {
         case .reaver: return Balance.reaverMeleeDamage
         case .skitter: return Balance.skitterMeleeDamage
         case .gnasher: return Balance.gnasherMeleeDamage
-        case .raider, .brute, .jet, .mech, .heli, .missileTruck, .immortal, .saucer, .phoenix: return 0
+        case .raider, .brute, .jet, .mech, .heli, .missileTruck, .immortal, .saucer, .phoenix, .vesper: return 0
         }
     }
 
@@ -262,6 +277,7 @@ enum EnemyKind: Int, CaseIterable {
         case .heli: base = Balance.heliReward
         case .saucer: base = Balance.saucerReward
         case .phoenix: base = Balance.phoenixReward
+        case .vesper: base = Balance.vesperReward
         case .missileTruck: base = Balance.missileTruckReward
         case .immortal: base = Balance.immortalReward
         case .gnasher: base = Balance.gnasherReward
@@ -277,14 +293,15 @@ enum EnemyKind: Int, CaseIterable {
         case .brute: return .brute
         case .reaver: return .reaver
         case .skitter: return .skitter
-        case .jet: return .jet
-        case .mech: return .mech
-        case .heli: return .heli
-        case .missileTruck: return .missileTruck
-        case .immortal: return .immortal
-        case .saucer: return .saucer
-        case .phoenix: return .phoenix
-        case .gnasher: return .gnasher
+            case .jet: return .jet
+            case .mech: return .mech
+            case .heli: return .heli
+            case .missileTruck: return .missileTruck
+            case .immortal: return .immortal
+            case .saucer: return .saucer
+            case .phoenix: return .phoenix
+            case .vesper: return .vesper
+            case .gnasher: return .gnasher
         }
     }
 
@@ -300,6 +317,7 @@ enum EnemyKind: Int, CaseIterable {
         case .heli: return "GUNSHIP"
         case .saucer: return "SAUCER"
         case .phoenix: return "STRIKER"
+        case .vesper: return "HERALD"
         case .missileTruck: return "LAUNCHER"
         case .immortal: return "PHASE"
         case .gnasher: return "VOLATILE"
@@ -407,6 +425,7 @@ final class EnemyNode: SKSpriteNode {
             case .immortal: return .immortal
             case .saucer: return .saucer
             case .phoenix: return .phoenix
+            case .vesper: return .vesper
             case .gnasher: return .gnasher
             }
         }())
@@ -421,6 +440,7 @@ final class EnemyNode: SKSpriteNode {
         case .heli: size = CGSize(width: 120, height: 64)
         case .saucer: size = CGSize(width: 144, height: 84)
         case .phoenix: size = CGSize(width: 150, height: 88)
+        case .vesper: size = CGSize(width: 156, height: 92)
         case .missileTruck: size = CGSize(width: 128, height: 80)
         case .immortal: size = CGSize(width: 128, height: 114)
         case .gnasher: size = CGSize(width: 52, height: 72)
@@ -504,6 +524,7 @@ final class EnemyNode: SKSpriteNode {
             case .immortal: return .immortal
             case .saucer: return .saucer
             case .phoenix: return .phoenix
+            case .vesper: return .vesper
             case .gnasher: return .gnasher
             }
         }()
@@ -525,6 +546,7 @@ final class EnemyNode: SKSpriteNode {
             case .jet: return CGPoint(x: 13, y: 0)
             case .saucer: return CGPoint(x: 30, y: -22)
             case .phoenix: return CGPoint(x: 32, y: -22)
+            case .vesper: return CGPoint(x: 34, y: -24)
             case .mech: return CGPoint(x: 41, y: 19)
             case .heli: return CGPoint(x: 21, y: -20)
             // Launcher cradle in the mantlet at the very nose: the rail
@@ -605,7 +627,7 @@ final class EnemyNode: SKSpriteNode {
         // dark padded BG + thin light border + left-anchored fill that
         // drains from the right side only. Brutes wear a wider bar.
         let barW: CGFloat = kind == .brute ? 56
-            : (kind.isMech || kind == .missileTruck || kind == .immortal || kind == .saucer || kind == .phoenix ? 64 : 44)
+            : (kind.isMech || kind == .missileTruck || kind == .immortal || kind == .saucer || kind == .phoenix || kind == .vesper ? 64 : 44)
         let barH: CGFloat = 7
         // Soft + sunk: more transparent than the structure bars, and pinned
         // deep behind so the hero always covers it when passing by units.
@@ -642,6 +664,8 @@ final class EnemyNode: SKSpriteNode {
             animateSaucer(dt: dt, advancing: advancing)
         } else if kind == .phoenix {
             animatePhoenix(dt: dt, advancing: advancing)
+        } else if kind == .vesper {
+            animateVesper(dt: dt, advancing: advancing)
         } else if kind == .mech {
             animateMech(dt: dt, advancing: advancing)
         } else {
@@ -701,6 +725,20 @@ final class EnemyNode: SKSpriteNode {
         yBob = 0
         let targetTilt: CGFloat = advancing ? -0.08 : 0
         body.zRotation += (targetTilt - body.zRotation) * min(1, 8 * CGFloat(dt))
+    }
+
+    /// Vesper hover: the void-herald drifts rather than darts — the 4
+    /// wing-veil shimmer frames cycle at all times, the frame banks a touch
+    /// deeper than the phoenix in flight and levels to aim while holding
+    /// station. Slowest tilt response of the sky pack, for a looming read.
+    private func animateVesper(dt: TimeInterval, advancing: Bool) {
+        marchPhase += dt * 10
+        if frames.count == 4 {
+            bodySprite.texture = frames[Int(marchPhase) % 4]
+        }
+        yBob = 0
+        let targetTilt: CGFloat = advancing ? -0.06 : 0
+        body.zRotation += (targetTilt - body.zRotation) * min(1, 5 * CGFloat(dt))
     }
 
     /// Mech gait: the two legs run a 4-phase cycle half a cycle apart

@@ -20,14 +20,23 @@ final class BaseNode: SKNode {
     static let baseHeight: CGFloat = 210
     /// Level 20+ Mk-II HQ fortress height (~25% taller + wider footprint).
     static let upgradedBaseHeight: CGFloat = 258
+    /// Finale enemy core-fortress height (Level 35 Embral Core only): a
+    /// huge Mordor-style main-main building, ~47% taller than the Mk-II
+    /// citadel the allied HQ keeps on the same level.
+    static let finaleBaseHeight: CGFloat = 380
     /// HP bar floats just above the roof (same spot as the old bars).
     private static let hpBarY: CGFloat = 232
     private static let upgradedHPBarY: CGFloat = 280
+    private static let finaleHPBarY: CGFloat = 404
 
     let team: Team
     /// Level 20+ Mk-II refit: bigger armored citadel keep + quad-missile
     /// rooftop launcher battery.
     let upgraded: Bool
+    /// Finale refit (enemy HQ on Level 35 only): the huge Mordor
+    /// core-fortress with a 5-missile rooftop battery. The allied HQ on
+    /// the same level stays Mk-II (`upgraded`, 4 missiles).
+    let finale: Bool
     /// Which way the gate + cannon face: player looks right (+1),
     /// enemy looks left (-1) — both toward mid.
     var facing: CGFloat { team == .player ? 1 : -1 }
@@ -49,39 +58,48 @@ final class BaseNode: SKNode {
     private var muzzleFlash: CGFloat = 0 // 0..1, decays after a fan shot
     private var desiredAngle: CGFloat?   // nil = park toward mid
     private var destroyed = false
+    /// Burning Eye + crown flame flicker on the finale core-fortress.
+    private var eyeGlow: SKShapeNode?
+    private var crownFlame: SKSpriteNode?
 
     /// Rest direction: both HQs face mid (player right, enemy left).
     private var homeAngle: CGFloat { team == .player ? 0 : .pi }
 
     // MARK: - Init
 
-    init(team: Team, upgraded: Bool = false) {
+    init(team: Team, upgraded: Bool = false, finale: Bool = false) {
         self.team = team
         self.upgraded = upgraded
+        // The finale core-fortress is enemy-only: a player-side finale
+        // request still renders the Mk-II citadel (allied HQ keeps it).
+        self.finale = finale && team == .enemy
 
         let palette = BaseNode.palette(for: team)
-        let bodyTex = BaseNode.makeBodyTexture(palette: palette, upgraded: upgraded)
+        let bodyTex = BaseNode.makeBodyTexture(palette: palette, upgraded: upgraded,
+                                               finale: self.finale)
         bodyTex.filteringMode = .nearest
         bodySprite = SKSpriteNode(texture: bodyTex)
-        let targetHeight = upgraded ? BaseNode.upgradedBaseHeight : BaseNode.baseHeight
+        let targetHeight = self.finale ? BaseNode.finaleBaseHeight
+            : upgraded ? BaseNode.upgradedBaseHeight : BaseNode.baseHeight
         let bodyScale = targetHeight / bodyTex.size().height
         bodySprite.setScale(bodyScale)
         bodySprite.anchorPoint = CGPoint(x: 0.5, y: 0)
 
-        let cannonTex = BaseNode.makeCannonTexture(palette: palette, upgraded: upgraded)
+        let cannonTex = BaseNode.makeCannonTexture(palette: palette, upgraded: upgraded,
+                                                   finale: self.finale)
         cannonTex.filteringMode = .nearest
         cannonSprite = SKSpriteNode(texture: cannonTex)
         // Pivot at the breech (left of the texture); barrel points +x.
-        let breechX: CGFloat = upgraded ? 6.0 : 4.0
+        let breechX: CGFloat = self.finale ? 6.0 : upgraded ? 6.0 : 4.0
         cannonSprite.anchorPoint = CGPoint(x: breechX / cannonTex.size().width, y: 0.5)
 
         // Gate glow sits inside the arch; sized in points after scaling.
-        gateGlow = SKShapeNode(ellipseOf: CGSize(width: upgraded ? 44 : 36,
-                                                 height: upgraded ? 72 : 62))
-        gateLightL = SKShapeNode(circleOfRadius: 5)
-        gateLightR = SKShapeNode(circleOfRadius: 5)
-        beacon = SKShapeNode(circleOfRadius: upgraded ? 6 : 5)
-        teamGlow = SKShapeNode(circleOfRadius: upgraded ? 120 : 95)
+        gateGlow = SKShapeNode(ellipseOf: CGSize(width: self.finale ? 60 : upgraded ? 44 : 36,
+                                                 height: self.finale ? 100 : upgraded ? 72 : 62))
+        gateLightL = SKShapeNode(circleOfRadius: self.finale ? 7 : 5)
+        gateLightR = SKShapeNode(circleOfRadius: self.finale ? 7 : 5)
+        beacon = SKShapeNode(circleOfRadius: self.finale ? 8 : upgraded ? 6 : 5)
+        teamGlow = SKShapeNode(circleOfRadius: self.finale ? 155 : upgraded ? 120 : 95)
 
         super.init()
 
@@ -97,8 +115,8 @@ final class BaseNode: SKNode {
         addChild(teamGlow)
 
         // Wide drop shadow for 2.5D grounding (child so it leaves with the HQ).
-        let shadow = SKShapeNode(ellipseOf: CGSize(width: upgraded ? 348 : 290,
-                                                   height: upgraded ? 28 : 24))
+        let shadow = SKShapeNode(ellipseOf: CGSize(width: finale ? 470 : upgraded ? 348 : 290,
+                                                   height: finale ? 36 : upgraded ? 28 : 24))
         shadow.fillColor = SKColor(white: 0, alpha: 0.35)
         shadow.strokeColor = .clear
         shadow.position = CGPoint(x: 0, y: 6)
@@ -110,8 +128,8 @@ final class BaseNode: SKNode {
         addChild(bodySprite)
 
         // Energy glow inside the gate arch (flickers; flashes on spawn).
-        // Gate opening rows 27-38 (classic) or 33-46 (Mk-II).
-        let gateLocal = CGPoint(x: 0, y: upgraded ? 64 : 55)
+        // Gate opening rows 27-38 (classic), 33-46 (Mk-II) or 44-58 (finale).
+        let gateLocal = CGPoint(x: 0, y: finale ? 100 : upgraded ? 64 : 55)
         gateGlow.fillColor = palette.gate
         gateGlow.strokeColor = .clear
         gateGlow.alpha = 0.55
@@ -120,7 +138,7 @@ final class BaseNode: SKNode {
         addChild(gateGlow)
 
         // Gate side lamps.
-        let lampDX: CGFloat = upgraded ? 34 : 28
+        let lampDX: CGFloat = finale ? 46 : upgraded ? 34 : 28
         gateLightL.fillColor = palette.beacon
         gateLightL.strokeColor = .clear
         gateLightL.position = gateLocal + CGVector(dx: -lampDX, dy: 6)
@@ -135,28 +153,54 @@ final class BaseNode: SKNode {
         // Roof cannon / quad-missile pod on a traversing pivot (turret-style,
         // like TowerNode). Barrel points +x in texture space; the pivot steers
         // it at targets.
-        let cannonScale: CGFloat = 3.6
+        let cannonScale: CGFloat = finale ? 4.2 : 3.6
         cannonSprite.setScale(cannonScale)
         cannonSprite.position = .zero
-        cannonPivot.position = CGPoint(x: facing * (upgraded ? 24 : 20),
-                                       y: upgraded ? 208 : 170)
+        cannonPivot.position = CGPoint(x: facing * (finale ? 32 : upgraded ? 24 : 20),
+                                       y: finale ? 318 : upgraded ? 208 : 170)
         cannonPivot.zRotation = homeAngle
         cannonPivot.zPosition = 2
         cannonPivot.addChild(cannonSprite)
         addChild(cannonPivot)
 
         // Muzzle at the barrel/pod tip in texture space.
-        let muzzleTipX: CGFloat = upgraded ? 22 : 18
+        let muzzleTipX: CGFloat = finale ? 32 : upgraded ? 22 : 18
         muzzleSocket.position = CGPoint(x: muzzleTipX * cannonScale, y: 0)
         cannonPivot.addChild(muzzleSocket)
 
-        // Antenna beacon on the mast.
+        // Antenna beacon on the mast (the finale Eye replaces the mast
+        // lamp: the beacon still rides the crown as a hot ember).
         beacon.fillColor = palette.beacon
         beacon.strokeColor = .clear
-        beacon.position = CGPoint(x: upgraded ? 0 : -2,
-                                  y: upgraded ? 264 : 220)
+        beacon.position = CGPoint(x: finale ? 0 : upgraded ? 0 : -2,
+                                  y: finale ? 372 : upgraded ? 264 : 220)
         beacon.zPosition = 2
         addChild(beacon)
+
+        // Finale Burning Eye: a hot ember slit that breathes over the
+        // crown (child so it leaves with the HQ).
+        if finale {
+            let eye = SKShapeNode(ellipseOf: CGSize(width: 46, height: 20))
+            eye.fillColor = SKColor(red: 1.0, green: 0.30, blue: 0.08, alpha: 1)
+            eye.strokeColor = SKColor(red: 1.0, green: 0.65, blue: 0.15, alpha: 1)
+            eye.lineWidth = 2
+            eye.position = CGPoint(x: 0, y: 336)
+            eye.zPosition = 3
+            addChild(eye)
+            eyeGlow = eye
+            let pupil = SKShapeNode(ellipseOf: CGSize(width: 12, height: 14))
+            pupil.fillColor = SKColor(red: 0.35, green: 0.02, blue: 0.02, alpha: 1)
+            pupil.strokeColor = .clear
+            eye.addChild(pupil)
+            let flameTex = BaseNode.eyeFlameTexture()
+            flameTex.filteringMode = .nearest
+            let flame = SKSpriteNode(texture: flameTex)
+            flame.setScale(4.0)
+            flame.position = CGPoint(x: 0, y: 352)
+            flame.zPosition = 3
+            addChild(flame)
+            crownFlame = flame
+        }
 
         buildHPBar(palette: palette)
     }
@@ -165,11 +209,14 @@ final class BaseNode: SKNode {
 
     /// Static pixel-art portrait of the in-battle HQ (procedural citadel +
     /// rooftop turret). Cached for SwiftUI intel cards.
-    static func previewImage(for team: Team, upgraded: Bool = false) -> UIImage {
-        switch (team, upgraded) {
-        case (.player, false): return playerPreviewImage
-        case (.enemy, false): return enemyPreviewImage
-        case (.player, true): return playerUpgradedPreviewImage
+    static func previewImage(for team: Team, upgraded: Bool = false,
+                             finale: Bool = false) -> UIImage {
+        let fin = finale && team == .enemy
+        switch (team, upgraded, fin) {
+        case (.player, false, _): return playerPreviewImage
+        case (.enemy, false, false): return enemyPreviewImage
+        case (.enemy, _, true): return enemyFinalePreviewImage
+        case (.player, true, _): return playerUpgradedPreviewImage
         default: return enemyUpgradedPreviewImage
         }
     }
@@ -178,20 +225,26 @@ final class BaseNode: SKNode {
     private static let enemyPreviewImage = makePreviewImage(for: .enemy, upgraded: false)
     private static let playerUpgradedPreviewImage = makePreviewImage(for: .player, upgraded: true)
     private static let enemyUpgradedPreviewImage = makePreviewImage(for: .enemy, upgraded: true)
+    private static let enemyFinalePreviewImage = makePreviewImage(for: .enemy, upgraded: true,
+                                                                  finale: true)
 
-    private static func makePreviewImage(for team: Team, upgraded: Bool) -> UIImage {
+    private static func makePreviewImage(for team: Team, upgraded: Bool,
+                                         finale: Bool = false) -> UIImage {
+        let fin = finale && team == .enemy
         let palette = palette(for: team)
-        let bodyImg = UIImage(cgImage: makeBodyTexture(palette: palette, upgraded: upgraded).cgImage())
-        let cannonImg = UIImage(cgImage: makeCannonTexture(palette: palette, upgraded: upgraded).cgImage())
+        let bodyImg = UIImage(cgImage: makeBodyTexture(palette: palette, upgraded: upgraded,
+                                                       finale: fin).cgImage())
+        let cannonImg = UIImage(cgImage: makeCannonTexture(palette: palette, upgraded: upgraded,
+                                                           finale: fin).cgImage())
 
-        let baseH: CGFloat = upgraded ? upgradedBaseHeight : baseHeight
+        let baseH: CGFloat = fin ? finaleBaseHeight : upgraded ? upgradedBaseHeight : baseHeight
         let baseW = baseH * bodyImg.size.width / bodyImg.size.height
-        let cannonScale: CGFloat = 3.6
+        let cannonScale: CGFloat = fin ? 4.2 : 3.6
         let cannonW = cannonImg.size.width * cannonScale
         let cannonH = cannonImg.size.height * cannonScale
-        let breechX: CGFloat = (upgraded ? 6.0 : 4.0) / cannonImg.size.width * cannonW
-        let mountY: CGFloat = upgraded ? 208 : 170
-        let mountDX: CGFloat = (team == .player ? 1 : -1) * (upgraded ? 24 : 20)
+        let breechX: CGFloat = (fin ? 6.0 : upgraded ? 6.0 : 4.0) / cannonImg.size.width * cannonW
+        let mountY: CGFloat = fin ? 318 : upgraded ? 208 : 170
+        let mountDX: CGFloat = (team == .player ? 1 : -1) * (fin ? 32 : upgraded ? 24 : 20)
         let groundInset: CGFloat = 8
         let width = baseW + 24
         let height = baseH + groundInset + 16
@@ -225,6 +278,13 @@ final class BaseNode: SKNode {
         guard !destroyed else { return }
         phase += dt
         beacon.alpha = 0.6 + 0.4 * sin(phase * 5)
+        if let eye = eyeGlow {
+            eye.alpha = 0.75 + 0.25 * sin(phase * 3.1)
+            eye.setScale(1 + 0.06 * sin(phase * 3.1))
+        }
+        if let flame = crownFlame {
+            flame.alpha = 0.7 + 0.3 * sin(phase * 9.0)
+        }
         teamGlow.alpha = 0.17 + 0.05 * sin(phase * 5)
         gateFlash = max(0, gateFlash - dt * 2.2)
         muzzleFlash = max(0, muzzleFlash - dt * 6)
@@ -309,12 +369,15 @@ final class BaseNode: SKNode {
         gateLightL.isHidden = true
         gateLightR.isHidden = true
         beacon.isHidden = true
+        eyeGlow?.isHidden = true
+        crownFlame?.isHidden = true
         teamGlow.alpha = 0.05
         hpFill.isHidden = true
         hpBG.alpha = 0.25
         if let parent = parent {
             StructureFX.explode(at: position, in: parent, team: team,
-                                size: upgraded ? BaseNode.upgradedBaseHeight : BaseNode.baseHeight)
+                                size: finale ? BaseNode.finaleBaseHeight
+                                    : upgraded ? BaseNode.upgradedBaseHeight : BaseNode.baseHeight)
         }
         // Burn briefly, sink + fade, then remove (shadow is a child: goes too).
         run(.sequence([
@@ -330,8 +393,9 @@ final class BaseNode: SKNode {
     /// Pinned above units (z=9) but below the hero (z=10): readable
     /// through marching armies, covered only by the hero passing by.
     private func buildHPBar(palette: Palette) {
-        let w: CGFloat = upgraded ? 190 : 160, h: CGFloat = 12
-        let barY = upgraded ? BaseNode.upgradedHPBarY : BaseNode.hpBarY
+        let w: CGFloat = finale ? 250 : upgraded ? 190 : 160, h: CGFloat = finale ? 14 : 12
+        let barY = finale ? BaseNode.finaleHPBarY
+            : upgraded ? BaseNode.upgradedHPBarY : BaseNode.hpBarY
         hpBG.color = SKColor(white: 0, alpha: 0.65)
         hpBG.size = CGSize(width: w + 4, height: h + 4)
         hpBG.position = CGPoint(x: 0, y: barY)
@@ -417,7 +481,9 @@ final class BaseNode: SKNode {
     /// bannered keep, twin stepped side towers with pennants, arched
     /// spawn gate, riveted foundation. Row 0 = top.
     /// Gate arch centre x=28, opening rows 27-38.
-    private static func makeBodyTexture(palette: Palette, upgraded: Bool) -> SKTexture {
+    private static func makeBodyTexture(palette: Palette, upgraded: Bool,
+                                        finale: Bool = false) -> SKTexture {
+        if finale { return makeFinaleBodyTexture(palette: palette) }
         if upgraded { return makeUpgradedBodyTexture(palette: palette) }
         let W = 56, H = 44
         return pixelTexture(w: W, h: H) { cg in
@@ -788,9 +854,213 @@ final class BaseNode: SKNode {
         }
     }
 
+    /// 80×72 finale core-fortress (Level 35 enemy only): a huge Mordor-style
+    /// main-main building — needle spire with the Burning Eye, jagged
+    /// crown, tapering black tower with ember windows + lava seams, twin
+    /// bastion wings with war-braziers, and a grand ember spawn gate.
+    /// Row 0 = top. Gate arch centre x=40, opening rows 44-58.
+    private static func makeFinaleBodyTexture(palette: Palette) -> SKTexture {
+        let W = 80, H = 72
+        return pixelTexture(w: W, h: H) { cg in
+            let outline = UIColor(red: 0.05, green: 0.03, blue: 0.05, alpha: 1)
+            let rockD = UIColor(red: 0.12, green: 0.09, blue: 0.12, alpha: 1)
+            let rockM = UIColor(red: 0.25, green: 0.18, blue: 0.20, alpha: 1)
+            let rockL = UIColor(red: 0.48, green: 0.32, blue: 0.28, alpha: 1)
+            let dark = UIColor(red: 0.07, green: 0.06, blue: 0.10, alpha: 1)
+            let ember = UIColor(red: 1.0, green: 0.42, blue: 0.10, alpha: 1)
+            let emberHot = UIColor(red: 1.0, green: 0.75, blue: 0.25, alpha: 1)
+            let blood = UIColor(red: 0.65, green: 0.08, blue: 0.06, alpha: 1)
+            let bloodDk = UIColor(red: 0.35, green: 0.05, blue: 0.05, alpha: 1)
+            let gateDark = UIColor(red: 0.04, green: 0.05, blue: 0.08, alpha: 1)
+            let gold = UIColor(red: 0.92, green: 0.78, blue: 0.36, alpha: 1)
+
+            // Silhouette spans per row: needle spire (0-7), crown (8-12),
+            // tapering black tower (13-59), bastion wings (17+), grand base.
+            func spans(at row: Int) -> [(Int, Int)] {
+                switch row {
+                case 0: return [(39, 40)]
+                case 1: return [(38, 41)]
+                case 2: return [(36, 43)]
+                case 3..<7: return [(35, 44)]
+                case 7: return [(33, 46)]
+                case 8: return [(29, 50)]
+                case 9: return [(27, 52)]
+                case 10: return [(29, 50)]
+                case 11: return [(28, 51)]
+                case 12: return [(28, 51)]
+                case 13..<17: return [(28, 51)]
+                case 17: return [(24, 25), (28, 51), (54, 55)]
+                case 18: return [(23, 26), (28, 51), (53, 56)]
+                case 19: return [(22, 27), (28, 51), (52, 57)]
+                case 20: return [(21, 28), (28, 51), (51, 58)]
+                case 21, 22: return [(20, 29), (28, 51), (50, 59)]
+                case 23: return [(12, 17), (20, 29), (28, 51), (50, 59), (62, 67)]
+                case 24: return [(10, 17), (20, 29), (28, 51), (50, 59), (62, 69)]
+                case 25..<44: return [(8, 29), (28, 51), (50, 71)]
+                case 44..<60: return [(6, 31), (28, 51), (48, 73)]
+                case 60..<70: return [(3, 76)]
+                case 70: return [(1, 78)]
+                case 71: return [(0, 79)]
+                default: return []
+                }
+            }
+
+            for row in 0..<H {
+                for (x0, x1) in spans(at: row) {
+                    fill(cg, x: x0, y: row, w: x1 - x0 + 1, h: 1, color: outline)
+                    let innerW = x1 - x0 - 1
+                    if innerW > 0 {
+                        fill(cg, x: x0 + 1, y: row, w: min(3, innerW), h: 1, color: rockL)
+                        fill(cg, x: x0 + 4, y: row, w: max(0, innerW - 6), h: 1, color: rockM)
+                        fill(cg, x: max(x0 + 1, x1 - 2), y: row, w: min(2, innerW), h: 1, color: rockD)
+                    }
+                }
+            }
+
+            // Needle spire: dark needle with ember tip.
+            fill(cg, x: 39, y: 0, w: 2, h: 2, color: emberHot)
+            fill(cg, x: 38, y: 2, w: 4, h: 1, color: dark)
+
+            // Burning Eye housing (rows 3-6): ember slit + dark pupil.
+            fill(cg, x: 35, y: 3, w: 10, h: 4, color: dark)
+            fill(cg, x: 36, y: 4, w: 8, h: 2, color: ember)
+            fill(cg, x: 37, y: 4, w: 6, h: 1, color: emberHot)
+            fill(cg, x: 39, y: 4, w: 2, h: 2, color: UIColor(red: 0.35, green: 0.02, blue: 0.02, alpha: 1))
+            fill(cg, x: 33, y: 7, w: 14, h: 1, color: palette.trimDark)
+            fill(cg, x: 34, y: 7, w: 12, h: 1, color: blood)
+
+            // Jagged crown teeth (row 9): alternating fangs.
+            for (tx, tall) in [(27, 1), (31, 2), (35, 1), (39, 2), (43, 1), (47, 2), (51, 1)] {
+                fill(cg, x: tx, y: tall == 2 ? 8 : 9, w: 2, h: tall, color: rockL)
+                fill(cg, x: tx, y: 8, w: 1, h: 1, color: emberHot)
+            }
+            // Crown war-band with skull studs.
+            fill(cg, x: 28, y: 11, w: 24, h: 2, color: bloodDk)
+            fill(cg, x: 28, y: 11, w: 24, h: 1, color: blood)
+            for sx in stride(from: 30, to: 51, by: 5) {
+                fill(cg, x: sx, y: 11, w: 2, h: 1, color: emberHot)
+            }
+
+            // Tower lava seams: vertical ember cracks down the black rock.
+            for sx in [32, 40, 47] {
+                for sy in stride(from: 15, to: 42, by: 4) {
+                    fill(cg, x: sx, y: sy, w: 1, h: 3, color: ember)
+                    fill(cg, x: sx, y: sy, w: 1, h: 1, color: emberHot)
+                }
+            }
+            // Ember window slits flanking the seams.
+            for (wx, wy) in [(30, 18), (48, 18), (30, 30), (48, 30), (30, 40), (48, 40)] {
+                fill(cg, x: wx, y: wy, w: 2, h: 4, color: outline)
+                fill(cg, x: wx, y: wy + 1, w: 2, h: 2, color: ember)
+                fill(cg, x: wx, y: wy + 1, w: 2, h: 1, color: emberHot)
+            }
+            // Horizontal armor rings on the tower.
+            for row in [24, 33, 41] {
+                fill(cg, x: 29, y: row, w: 22, h: 1, color: dark)
+                for rx in stride(from: 31, to: 50, by: 5) {
+                    fill(cg, x: rx, y: row + 1, w: 1, h: 1, color: rockL)
+                }
+            }
+
+            // Bastion wings: stepped roofs, gold fangs, pennants, braziers.
+            for (tx0, tx1) in [(24, 25), (54, 55)] {
+                fill(cg, x: tx0, y: 17, w: tx1 - tx0 + 1, h: 1, color: gold)
+            }
+            for (tx0, tx1) in [(23, 26), (53, 56)] {
+                fill(cg, x: tx0, y: 18, w: tx1 - tx0 + 1, h: 1, color: blood)
+            }
+            for (tx0, tx1) in [(22, 27), (52, 57)] {
+                fill(cg, x: tx0, y: 19, w: tx1 - tx0 + 1, h: 1, color: bloodDk)
+            }
+            for bx in [20, 50] {
+                fill(cg, x: bx, y: 21, w: 10, h: 1, color: rockL)
+                fill(cg, x: bx, y: 22, w: 10, h: 1, color: blood)
+                for cx in [bx + 2, bx + 5, bx + 8] {
+                    fill(cg, x: cx, y: 21, w: 1, h: 1, color: dark)
+                }
+                // Wing brazier flames burning on the bastions.
+                fill(cg, x: bx + 4, y: 25, w: 3, h: 4, color: ember)
+                fill(cg, x: bx + 4, y: 25, w: 3, h: 1, color: emberHot)
+            }
+            // Outer sponson war-frieze + hazard roots.
+            for sx in [8, 62] {
+                fill(cg, x: sx, y: 27, w: 9, h: 2, color: blood)
+                fill(cg, x: sx, y: 29, w: 9, h: 1, color: bloodDk)
+            }
+            // Flying war pennants on the bastion peaks.
+            fill(cg, x: 24, y: 13, w: 1, h: 4, color: dark)
+            fill(cg, x: 18, y: 13, w: 6, h: 1, color: blood)
+            fill(cg, x: 19, y: 14, w: 5, h: 1, color: bloodDk)
+            fill(cg, x: 55, y: 13, w: 1, h: 4, color: dark)
+            fill(cg, x: 56, y: 13, w: 6, h: 1, color: blood)
+            fill(cg, x: 56, y: 14, w: 5, h: 1, color: bloodDk)
+
+            // Grand ember spawn gate (centre x=40, rows 44-58).
+            fill(cg, x: 34, y: 43, w: 13, h: 16, color: outline)
+            fill(cg, x: 35, y: 44, w: 11, h: 15, color: gateDark)
+            fill(cg, x: 36, y: 45, w: 9, h: 13, color: bloodDk)
+            fill(cg, x: 37, y: 46, w: 7, h: 11, color: ember)
+            fill(cg, x: 38, y: 47, w: 5, h: 9, color: emberHot)
+            fill(cg, x: 39, y: 48, w: 3, h: 7, color: .white.withAlphaComponent(0.85))
+            for gx in 35..<46 {
+                fill(cg, x: gx, y: 44, w: 1, h: 2, color: dark)
+                fill(cg, x: gx, y: 57, w: 1, h: 2, color: dark)
+            }
+            // Blast pillars flanking the gate.
+            fill(cg, x: 32, y: 43, w: 2, h: 16, color: rockL)
+            fill(cg, x: 46, y: 43, w: 2, h: 16, color: rockD)
+            // Fanged lintel above the gate.
+            var hx = 32
+            var flip = false
+            while hx < 48 {
+                fill(cg, x: hx, y: 41, w: 2, h: 2, color: flip ? ember : dark)
+                hx += 2
+                flip.toggle()
+            }
+            fill(cg, x: 39, y: 40, w: 2, h: 1, color: gold)
+
+            // Massive fused foundation (rows 60-71) with ember channel.
+            fill(cg, x: 3, y: 60, w: 74, h: 1, color: rockL)
+            fill(cg, x: 3, y: 61, w: 74, h: 2, color: rockD)
+            for ex in stride(from: 6, to: 74, by: 8) {
+                fill(cg, x: ex, y: 63, w: 4, h: 1, color: ember)
+                fill(cg, x: ex, y: 63, w: 1, h: 1, color: emberHot)
+            }
+            fill(cg, x: 3, y: 64, w: 74, h: 5, color: rockD)
+            var fhx = 5
+            var fFlip = false
+            while fhx < 75 {
+                fill(cg, x: fhx, y: 69, w: 2, h: 1, color: fFlip ? ember : dark)
+                fhx += 2
+                fFlip.toggle()
+            }
+            fill(cg, x: 1, y: 70, w: 78, h: 1, color: rockD)
+            fill(cg, x: 0, y: 71, w: 80, h: 1, color: outline)
+            for rx in stride(from: 6, to: 75, by: 7) {
+                fill(cg, x: rx, y: 61, w: 1, h: 1, color: rockL)
+                fill(cg, x: rx, y: 65, w: 1, h: 1, color: rockL)
+            }
+            _ = W
+        }
+    }
+
+    /// 6×6 crown-flame sprite for the finale Eye beacon.
+    private static func eyeFlameTexture() -> SKTexture {
+        pixelTexture(w: 6, h: 6) { cg in
+            let ember = UIColor(red: 1.0, green: 0.45, blue: 0.10, alpha: 1)
+            let hot = UIColor(red: 1.0, green: 0.80, blue: 0.30, alpha: 1)
+            fill(cg, x: 2, y: 0, w: 2, h: 6, color: ember)
+            fill(cg, x: 2, y: 0, w: 2, h: 2, color: hot)
+            fill(cg, x: 1, y: 3, w: 4, h: 2, color: ember)
+            fill(cg, x: 0, y: 4, w: 6, h: 1, color: hot)
+        }
+    }
+
     /// 22×8 roof cannon (or 28×16 quad-missile pod on Mk-II HQs), barrel
     /// pointing +x.
-    private static func makeCannonTexture(palette: Palette, upgraded: Bool) -> SKTexture {
+    private static func makeCannonTexture(palette: Palette, upgraded: Bool,
+                                          finale: Bool = false) -> SKTexture {
+        if finale { return makeFinaleCannonTexture(palette: palette) }
         if upgraded { return makeUpgradedCannonTexture(palette: palette) }
         let W = 22, H = 8
         return pixelTexture(w: W, h: H) { cg in
@@ -865,6 +1135,50 @@ final class BaseNode: SKNode {
             // Rear exhaust vents.
             fill(cg, x: 0, y: 4, w: 3, h: 2, color: metalD)
             fill(cg, x: 0, y: 10, w: 3, h: 2, color: metalD)
+            _ = W
+        }
+    }
+
+    /// 34×20 finale 5-missile launcher battery, pointing +x. Five stacked
+    /// rocket tubes ride out of an armored ember-trimmed housing — one
+    /// glowing warhead tip per tube, five in a vertical row.
+    private static func makeFinaleCannonTexture(palette: Palette) -> SKTexture {
+        let W = 34, H = 20
+        return pixelTexture(w: W, h: H) { cg in
+            let outline = UIColor(red: 0.06, green: 0.04, blue: 0.06, alpha: 1)
+            let metalD = UIColor(red: 0.14, green: 0.14, blue: 0.20, alpha: 1)
+            let metalM = UIColor(red: 0.38, green: 0.40, blue: 0.50, alpha: 1)
+            let metalL = UIColor(red: 0.70, green: 0.74, blue: 0.83, alpha: 1)
+            let barrelD = UIColor(red: 0.09, green: 0.09, blue: 0.13, alpha: 1)
+            let warhead = UIColor(red: 1.0, green: 0.48, blue: 0.16, alpha: 1)
+            let warheadHot = UIColor(red: 1.0, green: 0.78, blue: 0.28, alpha: 1)
+
+            // Armored breech housing: x 2..12, y 1..18.
+            fill(cg, x: 2, y: 1, w: 11, h: 18, color: outline)
+            fill(cg, x: 3, y: 2, w: 9, h: 16, color: metalM)
+            fill(cg, x: 3, y: 2, w: 9, h: 1, color: metalL)
+            fill(cg, x: 3, y: 17, w: 9, h: 1, color: metalD)
+            fill(cg, x: 4, y: 4, w: 3, h: 12, color: palette.trim)
+            fill(cg, x: 4, y: 4, w: 3, h: 1, color: .white.withAlphaComponent(0.65))
+            fill(cg, x: 8, y: 9, w: 2, h: 2, color: .white)
+            // Ember crown rail over the housing.
+            fill(cg, x: 2, y: 0, w: 11, h: 1, color: warhead)
+            fill(cg, x: 4, y: 0, w: 2, h: 1, color: warheadHot)
+
+            // Five stacked tubes, one warhead tip each (rows 2/5/8/11/14).
+            for tubeY in [2, 5, 8, 11, 14] {
+                fill(cg, x: 12, y: tubeY, w: 20, h: 3, color: outline)
+                fill(cg, x: 13, y: tubeY + 1, w: 18, h: 1, color: metalD)
+                fill(cg, x: 13, y: tubeY, w: 18, h: 1, color: metalL)
+                fill(cg, x: 15, y: tubeY, w: 3, h: 3, color: palette.trimDark)
+                // Tube mouth + glowing warhead tip at x=30..31.
+                fill(cg, x: 30, y: tubeY, w: 2, h: 3, color: barrelD)
+                fill(cg, x: 30, y: tubeY + 1, w: 2, h: 1, color: warhead)
+                fill(cg, x: 31, y: tubeY + 1, w: 1, h: 1, color: warheadHot)
+            }
+            // Rear exhaust vents.
+            fill(cg, x: 0, y: 5, w: 3, h: 2, color: metalD)
+            fill(cg, x: 0, y: 12, w: 3, h: 2, color: metalD)
             _ = W
         }
     }

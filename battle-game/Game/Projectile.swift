@@ -39,6 +39,8 @@ struct Projectile {
     /// Detonation burst on contact (missiles): the explosion is visual,
     /// the contact damage still comes from the normal hit.
     var contactBlast: CGFloat = 0
+    /// Which splash FX the contact blast renders (see BlastFX).
+    var blastFX: BlastFX = .saucer
     /// Flight trail artifact.
     var trail: TrailKind = .none
     var trailAcc: TimeInterval = 0
@@ -49,6 +51,13 @@ enum TrailKind {
     case none
     case smoke
     case ember
+}
+
+/// Splash-blast FX family for contact-blast rounds. Saucer blue-plasma
+/// is the default hostile splash; the Vesper herald burns violet.
+enum BlastFX {
+    case saucer
+    case vesper
 }
 
 enum ProjectileFactory {
@@ -1000,6 +1009,56 @@ enum ProjectileFactory {
         return root
     }
 
+    /// Vesper void-shard: chunky pixel-art violet splinter — hot
+    /// lavender-white core, saturated magenta mid-shell, deep-violet rim,
+    /// plus a violet halo and 2 trailing spark squares. Flies nose-first
+    /// (scene sets zRotation) with a lateral weave; the core pulses
+    /// slower than the phoenix's, for a looming read.
+    static func makeVesperShard() -> SKNode {
+        let root = SKNode()
+        root.zPosition = 15
+        // Violet halo (reads at range, above the lane).
+        let halo = SKShapeNode(ellipseOf: CGSize(width: 30, height: 19))
+        halo.fillColor = SKColor(red: 0.62, green: 0.30, blue: 1.0, alpha: 0.30)
+        halo.strokeColor = .clear
+        root.addChild(halo)
+        // Deep-violet rim (slim pixel splinter, slightly longer than wide).
+        let rim = SKShapeNode(rectOf: CGSize(width: 22, height: 10), cornerRadius: 2)
+        rim.fillColor = SKColor(red: 0.30, green: 0.10, blue: 0.52, alpha: 1)
+        rim.strokeColor = SKColor(red: 0.16, green: 0.05, blue: 0.30, alpha: 1)
+        rim.lineWidth = 2
+        root.addChild(rim)
+        // Saturated magenta mid-shell.
+        let mid = SKShapeNode(rectOf: CGSize(width: 16, height: 8), cornerRadius: 2)
+        mid.fillColor = SKColor(red: 0.68, green: 0.30, blue: 1.0, alpha: 1)
+        mid.strokeColor = .clear
+        mid.position = CGPoint(x: 1, y: 0)
+        root.addChild(mid)
+        // Hot lavender-white core.
+        let core = SKShapeNode(rectOf: CGSize(width: 9, height: 5), cornerRadius: 1)
+        core.fillColor = SKColor(red: 0.93, green: 0.86, blue: 1.0, alpha: 1)
+        core.strokeColor = .clear
+        core.position = CGPoint(x: 2, y: 0)
+        root.addChild(core)
+        core.run(.repeatForever(.sequence([
+            .fadeAlpha(to: 0.55, duration: 0.14),
+            .fadeAlpha(to: 1.0, duration: 0.14),
+        ])))
+        // Trailing spark squares (pixel-art exhaust).
+        for i in 0..<2 {
+            let spark = SKShapeNode(rectOf: CGSize(width: 5, height: 5))
+            spark.fillColor = SKColor(red: 0.72, green: 0.42, blue: 1.0, alpha: 0.9)
+            spark.strokeColor = .clear
+            spark.position = CGPoint(x: -12 - CGFloat(i) * 7, y: i == 0 ? 2 : -2)
+            root.addChild(spark)
+            spark.run(.repeatForever(.sequence([
+                .fadeAlpha(to: 0.25, duration: 0.16),
+                .fadeAlpha(to: 0.9, duration: 0.16),
+            ])))
+        }
+        return root
+    }
+
     /// Saucer splash boom: red-plasma detonation — hot core flash, red
     /// fireballs, crackling spark squares + a pale shockwave ring.
     /// Self-removes (~0.6s).
@@ -1046,6 +1105,64 @@ enum ProjectileFactory {
         let ring = SKShapeNode(circleOfRadius: radius * 0.9)
         ring.fillColor = .clear
         ring.strokeColor = SKColor(red: 1.0, green: 0.55, blue: 0.4, alpha: 0.85)
+        ring.lineWidth = 3
+        ring.setScale(0.3)
+        root.addChild(ring)
+        ring.run(.sequence([
+            .group([.scale(to: 1.0, duration: 0.35),
+                    .fadeOut(withDuration: 0.35)]),
+            .removeFromParent(),
+        ]))
+        root.run(.sequence([.wait(forDuration: 0.6), .removeFromParent()]))
+        return root
+    }
+
+    /// Vesper splash boom: void-shard detonation — violet core flash,
+    /// magenta fireballs, crackling spark squares + a pale shockwave ring.
+    /// Self-removes (~0.6s).
+    static func makeVesperBlast(radius: CGFloat) -> SKNode {
+        let root = SKNode()
+        guard GameSettings.particlesEnabled else {
+            root.run(.sequence([.wait(forDuration: 0.01), .removeFromParent()]))
+            return root
+        }
+        root.zPosition = 16
+        let puff = SKShapeNode(circleOfRadius: radius * 0.35)
+        puff.fillColor = SKColor(red: 0.62, green: 0.32, blue: 1.0, alpha: 0.95)
+        puff.strokeColor = .clear
+        root.addChild(puff)
+        puff.run(.sequence([
+            .group([.scale(to: 2.2, duration: 0.3),
+                    .fadeOut(withDuration: 0.3)]),
+            .removeFromParent(),
+        ]))
+        let flash = SKShapeNode(circleOfRadius: radius * 0.25)
+        flash.fillColor = SKColor(red: 0.93, green: 0.86, blue: 1.0, alpha: 1)
+        flash.strokeColor = .clear
+        root.addChild(flash)
+        flash.run(.sequence([
+            .group([.scale(to: 0.2, duration: 0.15),
+                    .fadeOut(withDuration: 0.15)]),
+            .removeFromParent(),
+        ]))
+        for i in 0..<fxCount(4) {
+            let spark = SKShapeNode(rectOf: CGSize(width: 6, height: 6))
+            spark.fillColor = SKColor(red: 0.68 + CGFloat(i) * 0.06, green: 0.40, blue: 1.0, alpha: 1)
+            spark.strokeColor = .clear
+            spark.position = .zero
+            spark.zRotation = CGFloat(i) * 0.7
+            root.addChild(spark)
+            let a = CGFloat(i) * .pi / 2 + 0.4
+            spark.run(.sequence([
+                .group([.moveBy(x: cos(a) * radius * 0.8, y: sin(a) * radius * 0.6, duration: 0.32),
+                        .rotate(byAngle: 1.2, duration: 0.32),
+                        .fadeOut(withDuration: 0.32)]),
+                .removeFromParent(),
+            ]))
+        }
+        let ring = SKShapeNode(circleOfRadius: radius * 0.9)
+        ring.fillColor = .clear
+        ring.strokeColor = SKColor(red: 0.72, green: 0.48, blue: 1.0, alpha: 0.85)
         ring.lineWidth = 3
         ring.setScale(0.3)
         root.addChild(ring)

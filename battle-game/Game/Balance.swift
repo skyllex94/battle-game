@@ -155,6 +155,11 @@ enum Balance {
         /// above even the saucers and holds station to loose 3-round
         /// red-plasma bursts.
         var phoenixEvery: Int = 0
+        /// Every Nth summon drifts in a Vesper herald (0 = never shows).
+        /// Slow violet void-glider debuting in Level 34: cruises above
+        /// everything hostile and holds station to loose a 3-shard fan of
+        /// weaving void splinters with a small splash.
+        var vesperEvery: Int = 0
         /// DEV playground (Level 999): tiny arena, one player tower, no
         /// enemy tower, and the enemy gate releases only the unit under
         /// inspection. The PLAYGROUND button on the briefing screen is
@@ -246,6 +251,25 @@ enum Balance {
         /// (see LevelDressing.buildShadowRift).
         var shadowRift: Bool = false
 
+        /// Dread Hollow ground (Level 33): small pixel-art whispers baked
+        /// into the ash field — jagged hollow spires with hanging enemy
+        /// war banners, hollow-edge obsidian teeth and ember braziers
+        /// (see LevelDressing.buildDreadHollow).
+        var dreadHollow: Bool = false
+
+        /// Obsidian Gate ground (Level 34): small pixel-art whispers baked
+        /// into the ash field — towering obsidian monoliths, violet void
+        /// veins bleeding between the slabs, pale shackle-rings and tall
+        /// void-braziers burning violet
+        /// (see LevelDressing.buildObsidianGate).
+        var obsidianGate: Bool = false
+
+        /// Embral Core ground (Level 35, finale): small pixel-art whispers
+        /// baked into the ash field — fused obsidian + ember core shards,
+        /// burning core veins, chained core rings and tall twin-flame
+        /// core-braziers (see LevelDressing.buildEmbralCore).
+        var embralCore: Bool = false
+
         /// The enemy kinds this level can actually summon, in roster order.
         /// Briefings use this instead of campaign unlock levels, so a level
         /// that disables a unit (e.g. Level 13 has no Reavers) doesn't list it.
@@ -261,6 +285,7 @@ enum Balance {
             if immortalEvery > 0 { kinds.append(.immortal) }
             if saucerEvery > 0 { kinds.append(.saucer) }
             if phoenixEvery > 0 { kinds.append(.phoenix) }
+            if vesperEvery > 0 { kinds.append(.vesper) }
             if !extraGnasherSummons.isEmpty { kinds.append(.gnasher) }
             return kinds
         }
@@ -362,6 +387,9 @@ enum Balance {
         case 30: return layout30
         case 31: return layout31
         case 32: return layout32
+        case 33: return layout33
+        case 34: return layout34
+        case 35: return layout35
         default: return layout1
         }
     }
@@ -409,6 +437,12 @@ enum Balance {
     static var cinderGate: Bool { active.cinderGate }
     /// Shadowrift ash ground (Level 32): burning rift scar + black bridge.
     static var shadowRift: Bool { active.shadowRift }
+    /// Dread Hollow ash ground (Level 33): banner-spires + hollow teeth.
+    static var dreadHollow: Bool { active.dreadHollow }
+    /// Obsidian Gate ash ground (Level 34): monoliths + void veins.
+    static var obsidianGate: Bool { active.obsidianGate }
+    /// Embral Core ash ground (Level 35, finale): fused core shards + veins.
+    static var embralCore: Bool { active.embralCore }
     static var groundTopY: CGFloat = 120        // y of the walkable surface
     /// True on desert themes (dune sand + sand dressing; Levels 7-13).
     static var dunes: Bool {
@@ -561,6 +595,21 @@ enum Balance {
     static let baseMissileSpread: CGFloat = 0.11
     static let baseMissileWeaveAmp: CGFloat = 36
     static let baseMissileWeaveFreq: Double = 6.0
+    /// Finale enemy HQ (Level 35 Embral Core only): the huge Mordor
+    /// main-main building answers every push with a 5-missile salvo.
+    /// The allied HQ on the same level keeps the Mk-II 4-missile battery.
+    static let finaleBaseLevel = 35
+    static let baseMissileCountFinale = 5
+    /// True when a team's HQ renders + fires as the finale core-fortress:
+    /// enemy HQ on Level 35 only (the allied HQ stays Mk-II).
+    static func isFinaleBase(levelId: Int, team: Team) -> Bool {
+        levelId == finaleBaseLevel && team == .enemy && levelId != playgroundLevelId
+    }
+    /// Missiles per HQ volley on a level/team (5 on the finale enemy HQ,
+    /// 4 on every other Mk-II HQ).
+    static func baseMissileCount(forLevel levelId: Int, team: Team) -> Int {
+        isFinaleBase(levelId: levelId, team: team) ? baseMissileCountFinale : baseMissileCount
+    }
 
     // MARK: - Summoned enemies (march on the enemy base's side toward your base)
     // Per-level via the layout table (L1: single every 8s, cap 6 — untouched).
@@ -592,6 +641,8 @@ enum Balance {
     static var saucerEvery: Int { active.saucerEvery }
     /// Every Nth summon is a Phoenix strike-fighter (0 = never).
     static var phoenixEvery: Int { active.phoenixEvery }
+    /// Every Nth summon is a Vesper herald (0 = never).
+    static var vesperEvery: Int { active.vesperEvery }
     static let firstSummonDelay: Double = 5.0
     /// Raider (the classic marcher — Levels 1+). Base 40; Level 5+ scales
     /// via the layout's enemyHPScale (L5 = ×1.05, L6 = ×1.1025).
@@ -765,6 +816,33 @@ enum Balance {
     static let phoenixBoltSpeed: CGFloat = 740
     /// Red-plasma splash: small AoE around each phoenix impact (px radius).
     static let phoenixBlast: CGFloat = 60
+    /// Vesper (violet void-herald — Level 34+): a slow crescent-winged
+    /// glider wreathed in void-light — tall violet wing-sails, a hanging
+    /// shard-caster fork, trailing wisps. It cruises above everything
+    /// hostile yet (above the phoenixes) and holds station to loose a
+    /// 3-shard FAN of weaving void splinters with a small splash. The only
+    /// hostile that sprays a spread instead of a straight burst: sidestep
+    /// one shard and the next still tracks the lane. Slow, tanky,
+    /// far-reaching. Base 400, scaled — it pays a premium as the Level 34
+    /// sky terror.
+    static var vesperHP: CGFloat { 400 * active.enemyHPScale }
+    static let vesperSpeed: CGFloat = 115
+    static let vesperReward: Int = 375
+    static let vesperSightRange: CGFloat = 780
+    static let vesperShootRange: CGFloat = 520
+    static let vesperFireCooldown: Double = 2.6
+    static let vesperBoltDamage: CGFloat = 12
+    static let vesperHoverHeight: CGFloat = 295  // above the phoenixes (260)
+    static let vesperBurstCount: Int = 3
+    static let vesperBurstGap: Double = 0.14
+    static let vesperBoltSpeed: CGFloat = 620
+    /// Fan spread between shards in one volley (radians, ~8° apart).
+    static let vesperFanSpread: CGFloat = 0.14
+    /// Void-shard weave: lateral snake perpendicular to the flight line.
+    static let vesperWeaveAmp: CGFloat = 30
+    static let vesperWeaveFreq: Double = 5.0
+    /// Void-splash: small AoE around each vesper impact (px radius).
+    static let vesperBlast: CGFloat = 55
     /// Gnasher (pale volatile rusher — Level 27): fast melee crawler off
     /// the abyss floor. Chops hard up close and detonates when killed —
     /// clear it at range or eat the burst. Base 120, scaled.
@@ -942,8 +1020,8 @@ enum Balance {
     static let revrentSpeed: CGFloat = 100
     static let revrentDamage: CGFloat = 14
     static let revrentFireCooldown: Double = 2.4
-    static let revrentRange: CGFloat = 620
-    static let revrentSightRange: CGFloat = 860
+    static let revrentRange: CGFloat = 750
+    static let revrentSightRange: CGFloat = 950
     static let revrentHoverHeight: CGFloat = 235  // above the tempest (205)
     /// Interceptors in the ring (always 5).
     static let revrentDroneCount = 5
@@ -957,8 +1035,8 @@ enum Balance {
     static let revrentInterceptorHP: CGFloat = 80
     static let revrentInterceptorDamage: CGFloat = 12
     static let revrentInterceptorFireCooldown: Double = 1.1
-    static let revrentInterceptorRange: CGFloat = 440
-    static let revrentInterceptorSight: CGFloat = 700
+    static let revrentInterceptorRange: CGFloat = 520
+    static let revrentInterceptorSight: CGFloat = 800
     static let revrentInterceptorSpeed: CGFloat = 280
     static let revrentBuildTime: Double = 5.0
     /// How far ahead of the carrier the deployed screen flies (pts).

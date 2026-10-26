@@ -9,7 +9,7 @@ import UIKit
 /// advancing for a scuttling march cycle.
 enum UnitPixelArt {
 
-    enum Kind { case trooper, heavy, ranger, truck, bombard, tank, gunship, storm, enemy, brute, reaver, skitter, gnasher, jet, mech, heli, missileTruck, immortal, saucer, phoenix, tempest, revrent }
+    enum Kind { case trooper, heavy, ranger, truck, bombard, tank, gunship, storm, enemy, brute, reaver, skitter, gnasher, jet, mech, heli, missileTruck, immortal, saucer, phoenix, vesper, tempest, revrent }
 
     /// Walk frames for a kind: full 4-step stride
     /// (contact -> support -> toe-off -> swing). Generated once, shared.
@@ -40,6 +40,7 @@ enum UnitPixelArt {
         case .immortal: made = (0...3).map { immortal(pose: $0) }
         case .saucer: made = (0...3).map { saucer(pose: $0) }
         case .phoenix: made = (0...3).map { phoenix(pose: $0) }
+        case .vesper: made = (0...3).map { vesper(pose: $0) }
         case .tempest: made = (0...3).map { tempest(pose: $0) }
         case .revrent: made = (0...3).map { revrent(pose: $0) }
         }
@@ -406,6 +407,36 @@ enum UnitPixelArt {
             portraitCache[kind] = portrait
             return portrait
         }
+        // Vesper portrait: the whole violet herald scaled to fit
+        // the card with the shard-caster raised off the keel mount.
+        if kind == .vesper {
+            _ = frames(for: kind)
+            _ = armTexture(for: kind)
+            guard let body = imageCache["body-vesper-0"],
+                  let arm = imageCache["arm-vesper"] else { return UIImage() }
+            let m = armMetrics(for: kind)
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            format.opaque = false
+            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
+                                                   format: format).image { ctx in
+                let cg = ctx.cgContext
+                // Body canvas is 64x36: shrink so the raised caster fits.
+                let s: CGFloat = 0.48
+                let bw = 64 * s, bh = 36 * s
+                let x0 = (36 - bw) / 2, y0 = (24 - bh) / 2
+                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+                // Caster pivots on the keel mount, breaking the frame.
+                cg.saveGState()
+                cg.translateBy(x: x0 + 42 * s, y: y0 + 27 * s)
+                cg.rotate(by: -0.5)
+                let aw = CGFloat(m.w) * s, ah = CGFloat(m.h) * s
+                arm.draw(in: CGRect(x: -aw * 0.21, y: -ah / 2, width: aw, height: ah))
+                cg.restoreGState()
+            }
+            portraitCache[kind] = portrait
+            return portrait
+        }
         // Tempest portrait: the whole artillery frame scaled to fit
         // the card with the twin arc lances raised off the chin mount.
         if kind == .tempest {
@@ -529,6 +560,9 @@ enum UnitPixelArt {
             shoulder = CGPoint(x: 14, y: 15)
         case .phoenix:
             bodyKey = "body-phoenix-0"; armKey = "arm-phoenix"
+            shoulder = CGPoint(x: 14, y: 15)
+        case .vesper:
+            bodyKey = "body-vesper-0"; armKey = "arm-vesper"
             shoulder = CGPoint(x: 14, y: 15)
         case .tempest:
             bodyKey = "body-tempest-0"; armKey = "arm-tempest"
@@ -2188,6 +2222,8 @@ enum UnitPixelArt {
             return ArmMetrics(w: 24, h: 12, gripX: 5, tipX: 21)
         case .phoenix:
             return ArmMetrics(w: 24, h: 12, gripX: 5, tipX: 21)
+        case .vesper:
+            return ArmMetrics(w: 24, h: 12, gripX: 5, tipX: 21)
         default:
             return ArmMetrics(w: armW, h: armH, gripX: armGripX, tipX: armTipX)
         }
@@ -2217,6 +2253,7 @@ enum UnitPixelArt {
         case .immortal: return immortalArm()
         case .saucer: return saucerArm()
         case .phoenix: return phoenixArm()
+        case .vesper: return vesperArm()
         case .tempest: return tempestArm()
         case .revrent: return revrentArm()
         }
@@ -2980,6 +3017,146 @@ enum UnitPixelArt {
             fill(cg, x: 19, y: 2, w: 3, h: 8, O)
             fill(cg, x: 20, y: 3, w: 1, h: 6, plasma)
             fill(cg, x: 20, y: 5, w: 1, h: 2, plasmaHi)
+        }
+    }
+
+    // MARK: - Vesper (Level 34 violet void-herald)
+
+    /// Slow void-herald glider (64x36), side view facing +x: a deep-violet
+    /// crescent hull between twin translucent wing-veils sweeping up-back
+    /// and down-back, a pale hollow eye slit on the prow rim, a hanging
+    /// shard-caster fork slung below the keel with a crackling void thread,
+    /// and wisp trails bleeding off the stern. All violet: dusk plates,
+    /// magenta-lit leading edges, pale-lavender cores. The 4 poses bob the
+    /// frame and flicker the eye + veils + thread so the looming hover
+    /// reads in motion. The aimable shard-caster lives in vesperArm();
+    /// the pivot sits at canvas (42, 27), on the keel mount.
+    private static func vesper(pose: Int) -> SKTexture {
+        canvas(w: 64, h: 36, key: "body-vesper-\(pose)") { cg in
+            let hull = UIColor(red: 0.30, green: 0.12, blue: 0.48, alpha: 1)
+            let hullHi = UIColor(red: 0.72, green: 0.38, blue: 1.0, alpha: 1)
+            let hullLt = UIColor(red: 0.88, green: 0.62, blue: 1.0, alpha: 1)
+            let hullD = UIColor(red: 0.16, green: 0.06, blue: 0.30, alpha: 1)
+            let hullDk = UIColor(red: 0.08, green: 0.03, blue: 0.16, alpha: 1)
+            let veil = UIColor(red: 0.42, green: 0.20, blue: 0.72, alpha: 1)
+            let veilHi = UIColor(red: 0.78, green: 0.48, blue: 1.0, alpha: 1)
+            let eye = UIColor(red: 0.95, green: 0.55, blue: 1.0, alpha: 1)
+            let shard = UIColor(red: 0.68, green: 0.30, blue: 1.0, alpha: 1)
+            let shardHi = UIColor(red: 0.92, green: 0.78, blue: 1.0, alpha: 1)
+            let O = outline
+
+            let lift = [0, 1, 0, -1][pose]
+            let hot = pose % 2 == 0
+
+            // --- Stern wisps: void-light bleeding off the tail.
+            fill(cg, x: 18, y: 15 + lift, w: 3, h: 2, veilHi.withAlphaComponent(0.8))
+            fill(cg, x: 15, y: 16 + lift, w: 3, h: 1, hot ? shardHi : shard)
+            fill(cg, x: 19, y: 18 + lift, w: 2, h: 2, O)
+            fill(cg, x: 19, y: 18 + lift, w: 2, h: 1, hot ? shardHi : veil)
+
+            // --- Upper wing-veil: a tall translucent crescent sweeping
+            // up-back off the spine, magenta-lit leading edge, pale tip.
+            fill(cg, x: 27, y: 7 + lift, w: 11, h: 7, O)
+            fill(cg, x: 28, y: 8 + lift, w: 9, h: 5, veil)
+            fill(cg, x: 28, y: 12 + lift, w: 9, h: 1, hull)
+            fill(cg, x: 21, y: 4 + lift, w: 9, h: 4, O)
+            fill(cg, x: 22, y: 5 + lift, w: 7, h: 2, hullD)
+            fill(cg, x: 22, y: 5 + lift, w: 7, h: 1, veilHi)
+            fill(cg, x: 15, y: 1 + lift, w: 8, h: 4, O)
+            fill(cg, x: 16, y: 2 + lift, w: 6, h: 2, veilHi)
+            fill(cg, x: 16, y: 2 + lift, w: 2, h: 1, hot ? .white : shardHi)
+            // Pale tip feather catching the void-light.
+            fill(cg, x: 13, y: 0 + lift, w: 4, h: 2, O)
+            fill(cg, x: 14, y: 0 + lift, w: 2, h: 1, hot ? shardHi : veilHi)
+            // Spine strut tying the veil to the hull.
+            fill(cg, x: 30, y: 11 + lift, w: 3, h: 3, O)
+            fill(cg, x: 31, y: 12 + lift, w: 1, h: 1, shardHi)
+
+            // --- Lower wing-veil: mirrored crescent sweeping down-back
+            // under the belly, darker (falls away from the light), hot tip.
+            fill(cg, x: 27, y: 21 + lift, w: 11, h: 7, O)
+            fill(cg, x: 28, y: 22 + lift, w: 9, h: 5, hullDk)
+            fill(cg, x: 28, y: 22 + lift, w: 9, h: 1, hullD)
+            fill(cg, x: 21, y: 26 + lift, w: 9, h: 4, O)
+            fill(cg, x: 22, y: 27 + lift, w: 7, h: 2, hullD)
+            fill(cg, x: 22, y: 28 + lift, w: 7, h: 1, hull)
+            fill(cg, x: 16, y: 30 + lift, w: 7, h: 3, O)
+            fill(cg, x: 17, y: 31 + lift, w: 5, h: 1, veilHi)
+            fill(cg, x: 17, y: 31 + lift, w: 1, h: 1, hot ? .white : shardHi)
+            // Belly strut.
+            fill(cg, x: 30, y: 21 + lift, w: 3, h: 3, O)
+            fill(cg, x: 31, y: 21 + lift, w: 1, h: 1, shardHi)
+
+            // --- Crescent hull: dusk prow tapering to a forked stern.
+            fill(cg, x: 22, y: 14 + lift, w: 26, h: 8, O)
+            fill(cg, x: 23, y: 15 + lift, w: 24, h: 6, hull)
+            fill(cg, x: 23, y: 15 + lift, w: 24, h: 1, hullHi)
+            fill(cg, x: 23, y: 20 + lift, w: 24, h: 1, hullDk)
+            // Panel seams.
+            for rx in [28, 36, 44] {
+                fill(cg, x: rx, y: 15 + lift, w: 1, h: 6, hullD)
+            }
+            fill(cg, x: 25, y: 16 + lift, w: 2, h: 1, hullLt.withAlphaComponent(0.6))
+            // Pale void stripe along the flank.
+            fill(cg, x: 24, y: 18 + lift, w: 12, h: 1, shardHi)
+            fill(cg, x: 24, y: 19 + lift, w: 12, h: 1, hullDk)
+            // --- Hollow prow + pale eye slit (the hostile read).
+            fill(cg, x: 48, y: 14 + lift, w: 9, h: 8, O)
+            fill(cg, x: 49, y: 15 + lift, w: 7, h: 6, hull)
+            fill(cg, x: 49, y: 15 + lift, w: 7, h: 1, hullHi)
+            fill(cg, x: 54, y: 16 + lift, w: 3, h: 4, O)
+            fill(cg, x: 55, y: 17 + lift, w: 1, h: 2, hot ? .white : eye)
+            fill(cg, x: 55, y: 17 + lift, w: 1, h: 1, hot ? shardHi : eye)
+            // Prow barb.
+            fill(cg, x: 57, y: 17 + lift, w: 3, h: 2, O)
+            fill(cg, x: 58, y: 17 + lift, w: 1, h: 1, hot ? shardHi : hullHi)
+
+            // --- Shard-caster fork slung below the keel: twin prongs
+            // with a crackling void thread between them (the arm mounts
+            // just ahead of this fork and fires through it).
+            fill(cg, x: 40, y: 22 + lift, w: 4, h: 6, O)
+            fill(cg, x: 41, y: 23 + lift, w: 2, h: 4, hullD)
+            fill(cg, x: 50, y: 22 + lift, w: 4, h: 6, O)
+            fill(cg, x: 51, y: 23 + lift, w: 2, h: 4, hull)
+            fill(cg, x: 51, y: 23 + lift, w: 2, h: 1, hullHi)
+            fill(cg, x: 44, y: 24 + lift, w: 6, h: 2, hot ? shardHi : shard)
+            fill(cg, x: 46, y: 24 + lift, w: 2, h: 1, hot ? .white : shardHi)
+            // Caster hardpoint block on the keel.
+            fill(cg, x: 38, y: 20 + lift, w: 18, h: 3, O)
+            fill(cg, x: 39, y: 20 + lift, w: 16, h: 2, hullD)
+            fill(cg, x: 39, y: 20 + lift, w: 16, h: 1, hull.withAlphaComponent(0.7))
+        }
+    }
+
+    /// Shard-caster: armored violet mount + twin fork prongs with a
+    /// void-light thread between them. Mounts on the keel gun mount and
+    /// steers at targets like a gun-arm — the scene fires the 3-shard fan
+    /// through it.
+    private static func vesperArm() -> SKTexture {
+        canvas(w: armW, h: armH, key: "arm-vesper") { cg in
+            let hull = UIColor(red: 0.30, green: 0.12, blue: 0.48, alpha: 1)
+            let hullD = UIColor(red: 0.16, green: 0.06, blue: 0.30, alpha: 1)
+            let metal = UIColor(red: 0.22, green: 0.20, blue: 0.30, alpha: 1)
+            let shard = UIColor(red: 0.68, green: 0.30, blue: 1.0, alpha: 1)
+            let shardHi = UIColor(red: 0.92, green: 0.78, blue: 1.0, alpha: 1)
+            let O = outline
+            // Armored mount wrapping the grip (x=5).
+            fill(cg, x: 1, y: 2, w: 8, h: 8, O)
+            fill(cg, x: 2, y: 3, w: 6, h: 6, hull)
+            fill(cg, x: 2, y: 3, w: 6, h: 1, UIColor(red: 0.72, green: 0.38, blue: 1.0, alpha: 1))
+            fill(cg, x: 2, y: 7, w: 6, h: 1, hullD)
+            // Twin receiver block.
+            fill(cg, x: 8, y: 2, w: 6, h: 8, O)
+            fill(cg, x: 9, y: 3, w: 4, h: 6, metal)
+            // Upper + lower caster prongs.
+            fill(cg, x: 13, y: 2, w: 7, h: 3, O)
+            fill(cg, x: 14, y: 3, w: 5, h: 1, metal)
+            fill(cg, x: 13, y: 7, w: 7, h: 3, O)
+            fill(cg, x: 14, y: 8, w: 5, h: 1, metal)
+            // Void thread: violet light bridging the prongs at the muzzle.
+            fill(cg, x: 19, y: 2, w: 3, h: 8, O)
+            fill(cg, x: 20, y: 3, w: 1, h: 6, shard)
+            fill(cg, x: 20, y: 5, w: 1, h: 2, shardHi)
         }
     }
 

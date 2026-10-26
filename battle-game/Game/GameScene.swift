@@ -362,6 +362,9 @@ final class GameScene: SKScene {
         if Balance.blackrootVale { LevelDressing.buildBlackrootVale(in: world) }
         if Balance.cinderGate { LevelDressing.buildCinderGate(in: world) }
         if Balance.shadowRift { LevelDressing.buildShadowRift(in: world) }
+        if Balance.dreadHollow { LevelDressing.buildDreadHollow(in: world) }
+        if Balance.obsidianGate { LevelDressing.buildObsidianGate(in: world) }
+        if Balance.embralCore { LevelDressing.buildEmbralCore(in: world) }
         if Balance.active.theme == .dawn { LevelDressing.buildDuneWash(in: world) }
         if Balance.active.theme == .sunscorch { LevelDressing.buildSunscorchField(in: world) }
         if Balance.active.theme == .sandhold { LevelDressing.buildSandholdKeep(in: world) }
@@ -439,11 +442,14 @@ final class GameScene: SKScene {
     /// Pixel-art HQ (see BaseNode): spawn gate + roof cannon + wide HP bar.
     /// Enemy muzzle is the cannon tip; fan shots originate there.
     /// From Level 20 (`Balance.upgradedBaseLevel`) on, both teams field the
-    /// bigger Mk-II citadel HQ with a quad-missile rooftop battery.
+    /// bigger Mk-II citadel HQ with a quad-missile rooftop battery — except
+    /// the Level 35 finale, where the ALLIED HQ keeps the Mk-II kit and the
+    /// ENEMY HQ fields the huge Mordor core-fortress (5-missile battery).
     private func addBase(at x: CGFloat, team: Team) {
         let base = BaseNode(team: team,
                             upgraded: levelId != Balance.playgroundLevelId
-                                && levelId >= Balance.upgradedBaseLevel)
+                                && levelId >= Balance.upgradedBaseLevel,
+                            finale: Balance.isFinaleBase(levelId: levelId, team: team))
         base.position = CGPoint(x: x, y: Balance.groundY(at: x))
         world.addChild(base)
         let hp = Balance.baseHealth(for: team, levelId: levelId)
@@ -1125,6 +1131,7 @@ final class GameScene: SKScene {
             // Summon marchers toward the player base, capped. Levels with a
             // doubleChance sometimes pop a PAIR out of the gate together.
             // Priority order on a shared summon number: Heli Gunship (heliEvery),
+            // then the Vesper herald (vesperEvery, Level 34+),
             // then the Phoenix strike-fighter (phoenixEvery, Level 30+),
             // then Saucer gun-drones (saucerEvery, Level 24+), then Brute
             // (bruteEvery), Reaver (reaverEvery), Mech (mechEvery,
@@ -1159,6 +1166,11 @@ final class GameScene: SKScene {
                         kind = .immortal
                     } else if Balance.heliEvery > 0, summonCount % Balance.heliEvery == 0 {
                         kind = .heli
+                    } else if Balance.vesperEvery > 0, summonCount % Balance.vesperEvery == 0 {
+                        // Vesper wave: the violet herald drifts in — checked
+                        // ahead of the phoenix cadence so the debut cadence
+                        // is never swallowed by it.
+                        kind = .vesper
                     } else if Balance.phoenixEvery > 0, summonCount % Balance.phoenixEvery == 0 {
                         // Phoenix wave: the red interceptor dives in — checked
                         // ahead of the saucer cadence so the debut cadence is
@@ -1300,9 +1312,10 @@ final class GameScene: SKScene {
 
     /// 3 blasts from the same muzzle, spread out around the target direction.
     /// Bolt team matches the firing HQ so hits land on the right side.
-    /// Mk-II HQs (Level 20+ both teams) fire a 4-missile volley instead:
-    /// each missile rides a slight angle fan and weaves, like the Level 18
-    /// Mk-II tower refit.
+    /// Mk-II HQs (Level 20+ both teams) fire a 4-missile volley instead —
+    /// except the Level 35 finale enemy HQ, which fires a 5-missile salvo
+    /// from its core-fortress battery. Each missile rides a slight angle
+    /// fan and weaves, like the Level 18 Mk-II tower refit.
     private func fireBaseFan(from base: Base, at target: CGPoint) {
         let muzzle = baseMuzzle(for: base)
         var baseDir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
@@ -1311,9 +1324,10 @@ final class GameScene: SKScene {
         let baseAngle = atan2(baseDir.dy, baseDir.dx)
         if levelId != Balance.playgroundLevelId, levelId >= Balance.upgradedBaseLevel {
             SoundEngine.shared.missileLaunch(at: muzzle.x)
-            for k in 0..<Balance.baseMissileCount {
+            let missileCount = Balance.baseMissileCount(forLevel: levelId, team: base.team)
+            for k in 0..<missileCount {
                 let a = baseAngle
-                    + (CGFloat(k) - CGFloat(Balance.baseMissileCount - 1) / 2)
+                    + (CGFloat(k) - CGFloat(missileCount - 1) / 2)
                     * Balance.baseMissileSpread
                 let dir = CGVector(dx: cos(a), dy: sin(a))
                 let missile = ProjectileFactory.makeMissile(team: base.team)
@@ -1333,7 +1347,7 @@ final class GameScene: SKScene {
                                               trail: .smoke))
             }
             let flash = ProjectileFactory.makeMuzzleFlash()
-            flash.setScale(1.2)
+            flash.setScale(Balance.isFinaleBase(levelId: levelId, team: base.team) ? 1.6 : 1.2)
             flash.position = muzzle
             world.addChild(flash)
             base.node.fireFlash()
@@ -1461,6 +1475,8 @@ final class GameScene: SKScene {
                 updateSaucerFlight(e, dt: dt)
             } else if e.kind == .phoenix {
                 updatePhoenixFlight(e, dt: dt)
+            } else if e.kind == .vesper {
+                updateVesperFlight(e, dt: dt)
             }
 
             // Target priority: closest exposed body in sight (hero or ally)
@@ -1579,6 +1595,8 @@ final class GameScene: SKScene {
                         fireSaucerBurst(from: e, to: aim)
                     } else if e.kind == .phoenix {
                         firePhoenixBurst(from: e, to: aim)
+                    } else if e.kind == .vesper {
+                        fireVesperFan(from: e, to: aim)
                     } else if e.kind == .missileTruck {
                         fireMissile(from: e, to: aim)
                     } else if e.kind == .immortal {
@@ -1923,6 +1941,71 @@ final class GameScene: SKScene {
         world.addChild(flash)
     }
 
+    /// Vesper wing-wash: retriggers the rotor loop while the violet
+    /// herald is on the field (positional, so it fades with range).
+    /// Slower than the phoenix's darting buzz — a deep looming hum for
+    /// the biggest, slowest airframe.
+    private func updateVesperFlight(_ e: EnemyNode, dt: TimeInterval) {
+        e.rotorSoundTimer -= dt
+        if e.rotorSoundTimer <= 0 {
+            e.rotorSoundTimer = 3.2
+            SoundEngine.shared.heliRotor(at: e.position.x)
+        }
+    }
+
+    /// Vesper void fan: three violet void-shards from the keel caster in a
+    /// small spread — the only hostile volley that sprays instead of
+    /// snapping straight. Sidestep one shard and the next still tracks the
+    /// lane, so the fan punishes clumped pushes.
+    private func fireVesperFan(from e: EnemyNode, to target: CGPoint) {
+        for r in 0..<Balance.vesperBurstCount {
+            let delay = Double(r) * Balance.vesperBurstGap
+            // Fan offset per shard: centered on the aim (e.g. 3 shards at
+            // -spread, 0, +spread), so the volley opens downrange.
+            let fan = (CGFloat(r) - CGFloat(Balance.vesperBurstCount - 1) / 2)
+                * Balance.vesperFanSpread
+            if delay == 0 {
+                fireVesperShard(from: e, to: target, fan: fan, phase: Double(r) * 1.1)
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    guard let self, e.alive else { return }
+                    self.fireVesperShard(from: e, to: target, fan: fan, phase: Double(r) * 1.1)
+                }
+            }
+        }
+    }
+
+    /// One vesper shard: a weaving violet void-splinter + muzzle flash.
+    /// Weaves laterally in flight and splashes on impact (see
+    /// splashPlayer) so grouped troops feel the fan.
+    private func fireVesperShard(from e: EnemyNode, to target: CGPoint,
+                                 fan: CGFloat, phase: Double) {
+        let muzzle = e.muzzle()
+        var dir = CGVector(dx: target.x - muzzle.x, dy: target.y - muzzle.y)
+        let len = max(1, hypot(dir.dx, dir.dy))
+        dir = CGVector(dx: dir.dx / len, dy: dir.dy / len)
+        let baseAngle = atan2(dir.dy, dir.dx) + fan
+        let fanned = CGVector(dx: cos(baseAngle), dy: sin(baseAngle))
+        SoundEngine.shared.enemyFire(at: muzzle.x)
+        let shard = ProjectileFactory.makeVesperShard()
+        shard.position = muzzle
+        shard.zRotation = baseAngle
+        world.addChild(shard)
+        projectiles.append(Projectile(node: shard, dir: fanned, life: Balance.enemyBoltLife,
+                                      speed: Balance.vesperBoltSpeed, damage: e.boltDamage,
+                                      team: .enemy,
+                                      weaveAmp: Balance.vesperWeaveAmp,
+                                      weaveFreq: Balance.vesperWeaveFreq,
+                                      weavePhase: phase,
+                                      weaveSteers: true,
+                                      contactBlast: Balance.vesperBlast,
+                                      blastFX: .vesper))
+        let flash = ProjectileFactory.makeMuzzleFlash()
+        flash.setScale(0.9)
+        flash.position = muzzle
+        world.addChild(flash)
+    }
+
     // MARK: - Player army: summon + march toward the enemy base
     /// Called by the SwiftUI cards. Returns false when broke, capped,
     /// or the unit isn't fielded on this level yet (Ranger = Level 2+,
@@ -2004,10 +2087,15 @@ final class GameScene: SKScene {
             } else if let base = enemyBase, base.alive {
                 target = CGPoint(x: base.node.position.x, y: Balance.groundTopY + 100)
             }
-            // Revrent screen management runs even with no hull target:
-            // droids deploy on their own sight, dock back when clear.
+            // Revrent screen management runs every frame: the droids fly
+            // out once the carrier itself is in range, and dock back the
+            // moment no enemy is in sight anymore.
             if a.kind == .revrent {
-                updateRevrentCarrier(a, dt: dt, hasTarget: target != nil)
+                let inRange: Bool = {
+                    guard let t = target else { return false }
+                    return hypot(t.x - a.position.x, t.y - a.position.y) <= a.kind.shootRange
+                }()
+                updateRevrentCarrier(a, dt: dt, hasTarget: target != nil, inRange: inRange)
             }
             guard let aim = target else {
                 a.aimAt(nil)
@@ -2276,9 +2364,10 @@ final class GameScene: SKScene {
         world.addChild(puff)
     }
 
-    /// Per-frame carrier screen management: tick rebuild timers, deploy
-    /// the screen when enemies are in sight, recall it when clear.
-    private func updateRevrentCarrier(_ a: AllyNode, dt: TimeInterval, hasTarget: Bool) {
+    /// Per-frame carrier screen management: tick rebuild timers, fly the
+    /// screen out once the carrier itself is in firing range, recall it
+    /// when no enemy is in sight anymore.
+    private func updateRevrentCarrier(_ a: AllyNode, dt: TimeInterval, hasTarget: Bool, inRange: Bool) {
         // Dead droids rebuild one per slot after 5s, launching from the hull.
         for slot in 0..<a.interceptorBuildTimers.count {
             guard a.interceptorBuildTimers[slot] > 0 else { continue }
@@ -2301,11 +2390,13 @@ final class GameScene: SKScene {
         // No live screen to command without a hull.
         guard a.alive, !a.marchedOff else { return }
         let screen = interceptors.filter { $0.owner === a && $0.alive }
-        if hasTarget {
-            for d in screen where d.mode == .docked {
+        if inRange {
+            // Carrier in range: the whole screen flies out — docked and
+            // returning droids (re)dock-launch so all five engage.
+            for d in screen where d.mode != .deployed {
                 d.mode = .deployed
             }
-        } else {
+        } else if !hasTarget {
             for d in screen where d.mode == .deployed {
                 d.mode = .returning
             }
@@ -2347,18 +2438,34 @@ final class GameScene: SKScene {
                                      y: carrier.position.y + off.y + carrier.yBob * 0.5)
                 d.zRotation = sin(carrier.interceptorOrbitPhase * 2 + CGFloat(d.slotIndex)) * 0.15
             case .deployed:
-                // Screen anchor: ahead of the hull toward the enemy, fanned
-                // per slot + a lively wobble so they feel airborne.
-                let ahead: CGFloat = carrier.facing * Balance.revrentScreenAhead
-                let fan = (CGFloat(d.slotIndex) - CGFloat(Balance.revrentDroneCount - 1) / 2) * 34
-                let t = sceneTime * 2.2 + Double(d.slotIndex) * 1.3 + Double(d.wobbleSeed)
+                // Each droid hunts its own nearest foe and flies a close
+                // orbit around it — so the screen spreads over all of the
+                // enemies ahead instead of stacking in formation. Because
+                // they close to ~110pts, every droid ends up in range and
+                // the whole screen keeps shooting while the carrier holds.
+                guard let aim = nearestFoe(to: d.position, within: Balance.revrentInterceptorSight) else {
+                    // Nothing in this droid's own sight: push toward the
+                    // carrier's fight so it re-engages instead of hovering.
+                    let fallback = CGPoint(x: carrier.position.x + carrier.facing * Balance.revrentScreenAhead,
+                                           y: carrier.position.y + 26)
+                    moveInterceptor(d, toward: fallback, dt: dt)
+                    continue
+                }
+                // Leash: never chase beyond the carrier's own sight — hold
+                // near the hull instead of flying across the map alone.
+                if hypot(aim.x - carrier.position.x, aim.y - carrier.position.y) > carrier.kind.sightRange {
+                    let fallback = CGPoint(x: carrier.position.x + carrier.facing * Balance.revrentScreenAhead,
+                                           y: carrier.position.y + 26)
+                    moveInterceptor(d, toward: fallback, dt: dt)
+                    continue
+                }
+                let t = sceneTime * 2.0 + Double(d.slotIndex) * (Double.pi * 2 / Double(Balance.revrentDroneCount)) + Double(d.wobbleSeed)
                 let anchor = CGPoint(
-                    x: carrier.position.x + ahead + fan * 0.6 + CGFloat(sin(t * 0.9)) * 18,
-                    y: carrier.position.y + 26 + fan * 0.35 + CGFloat(cos(t * 1.3)) * 14)
+                    x: aim.x + CGFloat(cos(t)) * 110,
+                    y: aim.y + 40 + CGFloat(sin(t * 1.3)) * 26)
                 moveInterceptor(d, toward: anchor, dt: dt)
                 d.zRotation = sin(CGFloat(t)) * 0.2
-                // Shoot the nearest enemy in interceptor range.
-                if d.fireCooldown <= 0, let aim = nearestFoe(to: d.position, within: Balance.revrentInterceptorSight) {
+                if d.fireCooldown <= 0 {
                     let dist = hypot(aim.x - d.position.x, aim.y - d.position.y)
                     if dist <= Balance.revrentInterceptorRange {
                         d.fireCooldown = Balance.revrentInterceptorFireCooldown
@@ -3165,7 +3272,8 @@ final class GameScene: SKScene {
                     explode(p, at: p.node.position)
                 } else if p.contactBlast > 0 {
                     if p.team == .enemy {
-                        splashPlayer(at: p.node.position, radius: p.contactBlast, damage: p.damage)
+                        splashPlayer(at: p.node.position, radius: p.contactBlast, damage: p.damage,
+                                     blastFX: p.blastFX)
                     } else {
                         detonate(at: p.node.position, radius: p.contactBlast)
                     }
@@ -3184,9 +3292,11 @@ final class GameScene: SKScene {
                     continue
                 }
             } else if p.team == .enemy, p.contactBlast > 0 {
-                // Saucer plasma: splash carries the damage (no double-hit).
+                // Saucer plasma / vesper shards: splash carries the damage
+                // (no double-hit).
                 if touchesPlayer(at: p.node.position) {
-                    splashPlayer(at: p.node.position, radius: p.contactBlast, damage: p.damage)
+                    splashPlayer(at: p.node.position, radius: p.contactBlast, damage: p.damage,
+                                 blastFX: p.blastFX)
                     ProjectileFactory.recycle(p.node)
                     continue
                 }
@@ -3434,11 +3544,16 @@ final class GameScene: SKScene {
         return false
     }
 
-    /// Enemy splash (saucer plasma): blue blast FX + full damage to
-    /// every player-side body in the radius — allies, hero, towers, HQ.
-    private func splashPlayer(at pt: CGPoint, radius: CGFloat, damage: CGFloat) {
+    /// Enemy splash (saucer plasma, vesper shards): blast FX + full damage
+    /// to every player-side body in the radius — allies, hero, towers, HQ.
+    /// The FX family follows the round (blue for saucer plasma, violet for
+    /// vesper shards).
+    private func splashPlayer(at pt: CGPoint, radius: CGFloat, damage: CGFloat,
+                              blastFX: BlastFX = .saucer) {
         SoundEngine.shared.missileDetonate(at: pt.x)
-        let boom = ProjectileFactory.makeSaucerBlast(radius: radius)
+        let boom = blastFX == .vesper
+            ? ProjectileFactory.makeVesperBlast(radius: radius)
+            : ProjectileFactory.makeSaucerBlast(radius: radius)
         boom.position = pt
         world.addChild(boom)
         for a in allies where a.alive {

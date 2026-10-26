@@ -36,27 +36,6 @@ enum UnlockStore {
     }
 }
 
-/// Hostile debuts briefed in battle (persisted raw values). GameView
-/// consults it so a level's NEW HOSTILE modal fires once — replays skip
-/// whatever was already briefed.
-enum EnemyIntroSeen {
-    private static let seenKey = "enemyintro.seen"
-
-    static var seenRawValues: Set<Int> {
-        Set(UserDefaults.standard.array(forKey: seenKey) as? [Int] ?? [])
-    }
-
-    static func seen(_ kind: EnemyKind) -> Bool {
-        seenRawValues.contains(kind.rawValue)
-    }
-
-    static func mark(_ kind: EnemyKind) {
-        var set = seenRawValues
-        set.insert(kind.rawValue)
-        UserDefaults.standard.set(Array(set), forKey: seenKey)
-    }
-}
-
 /// Heroes claimed by milestone (persisted ids). HeroRoster consults it
 /// so a battle-time unlock survives replays — the gun-unlock seam, but
 /// for heroes.

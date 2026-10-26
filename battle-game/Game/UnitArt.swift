@@ -87,9 +87,30 @@ enum UnitPixelArt {
     /// Composed card portraits, built once per kind.
     private static var portraitCache: [Kind: UIImage] = [:]
 
+    /// Portrait backing: 144x96 px (4x the old 36x24 card). Every portrait
+    /// below draws body + arm at INTEGER scales with nearest sampling, so
+    /// modal, library and briefing portraits upscale from crisp pixels —
+    /// never from a 36px linear-blurred shrink (which is what turned the
+    /// big units into blocky smears).
+    private static let portraitW: CGFloat = 144
+    private static let portraitH: CGFloat = 96
+
+    private static func makePortrait(_ draw: (CGContext) -> Void) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        return UIGraphicsImageRenderer(
+            size: CGSize(width: portraitW, height: portraitH), format: format
+        ).image { ctx in
+            ctx.cgContext.interpolationQuality = .none
+            draw(ctx.cgContext)
+        }
+    }
+
     /// Card portrait: torso-up crop of the real sprite + its gun-arm raised
-    /// at a heroic angle, gun breaking out of frame. 36x24 px — show it
-    /// with `.interpolation(.none)` so pixels stay crisp when upscaled.
+    /// at a heroic angle, gun breaking out of frame. 144x96 px, integer-
+    /// scaled art — show it with `.interpolation(.none)` so pixels stay
+    /// crisp when upscaled.
     static func portraitImage(for kind: Kind) -> UIImage {
         if let cached = portraitCache[kind] { return cached }
         // Gun-truck portrait: full wide body + raised turret (custom
@@ -99,17 +120,13 @@ enum UnitPixelArt {
             _ = armTexture(for: kind)
             guard let body = imageCache["body-truck-0"],
                   let arm = imageCache["arm-truck-v2"] else { return UIImage() }
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 1
-            format.opaque = false
-            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
-                                                   format: format).image { ctx in
-                let cg = ctx.cgContext
-                body.draw(in: CGRect(x: 0, y: 0, width: 36, height: 24))
+            // Body art is 48x32: draw at 2x, centered; turret raised.
+            let portrait = makePortrait { cg in
+                body.draw(in: CGRect(x: 24, y: 16, width: 96, height: 64))
                 cg.saveGState()
-                cg.translateBy(x: 18, y: 10)
+                cg.translateBy(x: 72, y: 43)
                 cg.rotate(by: -0.30)
-                arm.draw(in: CGRect(x: -5, y: -6, width: 24, height: 12))
+                arm.draw(in: CGRect(x: -10, y: -12, width: 48, height: 24))
                 cg.restoreGState()
             }
             portraitCache[kind] = portrait
@@ -122,17 +139,13 @@ enum UnitPixelArt {
             _ = armTexture(for: kind)
             guard let body = imageCache["body-bombard-0"],
                   let arm = imageCache["arm-bombard-v1"] else { return UIImage() }
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 1
-            format.opaque = false
-            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
-                                                   format: format).image { ctx in
-                let cg = ctx.cgContext
-                body.draw(in: CGRect(x: 0, y: 0, width: 36, height: 24))
+            // Body art is 48x32: draw at 2x, centered; launcher sky-high.
+            let portrait = makePortrait { cg in
+                body.draw(in: CGRect(x: 24, y: 16, width: 96, height: 64))
                 cg.saveGState()
-                cg.translateBy(x: 18, y: 11)
+                cg.translateBy(x: 72, y: 45)
                 cg.rotate(by: -0.85)
-                arm.draw(in: CGRect(x: -5, y: -6, width: 24, height: 12))
+                arm.draw(in: CGRect(x: -10, y: -12, width: 48, height: 24))
                 cg.restoreGState()
             }
             portraitCache[kind] = portrait
@@ -146,21 +159,14 @@ enum UnitPixelArt {
             guard let body = imageCache["body-tank-0"],
                   let arm = imageCache["arm-tank-v1"] else { return UIImage() }
             let m = armMetrics(for: kind)
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 1
-            format.opaque = false
-            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
-                                                   format: format).image { ctx in
-                let cg = ctx.cgContext
-                let s: CGFloat = 0.62
-                let bw = 48 * s, bh = 32 * s
-                let x0 = (36 - bw) / 2, y0 = (24 - bh) / 2
-                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+            // Body art is 48x32: draw at 2x, centered; cannon level.
+            let portrait = makePortrait { cg in
+                body.draw(in: CGRect(x: 24, y: 16, width: 96, height: 64))
                 // Cannon pivots on the turret grip.
                 cg.saveGState()
-                cg.translateBy(x: x0 + 20 * s, y: y0 + 8.5 * s)
+                cg.translateBy(x: 64, y: 33)
                 cg.rotate(by: -0.12)
-                let aw = CGFloat(m.w) * s, ah = CGFloat(m.h) * s
+                let aw = CGFloat(m.w) * 2, ah = CGFloat(m.h) * 2
                 arm.draw(in: CGRect(x: -aw * 0.2, y: -ah / 2, width: aw, height: ah))
                 cg.restoreGState()
             }
@@ -175,21 +181,14 @@ enum UnitPixelArt {
             guard let body = imageCache["body-storm-0"],
                   let arm = imageCache["arm-storm"] else { return UIImage() }
             let m = armMetrics(for: kind)
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 1
-            format.opaque = false
-            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
-                                                   format: format).image { ctx in
-                let cg = ctx.cgContext
-                let s: CGFloat = 0.62
-                let bw = 48 * s, bh = 32 * s
-                let x0 = (36 - bw) / 2, y0 = (24 - bh) / 2
-                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+            // Body art is 48x32: draw at 2x, centered; pods raised.
+            let portrait = makePortrait { cg in
+                body.draw(in: CGRect(x: 24, y: 16, width: 96, height: 64))
                 // Pod cluster pivots on the battery grip.
                 cg.saveGState()
-                cg.translateBy(x: x0 + 24 * s, y: y0 + 6 * s)
+                cg.translateBy(x: 72, y: 28)
                 cg.rotate(by: -0.18)
-                let aw = CGFloat(m.w) * s, ah = CGFloat(m.h) * s
+                let aw = CGFloat(m.w) * 2, ah = CGFloat(m.h) * 2
                 arm.draw(in: CGRect(x: -aw * 0.2, y: -ah / 2, width: aw, height: ah))
                 cg.restoreGState()
             }
@@ -203,20 +202,13 @@ enum UnitPixelArt {
             _ = armTexture(for: kind)
             guard let body = imageCache["body-gunship-0"],
                   let arm = imageCache["arm-gunship"] else { return UIImage() }
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 1
-            format.opaque = false
-            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
-                                                   format: format).image { ctx in
-                let cg = ctx.cgContext
-                let s: CGFloat = min(36.0 / 76.0, 24.0 / 40.0)
-                let bw = 76 * s, bh = 40 * s
-                let x0 = (36 - bw) / 2, y0 = (24 - bh) / 2
-                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+            // Body art is 76x40: draw at 1x, centered; chin gun forward.
+            let portrait = makePortrait { cg in
+                body.draw(in: CGRect(x: 34, y: 28, width: 76, height: 40))
                 cg.saveGState()
-                cg.translateBy(x: x0 + 55 * s, y: y0 + 31 * s)
+                cg.translateBy(x: 89, y: 59)
                 cg.rotate(by: -0.14)
-                arm.draw(in: CGRect(x: -5 * s, y: -6 * s, width: 26 * s, height: 12 * s))
+                arm.draw(in: CGRect(x: -5, y: -6, width: 26, height: 12))
                 cg.restoreGState()
             }
             portraitCache[kind] = portrait
@@ -237,24 +229,18 @@ enum UnitPixelArt {
                   let arm = imageCache["arm-mech-v3"],
                   let legF = imageCache["mech-leg-f-1"],
                   let legB = imageCache["mech-leg-b-3"] else { return UIImage() }
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 1
-            format.opaque = false
-            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
-                                                   format: format).image { ctx in
-                let cg = ctx.cgContext
-                // Whole walker: two legs under the torso, aspect kept.
-                let s: CGFloat = min(36.0 / 48.0, 24.0 / 46.0)
-                let bw = 48 * s, bh = 26 * s, lw = 16 * s, lh = 20 * s
-                let x0 = (36 - bw) / 2
+            // Whole walker at 2x: two legs under the torso, aspect kept.
+            let portrait = makePortrait { cg in
+                let bw: CGFloat = 96, bh: CGFloat = 52, lw: CGFloat = 32, lh: CGFloat = 40
+                let x0: CGFloat = 24, yTop: CGFloat = 2
                 // Back leg (behind the body), then the body, then the front leg.
-                legB.draw(in: CGRect(x: x0 + bw * 0.30, y: bh, width: lw, height: lh))
-                body.draw(in: CGRect(x: x0, y: 0, width: bw, height: bh))
-                legF.draw(in: CGRect(x: x0 + bw * 0.52, y: bh, width: lw, height: lh))
+                legB.draw(in: CGRect(x: x0 + bw * 0.30, y: yTop + bh, width: lw, height: lh))
+                body.draw(in: CGRect(x: x0, y: yTop, width: bw, height: bh))
+                legF.draw(in: CGRect(x: x0 + bw * 0.52, y: yTop + bh, width: lw, height: lh))
                 cg.saveGState()
-                cg.translateBy(x: 20, y: 8)
+                cg.translateBy(x: 80, y: 32)
                 cg.rotate(by: -0.20)
-                arm.draw(in: CGRect(x: -3, y: -4, width: 18, height: 9))
+                arm.draw(in: CGRect(x: -6, y: -8, width: 36, height: 18))
                 cg.restoreGState()
             }
             portraitCache[kind] = portrait
@@ -267,20 +253,13 @@ enum UnitPixelArt {
             _ = armTexture(for: kind)
             guard let body = imageCache["body-heli-0"],
                   let arm = imageCache["arm-heli"] else { return UIImage() }
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 1
-            format.opaque = false
-            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
-                                                   format: format).image { ctx in
-                let cg = ctx.cgContext
-                let s: CGFloat = min(36.0 / 64.0, 24.0 / 36.0)
-                let bw = 64 * s, bh = 36 * s
-                let x0 = (36 - bw) / 2, y0 = (24 - bh) / 2
-                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+            // Body art is 64x36: draw at 2x, centered; chin gun forward.
+            let portrait = makePortrait { cg in
+                body.draw(in: CGRect(x: 8, y: 12, width: 128, height: 72))
                 cg.saveGState()
-                cg.translateBy(x: x0 + 43 * s, y: y0 + 29 * s)
+                cg.translateBy(x: 94, y: 70)
                 cg.rotate(by: -0.16)
-                arm.draw(in: CGRect(x: -2, y: -2, width: 12, height: 6))
+                arm.draw(in: CGRect(x: -4, y: -4, width: 24, height: 12))
                 cg.restoreGState()
             }
             portraitCache[kind] = portrait
@@ -294,23 +273,15 @@ enum UnitPixelArt {
             guard let body = imageCache["body-missile-truck-0"],
                   let arm = imageCache["arm-missile-truck"] else { return UIImage() }
             let m = armMetrics(for: kind)
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 1
-            format.opaque = false
-            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
-                                                   format: format).image { ctx in
-                let cg = ctx.cgContext
-                // Body is 64x40 px: shrink it a touch so the raised rail
-                // still fits inside the card.
-                let s: CGFloat = 0.42
-                let bw = 64 * s, bh = 40 * s
-                let x0: CGFloat = 2, y0: CGFloat = 4
-                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+            // Body art is 64x40: draw at 1x, centered (the raised rail
+            // needs the headroom) — rail out of the nose cradle.
+            let portrait = makePortrait { cg in
+                body.draw(in: CGRect(x: 40, y: 28, width: 64, height: 40))
                 // Rail pivots on the hot cradle in the launcher's nose.
                 cg.saveGState()
-                cg.translateBy(x: x0 + 59 * s, y: y0 + 10.5 * s)
+                cg.translateBy(x: 99, y: 38)
                 cg.rotate(by: -0.6)
-                let aw = CGFloat(m.w) * s, ah = CGFloat(m.h) * s
+                let aw = CGFloat(m.w), ah = CGFloat(m.h)
                 arm.draw(in: CGRect(x: -aw * 0.24, y: -ah / 2, width: aw, height: ah))
                 cg.restoreGState()
             }
@@ -325,22 +296,14 @@ enum UnitPixelArt {
             guard let body = imageCache["body-immortal-0"],
                   let arm = imageCache["arm-immortal"] else { return UIImage() }
             let m = armMetrics(for: kind)
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 1
-            format.opaque = false
-            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
-                                                   format: format).image { ctx in
-                let cg = ctx.cgContext
-                // Body canvas is 40x36: shrink so the raised cannon fits.
-                let s: CGFloat = 0.55
-                let bw = 40 * s, bh = 36 * s
-                let x0 = (36 - bw) / 2, y0 = (24 - bh) / 2
-                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+            // Body art is 40x36: draw at 2x, centered; cannon raised.
+            let portrait = makePortrait { cg in
+                body.draw(in: CGRect(x: 32, y: 12, width: 80, height: 72))
                 // Cannon pivots on the front chest joint, breaking the frame.
                 cg.saveGState()
-                cg.translateBy(x: x0 + 23 * s, y: y0 + 14 * s)
+                cg.translateBy(x: 78, y: 40)
                 cg.rotate(by: -0.5)
-                let aw = CGFloat(m.w) * s, ah = CGFloat(m.h) * s
+                let aw = CGFloat(m.w) * 2, ah = CGFloat(m.h) * 2
                 arm.draw(in: CGRect(x: -aw * 0.15, y: -ah / 2, width: aw, height: ah))
                 cg.restoreGState()
             }
@@ -355,22 +318,14 @@ enum UnitPixelArt {
             guard let body = imageCache["body-saucer-0"],
                   let arm = imageCache["arm-saucer"] else { return UIImage() }
             let m = armMetrics(for: kind)
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 1
-            format.opaque = false
-            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
-                                                   format: format).image { ctx in
-                let cg = ctx.cgContext
-                // Body canvas is 64x36: shrink so the raised guns fit.
-                let s: CGFloat = 0.48
-                let bw = 64 * s, bh = 36 * s
-                let x0 = (36 - bw) / 2, y0 = (24 - bh) / 2
-                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+            // Body art is 64x36: draw at 2x, centered; guns off the belly.
+            let portrait = makePortrait { cg in
+                body.draw(in: CGRect(x: 8, y: 12, width: 128, height: 72))
                 // Guns pivot on the belly mount, breaking the frame.
                 cg.saveGState()
-                cg.translateBy(x: x0 + 40 * s, y: y0 + 26 * s)
+                cg.translateBy(x: 88, y: 64)
                 cg.rotate(by: -0.5)
-                let aw = CGFloat(m.w) * s, ah = CGFloat(m.h) * s
+                let aw = CGFloat(m.w) * 2, ah = CGFloat(m.h) * 2
                 arm.draw(in: CGRect(x: -aw * 0.21, y: -ah / 2, width: aw, height: ah))
                 cg.restoreGState()
             }
@@ -385,22 +340,14 @@ enum UnitPixelArt {
             guard let body = imageCache["body-phoenix-0"],
                   let arm = imageCache["arm-phoenix"] else { return UIImage() }
             let m = armMetrics(for: kind)
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 1
-            format.opaque = false
-            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
-                                                   format: format).image { ctx in
-                let cg = ctx.cgContext
-                // Body canvas is 64x36: shrink so the raised emitter fits.
-                let s: CGFloat = 0.48
-                let bw = 64 * s, bh = 36 * s
-                let x0 = (36 - bw) / 2, y0 = (24 - bh) / 2
-                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+            // Body art is 64x36: draw at 2x, centered; emitter off the prow.
+            let portrait = makePortrait { cg in
+                body.draw(in: CGRect(x: 8, y: 12, width: 128, height: 72))
                 // Guns pivot on the prow mount, breaking the frame.
                 cg.saveGState()
-                cg.translateBy(x: x0 + 44 * s, y: y0 + 26 * s)
+                cg.translateBy(x: 96, y: 64)
                 cg.rotate(by: -0.5)
-                let aw = CGFloat(m.w) * s, ah = CGFloat(m.h) * s
+                let aw = CGFloat(m.w) * 2, ah = CGFloat(m.h) * 2
                 arm.draw(in: CGRect(x: -aw * 0.21, y: -ah / 2, width: aw, height: ah))
                 cg.restoreGState()
             }
@@ -415,22 +362,14 @@ enum UnitPixelArt {
             guard let body = imageCache["body-vesper-0"],
                   let arm = imageCache["arm-vesper"] else { return UIImage() }
             let m = armMetrics(for: kind)
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 1
-            format.opaque = false
-            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
-                                                   format: format).image { ctx in
-                let cg = ctx.cgContext
-                // Body canvas is 64x36: shrink so the raised caster fits.
-                let s: CGFloat = 0.48
-                let bw = 64 * s, bh = 36 * s
-                let x0 = (36 - bw) / 2, y0 = (24 - bh) / 2
-                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+            // Body art is 64x36: draw at 2x, centered; blaster off the keel.
+            let portrait = makePortrait { cg in
+                body.draw(in: CGRect(x: 8, y: 12, width: 128, height: 72))
                 // Caster pivots on the keel mount, breaking the frame.
                 cg.saveGState()
-                cg.translateBy(x: x0 + 42 * s, y: y0 + 27 * s)
+                cg.translateBy(x: 92, y: 66)
                 cg.rotate(by: -0.5)
-                let aw = CGFloat(m.w) * s, ah = CGFloat(m.h) * s
+                let aw = CGFloat(m.w) * 2, ah = CGFloat(m.h) * 2
                 arm.draw(in: CGRect(x: -aw * 0.21, y: -ah / 2, width: aw, height: ah))
                 cg.restoreGState()
             }
@@ -445,22 +384,14 @@ enum UnitPixelArt {
             guard let body = imageCache["body-tempest-0"],
                   let arm = imageCache["arm-tempest"] else { return UIImage() }
             let m = armMetrics(for: kind)
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 1
-            format.opaque = false
-            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
-                                                   format: format).image { ctx in
-                let cg = ctx.cgContext
-                // Body canvas is 56x32: shrink so the raised lances fit.
-                let s: CGFloat = 0.55
-                let bw = 56 * s, bh = 32 * s
-                let x0 = (36 - bw) / 2, y0 = (24 - bh) / 2
-                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+            // Body art is 56x32: draw at 2x, centered; lances off the chin.
+            let portrait = makePortrait { cg in
+                body.draw(in: CGRect(x: 16, y: 16, width: 112, height: 64))
                 // Lances pivot on the chin mount, breaking the frame.
                 cg.saveGState()
-                cg.translateBy(x: x0 + 38 * s, y: y0 + 23 * s)
+                cg.translateBy(x: 92, y: 62)
                 cg.rotate(by: -0.5)
-                let aw = CGFloat(m.w) * s, ah = CGFloat(m.h) * s
+                let aw = CGFloat(m.w) * 2, ah = CGFloat(m.h) * 2
                 arm.draw(in: CGRect(x: -aw * 0.21, y: -ah / 2, width: aw, height: ah))
                 cg.restoreGState()
             }
@@ -476,21 +407,13 @@ enum UnitPixelArt {
             guard let body = imageCache["body-revrent-0"],
                   let arm = imageCache["arm-revrent"] else { return UIImage() }
             let m = armMetrics(for: kind)
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 1
-            format.opaque = false
-            let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
-                                                   format: format).image { ctx in
-                let cg = ctx.cgContext
-                // Body canvas is 72x40: shrink so the raised relay fits.
-                let s: CGFloat = 0.44
-                let bw = 72 * s, bh = 40 * s
-                let x0 = (36 - bw) / 2, y0 = (24 - bh) / 2
-                body.draw(in: CGRect(x: x0, y: y0, width: bw, height: bh))
+            // Body art is 72x40: draw at 2x, centered; relay off the prow.
+            let portrait = makePortrait { cg in
+                body.draw(in: CGRect(x: 0, y: 8, width: 144, height: 80))
                 cg.saveGState()
-                cg.translateBy(x: x0 + 52 * s, y: y0 + 26 * s)
+                cg.translateBy(x: 104, y: 60)
                 cg.rotate(by: -0.5)
-                let aw = CGFloat(m.w) * s, ah = CGFloat(m.h) * s
+                let aw = CGFloat(m.w) * 2, ah = CGFloat(m.h) * 2
                 arm.draw(in: CGRect(x: -aw * 0.21, y: -ah / 2, width: aw, height: ah))
                 cg.restoreGState()
             }
@@ -577,26 +500,23 @@ enum UnitPixelArt {
         guard let body = imageCache[bodyKey], let arm = imageCache[armKey] else {
             return UIImage()
         }
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = false
-        let portrait = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 24),
-                                               format: format).image { ctx in
-            let cg = ctx.cgContext
-            // Torso-up crop: full width, rows 1...18 (head through belt).
-            // Renderer scale is 1, so points == pixels for the crop.
+        // Torso-up crop (24x18: head through belt) drawn at 3x, centered;
+        // gun-arm raised high off the shoulder at the same scale.
+        let portrait = makePortrait { cg in
             // NOTE: draw via UIImage (not raw CGImage) so UIKit orientation
             // is honoured — CGImage draws upside-down here.
             let crop = CGRect(x: 0, y: 1, width: 24, height: 18)
             if let bust = body.cgImage?.cropping(to: crop) {
                 UIImage(cgImage: bust, scale: 1, orientation: .up)
-                    .draw(in: CGRect(x: 2, y: 4, width: 24, height: 18))
+                    .draw(in: CGRect(x: 36, y: 21, width: 72, height: 54))
             }
-            // Gun-arm raised high, pivoting on the shoulder grip.
+            // Gun-arm raised high, pivoting on the shoulder grip. The
+            // stored shoulder is in old 36x24-backing coords where the crop
+            // sat at (2, 4) — rebase it onto the new 3x layout at (36, 21).
             cg.saveGState()
-            cg.translateBy(x: shoulder.x, y: shoulder.y)
+            cg.translateBy(x: 36 + (shoulder.x - 2) * 3, y: 21 + (shoulder.y - 4) * 3)
             cg.rotate(by: -0.32)
-            arm.draw(in: CGRect(x: -5, y: -6, width: 24, height: 12))
+            arm.draw(in: CGRect(x: -15, y: -18, width: 72, height: 36))
             cg.restoreGState()
         }
         portraitCache[kind] = portrait
@@ -3020,143 +2940,162 @@ enum UnitPixelArt {
         }
     }
 
-    // MARK: - Vesper (Level 34 violet void-herald)
+    // MARK: - Vesper (Level 34 void-herald, Scout-style interceptor)
 
-    /// Slow void-herald glider (64x36), side view facing +x: a deep-violet
-    /// crescent hull between twin translucent wing-veils sweeping up-back
-    /// and down-back, a pale hollow eye slit on the prow rim, a hanging
-    /// shard-caster fork slung below the keel with a crackling void thread,
-    /// and wisp trails bleeding off the stern. All violet: dusk plates,
-    /// magenta-lit leading edges, pale-lavender cores. The 4 poses bob the
-    /// frame and flicker the eye + veils + thread so the looming hover
-    /// reads in motion. The aimable shard-caster lives in vesperArm();
-    /// the pivot sits at canvas (42, 27), on the keel mount.
+    /// Slow void-herald interceptor (64x36), side view facing +x, drawn in
+    /// the spirit of the StarCraft 1 Protoss Scout: a steel-blue dart
+    /// fuselage with a glowing cyan cockpit canopy, the Scout's signature
+    /// twin forward prongs (long upper + lower fork blades split by the
+    /// Scout's open fork gap, both tipped with cyan blaster stings), gold
+    /// squadron trim along the flank, a small
+    /// dorsal fin, and twin stern engines burning cyan. Protoss steel with
+    /// gold edges and cyan cores. The 4 poses bob the frame and flicker
+    /// the engines + canopy + blaster tips so the looming hover reads in
+    /// motion. The aimable twin photon blaster lives in vesperArm(); the
+    /// pivot sits at canvas (42, 27), on the belly gun mount.
     private static func vesper(pose: Int) -> SKTexture {
         canvas(w: 64, h: 36, key: "body-vesper-\(pose)") { cg in
-            let hull = UIColor(red: 0.30, green: 0.12, blue: 0.48, alpha: 1)
-            let hullHi = UIColor(red: 0.72, green: 0.38, blue: 1.0, alpha: 1)
-            let hullLt = UIColor(red: 0.88, green: 0.62, blue: 1.0, alpha: 1)
-            let hullD = UIColor(red: 0.16, green: 0.06, blue: 0.30, alpha: 1)
-            let hullDk = UIColor(red: 0.08, green: 0.03, blue: 0.16, alpha: 1)
-            let veil = UIColor(red: 0.42, green: 0.20, blue: 0.72, alpha: 1)
-            let veilHi = UIColor(red: 0.78, green: 0.48, blue: 1.0, alpha: 1)
-            let eye = UIColor(red: 0.95, green: 0.55, blue: 1.0, alpha: 1)
-            let shard = UIColor(red: 0.68, green: 0.30, blue: 1.0, alpha: 1)
-            let shardHi = UIColor(red: 0.92, green: 0.78, blue: 1.0, alpha: 1)
+            let hull = UIColor(red: 0.42, green: 0.50, blue: 0.63, alpha: 1)
+            let hullHi = UIColor(red: 0.72, green: 0.80, blue: 0.92, alpha: 1)
+            let hullLt = UIColor(red: 0.88, green: 0.93, blue: 1.0, alpha: 1)
+            let hullD = UIColor(red: 0.24, green: 0.29, blue: 0.39, alpha: 1)
+            let hullDk = UIColor(red: 0.10, green: 0.13, blue: 0.20, alpha: 1)
+            let gold = UIColor(red: 0.85, green: 0.66, blue: 0.20, alpha: 1)
+            let goldHi = UIColor(red: 0.96, green: 0.84, blue: 0.43, alpha: 1)
+            let glow = UIColor(red: 0.30, green: 0.89, blue: 1.0, alpha: 1)
+            let glowHi = UIColor(red: 0.79, green: 0.97, blue: 1.0, alpha: 1)
             let O = outline
 
             let lift = [0, 1, 0, -1][pose]
             let hot = pose % 2 == 0
 
-            // --- Stern wisps: void-light bleeding off the tail.
-            fill(cg, x: 18, y: 15 + lift, w: 3, h: 2, veilHi.withAlphaComponent(0.8))
-            fill(cg, x: 15, y: 16 + lift, w: 3, h: 1, hot ? shardHi : shard)
-            fill(cg, x: 19, y: 18 + lift, w: 2, h: 2, O)
-            fill(cg, x: 19, y: 18 + lift, w: 2, h: 1, hot ? shardHi : veil)
-
-            // --- Upper wing-veil: a tall translucent crescent sweeping
-            // up-back off the spine, magenta-lit leading edge, pale tip.
-            fill(cg, x: 27, y: 7 + lift, w: 11, h: 7, O)
-            fill(cg, x: 28, y: 8 + lift, w: 9, h: 5, veil)
-            fill(cg, x: 28, y: 12 + lift, w: 9, h: 1, hull)
-            fill(cg, x: 21, y: 4 + lift, w: 9, h: 4, O)
-            fill(cg, x: 22, y: 5 + lift, w: 7, h: 2, hullD)
-            fill(cg, x: 22, y: 5 + lift, w: 7, h: 1, veilHi)
-            fill(cg, x: 15, y: 1 + lift, w: 8, h: 4, O)
-            fill(cg, x: 16, y: 2 + lift, w: 6, h: 2, veilHi)
-            fill(cg, x: 16, y: 2 + lift, w: 2, h: 1, hot ? .white : shardHi)
-            // Pale tip feather catching the void-light.
-            fill(cg, x: 13, y: 0 + lift, w: 4, h: 2, O)
-            fill(cg, x: 14, y: 0 + lift, w: 2, h: 1, hot ? shardHi : veilHi)
-            // Spine strut tying the veil to the hull.
-            fill(cg, x: 30, y: 11 + lift, w: 3, h: 3, O)
-            fill(cg, x: 31, y: 12 + lift, w: 1, h: 1, shardHi)
-
-            // --- Lower wing-veil: mirrored crescent sweeping down-back
-            // under the belly, darker (falls away from the light), hot tip.
-            fill(cg, x: 27, y: 21 + lift, w: 11, h: 7, O)
-            fill(cg, x: 28, y: 22 + lift, w: 9, h: 5, hullDk)
-            fill(cg, x: 28, y: 22 + lift, w: 9, h: 1, hullD)
-            fill(cg, x: 21, y: 26 + lift, w: 9, h: 4, O)
-            fill(cg, x: 22, y: 27 + lift, w: 7, h: 2, hullD)
-            fill(cg, x: 22, y: 28 + lift, w: 7, h: 1, hull)
-            fill(cg, x: 16, y: 30 + lift, w: 7, h: 3, O)
-            fill(cg, x: 17, y: 31 + lift, w: 5, h: 1, veilHi)
-            fill(cg, x: 17, y: 31 + lift, w: 1, h: 1, hot ? .white : shardHi)
-            // Belly strut.
-            fill(cg, x: 30, y: 21 + lift, w: 3, h: 3, O)
-            fill(cg, x: 31, y: 21 + lift, w: 1, h: 1, shardHi)
-
-            // --- Crescent hull: dusk prow tapering to a forked stern.
-            fill(cg, x: 22, y: 14 + lift, w: 26, h: 8, O)
-            fill(cg, x: 23, y: 15 + lift, w: 24, h: 6, hull)
-            fill(cg, x: 23, y: 15 + lift, w: 24, h: 1, hullHi)
-            fill(cg, x: 23, y: 20 + lift, w: 24, h: 1, hullDk)
-            // Panel seams.
-            for rx in [28, 36, 44] {
-                fill(cg, x: rx, y: 15 + lift, w: 1, h: 6, hullD)
+            // --- Twin stern engines: armored blocks with cyan exhausts
+            // burning off the tail (white-hot cores on even poses).
+            for ey in [12, 20] {
+                fill(cg, x: 12, y: ey + lift, w: 7, h: 4, O)
+                fill(cg, x: 13, y: ey + lift, w: 5, h: 4, hullD)
+                fill(cg, x: 13, y: ey + lift, w: 5, h: 1, hullHi)
+                fill(cg, x: 9, y: ey + 1 + lift, w: 4, h: 2, O)
+                fill(cg, x: 9, y: ey + 1 + lift, w: 3, h: 2, glow)
+                fill(cg, x: 9, y: ey + 1 + lift, w: 1, h: 2, hot ? .white : glowHi)
             }
-            fill(cg, x: 25, y: 16 + lift, w: 2, h: 1, hullLt.withAlphaComponent(0.6))
-            // Pale void stripe along the flank.
-            fill(cg, x: 24, y: 18 + lift, w: 12, h: 1, shardHi)
-            fill(cg, x: 24, y: 19 + lift, w: 12, h: 1, hullDk)
-            // --- Hollow prow + pale eye slit (the hostile read).
-            fill(cg, x: 48, y: 14 + lift, w: 9, h: 8, O)
-            fill(cg, x: 49, y: 15 + lift, w: 7, h: 6, hull)
-            fill(cg, x: 49, y: 15 + lift, w: 7, h: 1, hullHi)
-            fill(cg, x: 54, y: 16 + lift, w: 3, h: 4, O)
-            fill(cg, x: 55, y: 17 + lift, w: 1, h: 2, hot ? .white : eye)
-            fill(cg, x: 55, y: 17 + lift, w: 1, h: 1, hot ? shardHi : eye)
-            // Prow barb.
-            fill(cg, x: 57, y: 17 + lift, w: 3, h: 2, O)
-            fill(cg, x: 58, y: 17 + lift, w: 1, h: 1, hot ? shardHi : hullHi)
+            // Engine spine between the blocks.
+            fill(cg, x: 17, y: 14 + lift, w: 5, h: 8, O)
+            fill(cg, x: 18, y: 15 + lift, w: 3, h: 6, hull)
+            fill(cg, x: 18, y: 15 + lift, w: 3, h: 1, hullHi)
 
-            // --- Shard-caster fork slung below the keel: twin prongs
-            // with a crackling void thread between them (the arm mounts
-            // just ahead of this fork and fires through it).
-            fill(cg, x: 40, y: 22 + lift, w: 4, h: 6, O)
-            fill(cg, x: 41, y: 23 + lift, w: 2, h: 4, hullD)
-            fill(cg, x: 50, y: 22 + lift, w: 4, h: 6, O)
-            fill(cg, x: 51, y: 23 + lift, w: 2, h: 4, hull)
-            fill(cg, x: 51, y: 23 + lift, w: 2, h: 1, hullHi)
-            fill(cg, x: 44, y: 24 + lift, w: 6, h: 2, hot ? shardHi : shard)
-            fill(cg, x: 46, y: 24 + lift, w: 2, h: 1, hot ? .white : shardHi)
-            // Caster hardpoint block on the keel.
-            fill(cg, x: 38, y: 20 + lift, w: 18, h: 3, O)
-            fill(cg, x: 39, y: 20 + lift, w: 16, h: 2, hullD)
-            fill(cg, x: 39, y: 20 + lift, w: 16, h: 1, hull.withAlphaComponent(0.7))
+            // --- Dorsal fin: small gold-tipped blade on the spine.
+            fill(cg, x: 25, y: 7 + lift, w: 5, h: 6, O)
+            fill(cg, x: 26, y: 8 + lift, w: 3, h: 4, hullD)
+            fill(cg, x: 26, y: 8 + lift, w: 3, h: 1, hullHi)
+            fill(cg, x: 26, y: 7 + lift, w: 3, h: 1, goldHi)
+
+            // --- Glowing cockpit canopy amidships (the hostile read).
+            fill(cg, x: 28, y: 9 + lift, w: 12, h: 5, O)
+            fill(cg, x: 29, y: 10 + lift, w: 10, h: 3, glow)
+            fill(cg, x: 29, y: 10 + lift, w: 10, h: 1, hot ? .white : glowHi)
+            fill(cg, x: 28, y: 13 + lift, w: 12, h: 1, gold)
+            fill(cg, x: 33, y: 10 + lift, w: 1, h: 3, hullDk)
+
+            // --- Dart fuselage: stern block tapering to the nose.
+            fill(cg, x: 20, y: 13 + lift, w: 12, h: 10, O)
+            fill(cg, x: 21, y: 14 + lift, w: 10, h: 8, hull)
+            fill(cg, x: 21, y: 14 + lift, w: 10, h: 1, hullHi)
+            fill(cg, x: 21, y: 21 + lift, w: 10, h: 1, hullDk)
+            fill(cg, x: 30, y: 14 + lift, w: 13, h: 8, O)
+            fill(cg, x: 31, y: 15 + lift, w: 11, h: 6, hull)
+            fill(cg, x: 31, y: 15 + lift, w: 11, h: 1, hullHi)
+            fill(cg, x: 31, y: 20 + lift, w: 11, h: 1, hullDk)
+            // Panel seams + rivets.
+            for rx in [26, 34] {
+                fill(cg, x: rx, y: 14 + lift, w: 1, h: 8, hullD)
+            }
+            fill(cg, x: 23, y: 15 + lift, w: 2, h: 1, hullLt.withAlphaComponent(0.6))
+            // Gold squadron stripe along the flank.
+            fill(cg, x: 23, y: 18 + lift, w: 17, h: 1, gold)
+            fill(cg, x: 23, y: 19 + lift, w: 17, h: 1, hullDk)
+            // --- Short central sensor spike: the fork stays open around it
+            // — empty space between the prong blades is the Scout read.
+            fill(cg, x: 42, y: 16 + lift, w: 6, h: 3, O)
+            fill(cg, x: 43, y: 17 + lift, w: 4, h: 1, hullD)
+            fill(cg, x: 46, y: 17 + lift, w: 2, h: 1, hot ? .white : glow)
+
+            // --- Upper fork prong: the Scout's signature long forward
+            // blade sweeping up-forward — thin, gold-edged, cyan sting at
+            // the tip. Open space below it is the fork gap.
+            fill(cg, x: 33, y: 6 + lift, w: 9, h: 4, O)
+            fill(cg, x: 34, y: 7 + lift, w: 7, h: 2, hullD)
+            fill(cg, x: 34, y: 7 + lift, w: 7, h: 1, gold)
+            fill(cg, x: 41, y: 5 + lift, w: 11, h: 3, O)
+            fill(cg, x: 42, y: 6 + lift, w: 9, h: 1, hull)
+            fill(cg, x: 42, y: 5 + lift, w: 9, h: 1, gold)
+            fill(cg, x: 51, y: 4 + lift, w: 8, h: 3, O)
+            fill(cg, x: 52, y: 5 + lift, w: 6, h: 1, hullD)
+            fill(cg, x: 57, y: 5 + lift, w: 2, h: 1, hot ? .white : glow)
+            // Prong root strut tying the blade to the spine.
+            fill(cg, x: 36, y: 9 + lift, w: 4, h: 4, O)
+            fill(cg, x: 37, y: 10 + lift, w: 2, h: 2, hullD)
+            fill(cg, x: 37, y: 10 + lift, w: 2, h: 1, gold)
+
+            // --- Lower fork prong: mirrored long blade sweeping
+            // down-forward, gold-edged, cyan sting — the fork gap stays
+            // open above it all the way back to the hull.
+            fill(cg, x: 33, y: 23 + lift, w: 9, h: 4, O)
+            fill(cg, x: 34, y: 24 + lift, w: 7, h: 2, hullD)
+            fill(cg, x: 34, y: 25 + lift, w: 7, h: 1, gold)
+            fill(cg, x: 41, y: 25 + lift, w: 11, h: 3, O)
+            fill(cg, x: 42, y: 26 + lift, w: 9, h: 1, hull)
+            fill(cg, x: 42, y: 27 + lift, w: 9, h: 1, gold)
+            fill(cg, x: 51, y: 27 + lift, w: 8, h: 3, O)
+            fill(cg, x: 52, y: 28 + lift, w: 6, h: 1, hullD)
+            fill(cg, x: 57, y: 28 + lift, w: 2, h: 1, hot ? .white : glow)
+            // Prong root strut to the belly.
+            fill(cg, x: 36, y: 20 + lift, w: 4, h: 4, O)
+            fill(cg, x: 37, y: 21 + lift, w: 2, h: 2, hullD)
+            fill(cg, x: 37, y: 22 + lift, w: 2, h: 1, gold)
+
+            // --- Belly gun-mount hardpoint (the arm hangs off this block
+            // and fires through the prongs ahead of it).
+            fill(cg, x: 38, y: 25 + lift, w: 16, h: 4, O)
+            fill(cg, x: 39, y: 26 + lift, w: 14, h: 2, hullDk)
+            fill(cg, x: 39, y: 26 + lift, w: 14, h: 1, hull.withAlphaComponent(0.7))
+            fill(cg, x: 44, y: 27 + lift, w: 2, h: 1, gold)
         }
     }
 
-    /// Shard-caster: armored violet mount + twin fork prongs with a
-    /// void-light thread between them. Mounts on the keel gun mount and
-    /// steers at targets like a gun-arm — the scene fires the 3-shard fan
-    /// through it.
+    /// Twin photon blaster: steel-blue armored mount with gold trim + twin
+    /// barrels tipped with cyan blaster light. Mounts on the belly gun
+    /// mount and steers at targets like a gun-arm — the scene fires the
+    /// 3-shard fan through it.
     private static func vesperArm() -> SKTexture {
         canvas(w: armW, h: armH, key: "arm-vesper") { cg in
-            let hull = UIColor(red: 0.30, green: 0.12, blue: 0.48, alpha: 1)
-            let hullD = UIColor(red: 0.16, green: 0.06, blue: 0.30, alpha: 1)
-            let metal = UIColor(red: 0.22, green: 0.20, blue: 0.30, alpha: 1)
-            let shard = UIColor(red: 0.68, green: 0.30, blue: 1.0, alpha: 1)
-            let shardHi = UIColor(red: 0.92, green: 0.78, blue: 1.0, alpha: 1)
+            let hull = UIColor(red: 0.42, green: 0.50, blue: 0.63, alpha: 1)
+            let hullD = UIColor(red: 0.24, green: 0.29, blue: 0.39, alpha: 1)
+            let metal = UIColor(red: 0.16, green: 0.19, blue: 0.27, alpha: 1)
+            let gold = UIColor(red: 0.85, green: 0.66, blue: 0.20, alpha: 1)
+            let glow = UIColor(red: 0.30, green: 0.89, blue: 1.0, alpha: 1)
+            let glowHi = UIColor(red: 0.79, green: 0.97, blue: 1.0, alpha: 1)
             let O = outline
             // Armored mount wrapping the grip (x=5).
             fill(cg, x: 1, y: 2, w: 8, h: 8, O)
             fill(cg, x: 2, y: 3, w: 6, h: 6, hull)
-            fill(cg, x: 2, y: 3, w: 6, h: 1, UIColor(red: 0.72, green: 0.38, blue: 1.0, alpha: 1))
-            fill(cg, x: 2, y: 7, w: 6, h: 1, hullD)
+            fill(cg, x: 2, y: 3, w: 6, h: 1, gold)
+            fill(cg, x: 2, y: 8, w: 6, h: 1, hullD)
             // Twin receiver block.
             fill(cg, x: 8, y: 2, w: 6, h: 8, O)
             fill(cg, x: 9, y: 3, w: 4, h: 6, metal)
-            // Upper + lower caster prongs.
+            // Upper + lower photon barrels.
             fill(cg, x: 13, y: 2, w: 7, h: 3, O)
             fill(cg, x: 14, y: 3, w: 5, h: 1, metal)
+            fill(cg, x: 14, y: 3, w: 2, h: 1, glow)
             fill(cg, x: 13, y: 7, w: 7, h: 3, O)
             fill(cg, x: 14, y: 8, w: 5, h: 1, metal)
-            // Void thread: violet light bridging the prongs at the muzzle.
+            fill(cg, x: 14, y: 8, w: 2, h: 1, glow)
+            // Photon bridge: cyan blaster light joining the barrels at
+            // the muzzle.
             fill(cg, x: 19, y: 2, w: 3, h: 8, O)
-            fill(cg, x: 20, y: 3, w: 1, h: 6, shard)
-            fill(cg, x: 20, y: 5, w: 1, h: 2, shardHi)
+            fill(cg, x: 20, y: 3, w: 1, h: 6, glow)
+            fill(cg, x: 20, y: 5, w: 1, h: 2, glowHi)
         }
     }
 

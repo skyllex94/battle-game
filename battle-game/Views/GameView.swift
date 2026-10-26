@@ -550,8 +550,9 @@ struct GameView: View {
             }
 
             // New-hostile intel: each enemy debut for THIS level gets its
-            // own modal (portrait + stats + threat read). Fires once per
-            // hostile — replays skip whatever was already briefed.
+            // own modal (portrait + stats + threat read), same as the new
+            // army-unit cards — every entry, no buttons. Tap outside the
+            // card to step through the queue.
             if let step = currentIntro, case .foe(let foe) = step {
                 Color.black.opacity(0.6)
                     .ignoresSafeArea()
@@ -592,10 +593,6 @@ struct GameView: View {
                         UnitStatChip(label: "HP", value: "\(Int(foe.hp))")
                         UnitStatChip(label: "DMG", value: "\(Int(foe.attackDamage))")
                         UnitStatChip(label: "SPD", value: "\(Int(foe.moveSpeed))")
-                    }
-                    PixelMenuButton(title: introNextTitle, style: .primary) {
-                        SoundEngine.shared.uiTap()
-                        advanceIntro()
                     }
                 }
                 .padding(.horizontal, 26)
@@ -908,11 +905,6 @@ struct GameView: View {
             scene.heroJumpHeld = false
             weapon = scene.heroWeapon
             revivedThisRun = false
-            // Retire past hostile debuts silently: only the frontier
-            // level ever raises NEW HOSTILE, and only once per hostile.
-            for kind in EnemyKind.allCases where kind.unlockLevel < level.id {
-                EnemyIntroSeen.mark(kind)
-            }
             // Queued level-entry intel: let the battle breathe ~1s, then
             // freeze and step through every debut on this level — one
             // modal per new enemy unit (plus tower/base/bomber/army cards).
@@ -1364,14 +1356,6 @@ struct GameView: View {
             .frame(width: 264, height: 168)
             .clipShape(PixelPanelShape(cut: 8))
             .overlay(PixelPanelShape(cut: 8).stroke(.yellow.opacity(0.85), lineWidth: 2))
-            .overlay(alignment: .topTrailing) {
-                Text("FINALE")
-                    .font(.system(size: 10, weight: .black, design: .monospaced))
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(.yellow)
-                    .padding(6)
-            }
             .overlay(alignment: .bottomLeading) {
                 HStack(spacing: 3) {
                     ForEach(0..<Balance.baseMissileCountFinale, id: \.self) { _ in
@@ -1392,7 +1376,7 @@ struct GameView: View {
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                 .tracking(1.5)
                 .foregroundStyle(.yellow)
-            Text("This is it — the heart of the enemy on Emra. Their HQ rises as a huge Mordor core-fortress crowned by the Burning Eye, answering every push with a 5-rocket salvo. Ours stands as the same Mk-II citadel. Bring the Core down and take humanity home.")
+            Text("This is it — the heart of the enemy on Emra. Their HQ rises as a huge core-fortress crowned by the Burning Eye.")
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white.opacity(0.78))
@@ -1403,10 +1387,6 @@ struct GameView: View {
                 UnitStatChip(label: "SALVO", value: "5 MISSILES")
                 UnitStatChip(label: "ENEMY HQ", value: "\(Int(Balance.enemyBaseHealth(forLevel: level.id).rounded()))")
                 UnitStatChip(label: "RANGE", value: "\(Int(Balance.baseRange))")
-            }
-            PixelMenuButton(title: introNextTitle, style: .primary) {
-                SoundEngine.shared.uiTap()
-                advanceIntro()
             }
         }
         .padding(.horizontal, 22)
@@ -1472,10 +1452,11 @@ struct GameView: View {
         ArmyKind.allCases.filter { $0.unlockLevel == level.id }
     }
 
-    /// Every hostile debuting on this level that hasn't been briefed yet.
-    /// Usually one; the queue shows each in turn. Replays skip briefed.
+    /// Every hostile debuting on this level (usually one — array so a
+    /// future level can field two at once and each gets its own modal).
+    /// Mirrors the army debuts: shows on every entry, replays included.
     private var foeDebuts: [EnemyKind] {
-        EnemyKind.allCases.filter { $0.unlockLevel == level.id && !EnemyIntroSeen.seen($0) }
+        EnemyKind.allCases.filter { $0.unlockLevel == level.id }
     }
 
     /// Total intel cards in the current run (for the "1 OF N" header).
@@ -1524,11 +1505,6 @@ struct GameView: View {
     /// drains, hands off to the Level 5 grants / milestone hero if pending,
     /// otherwise resumes the battle.
     private func advanceIntro() {
-        // Persist hostile briefings the moment their card is dismissed so
-        // replays never re-modal.
-        if case .foe(let foe) = currentIntro {
-            EnemyIntroSeen.mark(foe)
-        }
         if introQueue.isEmpty {
             currentIntro = nil
             introTotalCount = 0

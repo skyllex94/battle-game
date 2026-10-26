@@ -728,9 +728,10 @@ final class EnemyNode: SKSpriteNode {
     }
 
     /// Vesper hover: the void-herald drifts rather than darts — the 4
-    /// wing-veil shimmer frames cycle at all times, the frame banks a touch
-    /// deeper than the phoenix in flight and levels to aim while holding
-    /// station. Slowest tilt response of the sky pack, for a looming read.
+    /// engine/canopy/blaster flicker frames cycle at all times, the frame
+    /// banks a touch deeper than the phoenix in flight and levels to aim
+    /// while holding station. Slowest tilt response of the sky pack, for
+    /// a looming read.
     private func animateVesper(dt: TimeInterval, advancing: Bool) {
         marchPhase += dt * 10
         if frames.count == 4 {

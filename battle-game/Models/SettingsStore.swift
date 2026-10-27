@@ -13,6 +13,7 @@ final class SettingsStore: ObservableObject {
     @Published var sfxVolume: Double { didSet { save(sfxVolume, "settings.sfxVolume") } }
     @Published var hapticsEnabled: Bool { didSet { save(hapticsEnabled, "settings.haptics") } }
     @Published var particlesEnabled: Bool { didSet { save(particlesEnabled, "settings.particles") } }
+    @Published var weatherEnabled: Bool { didSet { save(weatherEnabled, "settings.weather") } }
     @Published var muzzleFlashEnabled: Bool { didSet { save(muzzleFlashEnabled, "settings.muzzleFlash") } }
     @Published var effectsQuality: String { didSet { save(effectsQuality, "settings.effectsQuality") } }
     /// 0.5 ... 1.5 multiplier applied to joystick look/turn speed in stage 2.
@@ -32,6 +33,7 @@ final class SettingsStore: ObservableObject {
         sfxVolume = double("settings.sfxVolume", 0.8)
         hapticsEnabled = bool("settings.haptics", true)
         particlesEnabled = bool("settings.particles", true)
+        weatherEnabled = bool("settings.weather", true)
         muzzleFlashEnabled = bool("settings.muzzleFlash", true)
         effectsQuality = defaults.string(forKey: "settings.effectsQuality")
             ?? GameSettings.EffectsQuality.standard.rawValue
@@ -52,6 +54,7 @@ final class SettingsStore: ObservableObject {
         sfxVolume = 0.8
         hapticsEnabled = true
         particlesEnabled = true
+        weatherEnabled = true
         muzzleFlashEnabled = true
         effectsQuality = GameSettings.EffectsQuality.standard.rawValue
         sensitivity = 1.0
@@ -92,6 +95,12 @@ enum GameSettings {
 
     static var particlesEnabled: Bool {
         BoolDefault("settings.particles", fallback: true)
+    }
+
+    /// Snowfall overlay on snow levels. Independent from particles so a
+    /// player can keep combat FX but clear the snow (visibility + battery).
+    static var weatherEnabled: Bool {
+        BoolDefault("settings.weather", fallback: true)
     }
 
     static var hapticsEnabled: Bool {

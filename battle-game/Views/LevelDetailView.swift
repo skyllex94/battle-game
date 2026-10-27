@@ -18,11 +18,15 @@ struct LevelDetailView: View {
     /// initial value — SwiftUI re-evaluates that on every re-render, and a
     /// throwaway scene would fight the running battle for the layout).
     @State private var bgScene: MainMenuBattleScene?
-    /// Gates the SpriteView one runloop past the push: the frost diorama's
-    /// first bake (Level 21+) is main-thread CoreGraphics, and presenting
-    /// it synchronously inside the navigation transition is what freezes
-    /// the map tap. The static gradient underneath covers the gap.
+    /// Gates the SpriteView past the push: the diorama's first bake is
+    /// main-thread CoreGraphics (frost levels especially), and presenting
+    /// it inside the navigation transition is what stuttered the map tap.
+    /// The scene builds after the push lands, then crossfades in — the
+    /// static gradient underneath covers the gap so the push itself is
+    /// light and the backdrop arrives as a fade, not a pop.
     @State private var dioramaReady = false
+    /// Backdrop crossfade 0 → 1 once the diorama's first frame is up.
+    @State private var bgOpacity = 0.0
 
     /// Enemy kinds debuting on this level (briefing intel).
     private var newEnemies: [EnemyKind] {
@@ -91,15 +95,37 @@ struct LevelDetailView: View {
         .background(Color.black.ignoresSafeArea(edges: .all))
         .onAppear {
             // Backdrop must dress THIS level's battlefield, not the last one
-            // played — build it once per level. Presentation waits a runloop
-            // so the map → briefing push never stalls on a cold bake.
+            // played — build it once per level. The build waits until the
+            // push animation lands, then crossfades: baking mid-push is
+            // what made the transition stutter.
             if bgScene?.levelId != level.id {
-                dioramaReady = false
-                bgScene = MainMenuBattleScene(size: CGSize(width: 1334, height: 750),
-                                              levelId: level.id)
-                DispatchQueue.main.async { dioramaReady = true }
+                showDioramaAfterPush()
             } else if !dioramaReady {
-                DispatchQueue.main.async { dioramaReady = true }
+                fadeDioramaIn()
+            } else if bgOpacity < 1 {
+                withAnimation(.easeIn(duration: 0.3)) { bgOpacity = 1 }
+            }
+        }
+    }
+
+    /// Builds the diorama after the navigation push lands, then fades it in.
+    private func showDioramaAfterPush() {
+        dioramaReady = false
+        bgOpacity = 0
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            bgScene = MainMenuBattleScene(size: CGSize(width: 1334, height: 750),
+                                          levelId: level.id)
+            fadeDioramaIn()
+        }
+    }
+
+    /// Presents the built scene behind the fade, then crossfades once its
+    /// first frame is up so the backdrop arrives as a dissolve, not a pop.
+    private func fadeDioramaIn() {
+        DispatchQueue.main.async {
+            dioramaReady = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                withAnimation(.easeIn(duration: 0.45)) { bgOpacity = 1 }
             }
         }
     }
@@ -119,6 +145,7 @@ struct LevelDetailView: View {
             SpriteView(scene: scene, options: [.ignoresSiblingOrder])
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea(edges: .all)
+                .opacity(bgOpacity)
         }
         LinearGradient(colors: [.black.opacity(0.74), .black.opacity(0.46)],
                        startPoint: .leading, endPoint: .trailing)
@@ -153,14 +180,6 @@ struct LevelDetailView: View {
                 .background(.black.opacity(0.65))
                 .clipShape(ShopPixelShape(cut: 6))
                 .overlay(ShopPixelShape(cut: 6).stroke(.cyan.opacity(0.6), lineWidth: 2))
-            }
-
-            HStack(spacing: 6) {
-                Rectangle().fill(.cyan).frame(width: 8, height: 8)
-                Text("MISSION BRIEFING")
-                    .font(.system(size: tight ? 10 : 11, weight: .black, design: .monospaced))
-                    .tracking(2)
-                    .foregroundStyle(.cyan)
             }
 
             Spacer(minLength: 6)

@@ -1715,9 +1715,6 @@ struct GameView: View {
                                 .lineLimit(1)
                                 .foregroundStyle(minimap.reloading || minimap.ammoMag == 0 ? .red
                                     : .white.opacity(0.9))
-                            Text("MAG")
-                                .font(.system(size: 8, weight: .black, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.4))
                             if LoadoutStore.loadout.count > 1 {
                                 Image(systemName: "arrow.2.circlepath")
                                     .font(.system(size: 9, weight: .bold))

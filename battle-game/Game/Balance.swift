@@ -1072,14 +1072,15 @@ enum Balance {
     /// Interceptor droids: independent flyers with their own life. They
     /// deploy off the carrier when enemies are in sight, fly ahead of the
     /// hull and shoot, then fall back to the ring when the sky is clear.
-    /// A killed droid takes `revrentBuildTime` to be rebuilt.
+    /// A killed droid takes `revrentBuildTime` to be rebuilt, +1s extra
+    /// per interceptor that carrier has already lost.
     static let revrentInterceptorHP: CGFloat = 80
     static let revrentInterceptorDamage: CGFloat = 12
     static let revrentInterceptorFireCooldown: Double = 1.1
     static let revrentInterceptorRange: CGFloat = 520
     static let revrentInterceptorSight: CGFloat = 800
     static let revrentInterceptorSpeed: CGFloat = 280
-    static let revrentBuildTime: Double = 10.0
+    static let revrentBuildTime: Double = 7.0
     /// How far ahead of the carrier the deployed screen flies (pts).
     static let revrentScreenAhead: CGFloat = 130
 

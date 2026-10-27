@@ -1488,9 +1488,12 @@ final class GameScene: SKScene {
                 updateVesperFlight(e, dt: dt)
             }
 
-            // Target priority: closest exposed body in sight (hero or ally)
-            // > player tower > player base. Marchers chew what's nearest
-            // instead of walking past your army to reach you.
+            // Target priority: nearest of (hero / ally / interceptor /
+            // player tower / player base). Structures compete by proximity:
+            // if a tower is closer than any exposed body, the marcher
+            // fights the tower instead of walking past it to chase the hero.
+            // (Bodies use true distance; structures use the ground-line gap
+            // for melee, true distance for shooters — matching stop logic.)
             var target: CGPoint? = nil
             var bestDist = e.sightRange
             if hero.alive, !heroProtected {
@@ -1526,6 +1529,32 @@ final class GameScene: SKScene {
                 } else if let base = playerBase, base.alive {
                     target = CGPoint(x: base.node.position.x,
                                      y: Balance.groundTopY + 100)
+                }
+            } else {
+                // A body is in sight — but a closer structure steals the
+                // target so marchers don't stroll past towers to reach you.
+                // Layered defense still falls outer-first: the base only
+                // competes once no player tower stands.
+                if let tower = nearestTower(team: .player, toX: e.position.x) {
+                    let tAim = CGPoint(x: tower.node.position.x,
+                                       y: Balance.groundTopY + 100)
+                    let tDist = e.kind.isMelee
+                        ? abs(tAim.x - e.position.x)
+                        : hypot(tAim.x - e.position.x, tAim.y - e.position.y)
+                    if tDist < bestDist {
+                        bestDist = tDist
+                        target = tAim
+                    }
+                } else if let base = playerBase, base.alive {
+                    let bAim = CGPoint(x: base.node.position.x,
+                                       y: Balance.groundTopY + 100)
+                    let bDist = e.kind.isMelee
+                        ? abs(bAim.x - e.position.x)
+                        : hypot(bAim.x - e.position.x, bAim.y - e.position.y)
+                    if bDist < bestDist {
+                        bestDist = bDist
+                        target = bAim
+                    }
                 }
             }
             guard let aim = target else {
@@ -2547,8 +2576,9 @@ final class GameScene: SKScene {
         world.addChild(flash)
     }
 
-    /// Shared interceptor damage: drains HP, bursts + starts the 10s
-    /// rebuild on death. Removal happens in updateInterceptors' sweep.
+    /// Shared interceptor damage: drains HP, bursts + starts the rebuild
+    /// on death (7s base, +1s extra per interceptor this carrier has
+    /// lost). Removal happens in updateInterceptors' sweep.
     private func damageInterceptor(_ d: RevrentInterceptorNode, amount: CGFloat) {
         guard d.alive else { return }
         d.hp = max(0, d.hp - amount)
@@ -2560,7 +2590,9 @@ final class GameScene: SKScene {
             SoundEngine.shared.troopDown(at: d.position.x)
             if let carrier = d.owner {
                 if slotHasLiveInterceptor(carrier: carrier, slot: d.slotIndex) == false {
-                    carrier.interceptorBuildTimers[d.slotIndex] = Balance.revrentBuildTime
+                    carrier.interceptorRebuildExtra += 1
+                    carrier.interceptorBuildTimers[d.slotIndex] =
+                        Balance.revrentBuildTime + carrier.interceptorRebuildExtra
                 }
             }
             d.removeFromParent()

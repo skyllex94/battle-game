@@ -137,16 +137,13 @@ enum EmraMap {
                         + 3.0 * sin(Double(gy) * 0.27 + 1.1)).rounded())
         let x = gx + warp
         let n = h(gx, gy, 55)
-        // Levels: 1-6 woods (x 22/51/80/109/138/182), 7-12 desert
-        // (211/241/269/298/342/371), 13-20 mountains (400/429/458/502/531/
-        // 560/589/618), 21-27 ice (662/691/720/749/778/822/851), and
-        // 28-35 the dark core (880/909/938/982/1011/1040/1069/1098).
+        // Levels: 1-6 woods (x 22/51/80/109/138/182), 7-12 unified
+        // dune sea (211/241/269/298/342/371 — all golden dunes + oasis
+        // waste in the L7/L8 voice), 13-20 mountains (400/429/458/502/
+        // 531/560/589/618), 21-27 ice (662/691/720/749/778/822/851),
+        // and 28-35 the dark core (880/909/938/982/1011/1040/1069/1098).
         if x < 190 { return 0 }
         if x < 202 { return n < (x - 190) * 8 ? 1 : 0 }
-        if x < 248 { return 1 }
-        if x < 258 { return n < (x - 248) * 10 ? 2 : 1 }
-        if x < 284 { return 2 }
-        if x < 296 { return n < (x - 284) * 8 ? 1 : 2 }
         if x < 380 { return 1 }
         if x < 392 { return n < (x - 380) * 8 ? 3 : 1 }
         if x < 628 { return 3 }
@@ -194,39 +191,25 @@ enum EmraMap {
             if n > 88 { return lit }
             return mid
         case 1:
-            // L7 golden dunes -> L8 oasis waste -> L10 glasswind salt flats
-            // -> L11 burnt foundry -> L12 red canyon.
-            let jitter = h(gx, gy, 133) % 9 - 4
-            let xx = gx + jitter
+            // L7-L12 unified dune sea, all in the L7/L8 voice: golden
+            // dunes combed with oasis-waste washes (sun-bleached tan).
+            // Broad patches drift between the two so the whole stretch
+            // reads as one continuous desert instead of five mini-biomes.
+            let broad = h(gx / 9, gy / 4, 133)
             let dark: Color
             let base: Color
             let lit: Color
-            if xx < 228 {
-                dark = Color(red: 0.69, green: 0.55, blue: 0.32)
-                base = Color(red: 0.85, green: 0.70, blue: 0.43)
-                lit = Color(red: 0.96, green: 0.84, blue: 0.57)
-            } else if xx < 252 {
+            if broad > 60 {
+                // Oasis waste wash.
                 dark = Color(red: 0.57, green: 0.52, blue: 0.32)
                 base = Color(red: 0.74, green: 0.68, blue: 0.43)
                 lit = Color(red: 0.88, green: 0.82, blue: 0.55)
-            } else if xx < 296 {
-                dark = Color(red: 0.48, green: 0.28, blue: 0.18)
-                base = Color(red: 0.68, green: 0.43, blue: 0.26)
-                lit = Color(red: 0.84, green: 0.58, blue: 0.34)
-            } else if xx < 324 {
-                dark = Color(red: 0.76, green: 0.75, blue: 0.68)
-                base = Color(red: 0.90, green: 0.89, blue: 0.82)
-                lit = Color(red: 0.98, green: 0.98, blue: 0.94)
-            } else if xx < 356 {
-                dark = Color(red: 0.58, green: 0.39, blue: 0.24)
-                base = Color(red: 0.76, green: 0.55, blue: 0.34)
-                lit = Color(red: 0.90, green: 0.70, blue: 0.45)
             } else {
-                dark = Color(red: 0.48, green: 0.24, blue: 0.16)
-                base = Color(red: 0.66, green: 0.36, blue: 0.22)
-                lit = Color(red: 0.82, green: 0.50, blue: 0.28)
+                // Golden dune.
+                dark = Color(red: 0.69, green: 0.55, blue: 0.32)
+                base = Color(red: 0.85, green: 0.70, blue: 0.43)
+                lit = Color(red: 0.96, green: 0.84, blue: 0.57)
             }
-            let broad = h(gx / 9, gy / 4, 133)
             if broad > 76 { return lit }
             if n < 14 { return dark }
             if n > 88 { return lit }
@@ -400,18 +383,9 @@ enum EmraMap {
         }
 
         func dune(_ x: Int, _ y: Int, _ w: Int) {
-            let light: Color
-            let shade: Color
-            if x >= 330 {
-                light = Color(red: 0.78, green: 0.52, blue: 0.32)
-                shade = Color(red: 0.48, green: 0.30, blue: 0.20)
-            } else if x >= 286 {
-                light = Color(red: 0.96, green: 0.93, blue: 0.82)
-                shade = Color(red: 0.70, green: 0.66, blue: 0.55)
-            } else {
-                light = Color(red: 0.96, green: 0.87, blue: 0.66)
-                shade = Color(red: 0.70, green: 0.57, blue: 0.36)
-            }
+            // Unified golden dune crest (L7/L8 voice across 7-12).
+            let light = Color(red: 0.96, green: 0.87, blue: 0.66)
+            let shade = Color(red: 0.70, green: 0.57, blue: 0.36)
             for ox in -w...w {
                 let t = abs(Double(ox) / Double(max(1, w)))
                 let yy = y - Int((1 - t) * 3.0)
@@ -925,6 +899,7 @@ enum EmraMap {
             if biomeAt(x, y) == 1 { dune(x, y, frng.int(7, 15)) }
         }
 
+        // Wind-combed sand ripples across the whole dune sea.
         for _ in 0..<56 {
             let x = frng.int(202, 378)
             let y = frng.int(0, rows - 1)
@@ -932,8 +907,8 @@ enum EmraMap {
             guard y > top + 3, y < bot - 2, !nearNode(x, y, 5, 3) else { continue }
             if biomeAt(x, y) != 1 { continue }
             let s = frng.int(2, 4)
-            px(x, y, s, 1, Color(red: 0.48, green: 0.37, blue: 0.24), 0.9)
-            px(x, y - 1, max(1, s - 1), 1, Color(red: 0.67, green: 0.55, blue: 0.38), 0.85)
+            px(x, y, s, 1, Color(red: 0.70, green: 0.57, blue: 0.36), 0.9)
+            px(x, y - 1, max(1, s - 1), 1, Color(red: 0.96, green: 0.87, blue: 0.66), 0.85)
         }
 
         let wadi: [(Int, Int)] = [(202, 38), (210, 41), (218, 44), (226, 46),
@@ -969,92 +944,40 @@ enum EmraMap {
 
         mesa(218, 58, 19, 8)
         oasis(250, 56)
+        oasis(336, 57)
         pyramid(208, 57)
         pyramid(316, 58)
+        pyramid(360, 57)
+        palm(296, 52)
+        palm(322, 60)
 
         let reef: [(Int, Int)] = [(232, 64), (236, 66), (240, 65), (244, 67)]
         for (x, y) in reef {
             px(x, y, 2, 1, Color(red: 0.86, green: 0.50, blue: 0.46), 0.65)
         }
 
-        // L9 Duskfall Flats: dark sandstone shelves, dead scrub and bones.
-        for i in 0..<7 {
-            let bx = 252 + h(i, 60, 114) * 24 / 100
-            let by = 50 + h(i, 61, 115) * 9 / 100
-            for j in 0..<6 {
-                px(bx + j, by + (j % 2), 1, 1, Color(red: 0.20, green: 0.12, blue: 0.10), 0.75)
-                px(bx + j, by + 1 + (j % 2), 1, 1, Color(red: 0.52, green: 0.33, blue: 0.21), 0.35)
-            }
-        }
-
-        for i in 0..<7 {
-            let x = 258 + h(i, 62, 116) * 24 / 100
+        // Eastern dune sea (old L9-L12 ground): more of the same golden
+        // dunes voice — extra crests, a third oasis, pyramids, palms,
+        // cactus clusters, bones and sandstone ruin arches.
+        for _ in 0..<10 {
+            let x = 258 + h(frng.int(0, 999), 62, 116) % 112
             let top = landTop(x), bot = landBot(x)
             guard bot - top > 12 else { continue }
-            let y = top + 8 + h(i, 63, 117) % max(1, bot - top - 14)
-            if !nearNode(x, y, 5, 3), biomeAt(x, y) == 2 { deadTree(x, y) }
+            let y = top + 8 + h(x, 63, 117) % max(1, bot - top - 14)
+            if !nearNode(x, y, 5, 3), biomeAt(x, y) == 1 { dune(x, y, 7) }
         }
 
         var ashRNG = RNG(987654321)
 
-        for _ in 0..<10 {
-            let x = ashRNG.int(256, 286)
-            let y = ashRNG.int(0, rows - 1)
-            let top = landTop(x), bot = landBot(x)
-            guard y > top + 5, y < bot - 3, !nearNode(x, y) else { continue }
-            if biomeAt(x, y) == 2 { px(x, y, 2, 1, Color(red: 0.50, green: 0.31, blue: 0.19), 0.7) }
-        }
-
-        for _ in 0..<11 {
-            let x = ashRNG.int(258, 282)
-            let y = ashRNG.int(0, rows - 1)
-            let top = landTop(x), bot = landBot(x)
-            guard y > top + 5, y < bot - 3, !nearNode(x, y) else { continue }
-            if biomeAt(x, y) == 2 { duskDune(x, y, ashRNG.int(5, 10)) }
-        }
-
-        duskDune(274, 49, 11)
+        oasis(288, 55)
         ruinArch(266, 59)
+        ruinArch(344, 60)
         bones(278, 47)
-
-        // L10 Glasswind Flats: salt crust, pale glints and a ruined waymark.
-        for _ in 0..<14 {
-            let x = ashRNG.int(288, 324)
-            let y = ashRNG.int(0, rows - 1)
-            let top = landTop(x), bot = landBot(x)
-            guard y > top + 4, y < bot - 2, !nearNode(x, y, 6, 4) else { continue }
-            if biomeAt(x, y) == 1 {
-                px(x, y, 2, 1, Color(red: 0.96, green: 0.95, blue: 0.88), 0.7)
-            }
-        }
-        ruinArch(304, 56)
-        bones(292, 58)
-
-        // L11 Cinder Foundry: slag heaps, broken walls and dead trees.
-        for _ in 0..<18 {
-            let x = ashRNG.int(328, 356)
-            let y = ashRNG.int(0, rows - 1)
-            let top = landTop(x), bot = landBot(x)
-            guard y > top + 3, y < bot - 2, !nearNode(x, y) else { continue }
-            if biomeAt(x, y) == 1 { px(x, y, 2, 1, Color(red: 0.34, green: 0.23, blue: 0.18), 0.8) }
-        }
-        ruinArch(334, 56)
-        ruinArch(350, 60)
         bones(340, 50)
-        deadTree(330, 52)
-        deadTree(354, 48)
-
-        // L12 Red Canyon: layered mesas and dry cuts.
-        mesa(370, 58, 22, 10)
-        ruinArch(360, 60)
         bones(366, 48)
-        for _ in 0..<10 {
-            let x = ashRNG.int(358, 378)
-            let y = ashRNG.int(0, rows - 1)
-            let top = landTop(x), bot = landBot(x)
-            guard y > top + 3, y < bot - 2, !nearNode(x, y) else { continue }
-            if biomeAt(x, y) == 1 { px(x, y, 2, 1, Color(red: 0.44, green: 0.22, blue: 0.15), 0.8) }
-        }
+        cactus(330, 52)
+        cactus(354, 48)
+        palm(262, 60)
 
         // L13-20 mountain passes: scree, thin pine valleys and broken roads.
         for _ in 0..<44 {

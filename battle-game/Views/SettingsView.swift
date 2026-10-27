@@ -118,12 +118,20 @@ struct SettingsView: View {
     @ViewBuilder
     private func content(wide: Bool) -> some View {
         if wide {
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 14),
-                                GridItem(.flexible(), spacing: 14)], spacing: 14) {
-                audioPanel
-                graphicsPanel
-                controlsPanel
-                dataPanel
+            // Masonry columns (not a grid): each stack packs its own
+            // panels edge-to-edge, so a short panel never leaves a gap
+            // under it while the neighbor row stretches.
+            HStack(alignment: .top, spacing: 14) {
+                VStack(spacing: 14) {
+                    audioPanel
+                    dataPanel
+                }
+                .frame(maxWidth: .infinity, alignment: .top)
+                VStack(spacing: 14) {
+                    graphicsPanel
+                    controlsPanel
+                }
+                .frame(maxWidth: .infinity, alignment: .top)
             }
         } else {
             VStack(spacing: 14) {
@@ -168,6 +176,13 @@ struct SettingsView: View {
                     .frame(height: 1)
                 SettingsToggleRow(title: "HAPTICS", subtitle: "Destruction feedback",
                                   isOn: $settings.hapticsEnabled)
+                Rectangle()
+                    .fill(.white.opacity(0.08))
+                    .frame(height: 1)
+                Text("MIXER IS LIVE — VOLUMES APPLY MID-BATTLE.")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(1.2)
+                    .foregroundStyle(.white.opacity(0.35))
             }
         }
     }
@@ -179,6 +194,8 @@ struct SettingsView: View {
                                   isOn: $settings.particlesEnabled)
                 SettingsToggleRow(title: "MUZZLE FLASHES", subtitle: "Gun-tip light burst",
                                   isOn: $settings.muzzleFlashEnabled)
+                SettingsToggleRow(title: "WEATHER FX", subtitle: "Snowfall on snow levels",
+                                  isOn: $settings.weatherEnabled)
                 VStack(alignment: .leading, spacing: 7) {
                     Text("EFFECTS QUALITY")
                         .font(.system(size: 11, weight: .black, design: .monospaced))
@@ -194,7 +211,7 @@ struct SettingsView: View {
                         }
                     }
                 }
-                Text("Higher quality spawns more debris and smoke. Turn particles off to save battery in long sieges.")
+                Text("Higher quality spawns more debris and smoke. Turn particles off to save battery in long sieges; weather clears snowfall only.")
                     .font(.system(size: 9, weight: .bold, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.4))
                     .fixedSize(horizontal: false, vertical: true)
@@ -220,6 +237,21 @@ struct SettingsView: View {
                         .monospacedDigit()
                         .foregroundStyle(.white)
                         .frame(width: 44, alignment: .trailing)
+                    if abs(settings.sensitivity - 1.0) > 0.001 {
+                        Button {
+                            settings.sensitivity = 1.0
+                            SoundEngine.shared.uiTap()
+                        } label: {
+                            Text("RESET")
+                                .font(.system(size: 8, weight: .black, design: .monospaced))
+                                .tracking(1)
+                                .foregroundStyle(.green)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .overlay(Rectangle().stroke(.green.opacity(0.5), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 PixelSlider(value: $settings.sensitivity, range: 0.5...1.5, step: 0.1,
                             tint: .green)

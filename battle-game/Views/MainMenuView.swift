@@ -101,9 +101,23 @@ struct MainMenuView: View {
                             }
                             Button {
                                 SoundEngine.shared.uiTap()
+                                path.append(Route.cutscene)
+                            } label: {
+                                PixelCommandButton(title: "CUTSCENE", systemIcon: "film.fill",
+                                                   style: .ghost)
+                            }
+                            Button {
+                                SoundEngine.shared.uiTap()
                                 path.append(Route.settings)
                             } label: {
                                 PixelCommandButton(title: "SETTINGS", systemIcon: "gearshape.fill",
+                                                   style: .ghost)
+                            }
+                            Button {
+                                SoundEngine.shared.uiTap()
+                                path.append(Route.about)
+                            } label: {
+                                PixelCommandButton(title: "ABOUT", systemIcon: "info.circle.fill",
                                                    style: .ghost)
                             }
                             HStack(spacing: 6) {
@@ -133,8 +147,12 @@ struct MainMenuView: View {
                 switch route {
                 case .map:
                     LevelMapView(path: $path)
+                case .cutscene:
+                    CutsceneView()
                 case .settings:
                     SettingsView()
+                case .about:
+                    AboutView()
                 case .detail(let id):
                     LevelDetailView(level: CampaignData.levels.first(where: { $0.id == id })
                         ?? CampaignData.levels[0], path: $path)

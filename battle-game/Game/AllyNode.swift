@@ -256,7 +256,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .gunship: return "Dual-rotor gunship. High hover, 3-round gun bursts."
         case .storm: return "Rocket tank. Tracked pod turret, 4 wavy missiles."
         case .tempest: return "Arc drone. Longest reach, spins up the widest blast."
-        case .revrent: return "Carrier ship. 5 living interceptors, rebuild in 10s."
+        case .revrent: return "Carrier ship. 5 living interceptors, slower rebuild each loss."
         }
     }
 
@@ -348,8 +348,13 @@ final class AllyNode: SKSpriteNode {
     /// back into the ring when the sky is clear.
     var interceptorOrbitPhase: TimeInterval = 0
     /// Per-slot rebuild countdowns (5 slots). 0 = slot ready/occupied;
-    /// >0 = droid dead, counting down to the 10s rebuild.
+    /// >0 = droid dead, counting down to the rebuild. Each interceptor
+    /// lost adds +1s (`interceptorRebuildExtra`), so repeated losses
+    /// rebuild slower and slower.
     var interceptorBuildTimers: [TimeInterval] = []
+    /// Escalating rebuild penalty for this carrier: +1s per interceptor
+    /// lost, added on top of `Balance.revrentBuildTime` for every rebuild.
+    var interceptorRebuildExtra: TimeInterval = 0
     var facing: CGFloat { xScale >= 0 ? 1 : -1 }
     /// Local dock offset for one ring slot (same orbit the old child
     /// drones used — now followed by world-space interceptors).

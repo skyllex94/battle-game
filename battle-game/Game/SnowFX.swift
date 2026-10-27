@@ -13,15 +13,16 @@ import SpriteKit
 /// - The node is screen-locked: the scene merely re-pins its position to
 ///   the camera once per frame inside updateParallax — exactly like the
 ///   sky layer.
-/// Settings doors: hidden entirely when particles are off; the LOW
-/// quality tier drops the far sheet and thins the flakes.
+/// Settings doors: hidden entirely when particles are off or weather FX is
+/// off; the LOW quality tier drops the far sheet and thins the flakes.
 enum SnowFX {
 
     /// Screen-locked snow overlay sized for the visible camera rect.
-    /// Returns nil when the level has no snowfall or particles are off —
-    /// the scene adds it only if this returns a node.
+    /// Returns nil when the level has no snowfall, particles are off, or
+    /// weather FX is off — the scene adds it only if this returns a node.
     static func buildSnow(sceneSize: CGSize, cameraZoom: CGFloat) -> SKNode? {
-        guard Balance.snowfall, GameSettings.particlesEnabled else { return nil }
+        guard Balance.snowfall, GameSettings.particlesEnabled,
+              GameSettings.weatherEnabled else { return nil }
 
         let root = SKNode()
         root.name = "snow"

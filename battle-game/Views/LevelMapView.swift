@@ -24,6 +24,16 @@ struct LevelMapView: View {
         min(EmraMap.pages - 1, max(0, Int((panX / fullW).rounded())))
     }
 
+    /// Page holding the NEXT beacon, if one exists (mirrors the node
+    /// marker logic: unlocked + stars == 0). Nil once everything is
+    /// cleared — nothing to locate.
+    private var nextPage: Int? {
+        let id = CampaignData.unlockedLevel
+        guard CampaignData.levels.contains(where: { $0.id == id }),
+              CampaignData.stars(for: id) == 0 else { return nil }
+        return min(EmraMap.pages - 1, max(0, (id - 1) / 5))
+    }
+
     private func clampPan(_ x: CGFloat) -> CGFloat {
         min(max(0, x), fullW * CGFloat(EmraMap.pages - 1))
     }
@@ -101,22 +111,6 @@ struct LevelMapView: View {
             // Safe-area chrome on top.
             GeometryReader { geo in
                 ZStack {
-                    // Readability grades.
-                    LinearGradient(colors: [.black.opacity(0.30), .clear],
-                                   startPoint: .top, endPoint: .bottom)
-                        .frame(height: 150)
-                        .frame(maxHeight: .infinity, alignment: .top)
-                        .allowsHitTesting(false)
-                    LinearGradient(colors: [.clear, .black.opacity(0.35)],
-                                   startPoint: .top, endPoint: .bottom)
-                        .frame(height: 110)
-                        .frame(maxHeight: .infinity, alignment: .bottom)
-                        .allowsHitTesting(false)
-                    RadialGradient(colors: [.clear, .black.opacity(0.22)],
-                                   center: .center, startRadius: 80, endRadius: 520)
-                        .ignoresSafeArea(edges: .all)
-                        .allowsHitTesting(false)
-
                     // Page arrows on each end.
                     HStack(spacing: 0) {
                         if currentPage > 0 {
@@ -153,9 +147,32 @@ struct LevelMapView: View {
                         .padding(.top, 8)
                         EmraZoneChip(page: currentPage) { goPage($0) }
                         Spacer()
-                        EmraIntelStrip()
+                        // Off-screen NEXT locator: jumps the camera back to
+                        // the beacon's page. Only shows while paged away.
+                        if let nextPage, nextPage != currentPage {
+                            HStack {
+                                Spacer()
+                                Button {
+                                    goPage(nextPage)
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "location.fill")
+                                            .font(.system(size: 10, weight: .black))
+                                        Text("NEXT")
+                                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                                            .tracking(2)
+                                    }
+                                    .foregroundStyle(.black)
+                                    .padding(.horizontal, 12).padding(.vertical, 7)
+                                    .background(.yellow)
+                                    .clipShape(MapPixelShape(cut: 5))
+                                    .overlay(MapPixelShape(cut: 5).stroke(.white.opacity(0.6), lineWidth: 2))
+                                    .shadow(color: .yellow.opacity(0.4), radius: 8)
+                                }
+                            }
                             .padding(.horizontal, 12)
                             .padding(.bottom, 10)
+                        }
                     }
                 }
             }
@@ -171,7 +188,6 @@ struct LevelMapView: View {
 private struct EmraNodeView: View {
     let level: LevelDef
     @Binding var path: NavigationPath
-    @State private var tick = false
 
     private var unlocked: Bool { CampaignData.isUnlocked(level) }
     private var stars: Int { CampaignData.stars(for: level.id) }
@@ -188,21 +204,16 @@ private struct EmraNodeView: View {
                 content.opacity(0.55).allowsHitTesting(false)
             }
         }
-        .onAppear { tick.toggle() }
     }
 
     private var content: some View {
         VStack(spacing: 3) {
             ZStack {
+                // Pixel-art NEXT beacon: pinned dead-center on the pad so it
+                // can never drift toward the level or off the screen — it
+                // only breathes + pings in place.
                 if isNext {
-                    Circle()
-                        .stroke(.yellow, lineWidth: 3)
-                        .frame(width: 62, height: 62)
-                        .opacity(0.9)
-                        .scaleEffect(tick ? 1.12 : 1.0)
-                        .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true),
-                                   value: tick)
-                        .onAppear { tick = true }
+                    NextLevelMarker()
                 }
                 // Pixel diamond pad.
                 Rectangle()
@@ -226,7 +237,7 @@ private struct EmraNodeView: View {
                         .foregroundStyle(.white.opacity(0.9))
                 }
             }
-            .frame(height: 66)
+            .frame(height: 92)
             if isNext {
                 Text("NEXT")
                     .font(.system(size: 9, weight: .black, design: .monospaced))
@@ -251,6 +262,79 @@ private struct EmraNodeView: View {
         if !unlocked { return .gray }
         if stars > 0 { return .blue }
         return .green
+    }
+}
+
+private struct NextLevelMarker: View {
+    /// Radar ping: 0 = tight on the pad, 1 = fully expanded + faded.
+    @State private var ping = false
+    /// Tight ring breath: expands/contracts in place.
+    @State private var breathe = false
+    /// Corner-spark blink.
+    @State private var blink = false
+
+    var body: some View {
+        ZStack {
+            // Outer radar ping: chunky pixel diamond that expands from the
+            // pad and dissolves — always centered, never travels.
+            PixelDiamondRing(edge: 62, line: 4, color: .yellow)
+                .scaleEffect(ping ? 1.5 : 0.92)
+                .opacity(ping ? 0 : 0.8)
+                .animation(.linear(duration: 1.6).repeatForever(autoreverses: false),
+                           value: ping)
+            // Tight breathing ring hugging the pad.
+            PixelDiamondRing(edge: 62, line: 3, color: .yellow)
+                .scaleEffect(breathe ? 1.12 : 1.0)
+                .opacity(0.95)
+                .shadow(color: .yellow.opacity(0.6), radius: 8)
+                .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                           value: breathe)
+            // Four blinking corner sparks (N/E/S/W) — pixel crumbs that
+            // sell the retro beacon read.
+            ForEach(0..<4, id: \.self) { i in
+                Rectangle()
+                    .fill(.yellow)
+                    .frame(width: 6, height: 6)
+                    .offset(y: -46)
+                    .rotationEffect(.degrees(Double(i) * 90))
+                    .opacity(blink ? 0.25 : 1)
+            }
+            .animation(.easeInOut(duration: 0.55).repeatForever(autoreverses: true),
+                       value: blink)
+        }
+        .frame(width: 92, height: 92)
+        .allowsHitTesting(false)
+        .onAppear {
+            // Flip once: the repeatForever animations take it from here.
+            ping = true
+            breathe = true
+            blink = true
+        }
+    }
+}
+
+/// Chunky pixel diamond ring: a rotated stroked square with stepped
+/// corner blocks so it reads as pixel art, not a smooth vector circle.
+private struct PixelDiamondRing: View {
+    let edge: CGFloat
+    let line: CGFloat
+    let color: Color
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .stroke(color, lineWidth: line)
+                .frame(width: edge, height: edge)
+                .rotationEffect(.degrees(45))
+            // Stepped corner pixels break the smooth-vector read.
+            ForEach(0..<4, id: \.self) { i in
+                Rectangle()
+                    .fill(color)
+                    .frame(width: line + 3, height: line + 3)
+                    .offset(y: -edge * 0.7071)
+                    .rotationEffect(.degrees(Double(i) * 90))
+            }
+        }
     }
 }
 
@@ -359,32 +443,6 @@ private struct EmraArrow: View {
                 .overlay(Rectangle().stroke(.cyan.opacity(0.6), lineWidth: 2))
                 .shadow(color: .cyan.opacity(0.25), radius: 8)
         }
-    }
-}
-
-private struct EmraIntelStrip: View {
-    var body: some View {
-        HStack(spacing: 10) {
-            Rectangle().fill(.cyan).frame(width: 8, height: 8)
-            if let next = CampaignData.levels.first(where: { $0.id == CampaignData.unlockedLevel }) {
-                Text("NEXT — \(next.name.uppercased()): \(next.subtitle). Tap a lit region to deploy.")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .lineLimit(2)
-            } else {
-                Text("EMRA SECURED — every region taken. Replay missions for ★★★.")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.yellow)
-            }
-            Spacer()
-            Text("● SECURED  ● NEXT  ○ LOCKED")
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .tracking(1)
-                .foregroundStyle(.white.opacity(0.5))
-        }
-        .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(.black.opacity(0.55))
-        .overlay(Rectangle().stroke(.white.opacity(0.15), lineWidth: 1))
     }
 }
 

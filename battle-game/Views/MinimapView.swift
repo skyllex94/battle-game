@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// Top-center lane minimap: slim dusk-styled strip with territory tint,
-/// glowing structure marks (blue = you, red = enemy), unit dots, hero
-/// diamond, and a viewport box showing what the camera currently sees.
-/// Driven by a MinimapSnapshot polled at ~7Hz.
+/// Top-center lane minimap: chunky pixel-art strip with stepped territory
+/// blocks, hard-square structure marks (blue = you, red = enemy), square
+/// unit pixels, a pixel-diamond hero, and a hard viewport box showing what
+/// the camera currently sees. Driven by a MinimapSnapshot polled at ~7Hz.
+/// No rounded corners, no gradients, no blur glows — crisp squares only.
 struct MinimapView: View {
     let snap: MinimapSnapshot
     /// Lane strip width. The HUD embeds a compact 160pt version on narrow
@@ -25,96 +26,100 @@ struct MinimapView: View {
 
     var body: some View {
         ZStack {
-            // Outer shell: dark pill + hairline border.
-            RoundedRectangle(cornerRadius: 7)
-                .fill(.black.opacity(0.62))
+            // Outer shell: pixel-cut panel + hard 1px border.
+            ShopPixelShape(cut: 5)
+                .fill(.black.opacity(0.72))
                 .frame(width: stripWidth + 14, height: stripHeight + 8)
-            RoundedRectangle(cornerRadius: 7)
-                .stroke(.white.opacity(0.18), lineWidth: 1)
+            ShopPixelShape(cut: 5)
+                .stroke(.white.opacity(0.22), lineWidth: 1)
                 .frame(width: stripWidth + 14, height: stripHeight + 8)
 
-            // Territory tint: blue home -> neutral mid -> red home.
-            LinearGradient(
-                stops: [
-                    .init(color: .blue.opacity(0.30), location: 0),
-                    .init(color: .blue.opacity(0.06), location: 0.32),
-                    .init(color: .white.opacity(0.03), location: 0.5),
-                    .init(color: .red.opacity(0.06), location: 0.68),
-                    .init(color: .red.opacity(0.30), location: 1),
-                ],
-                startPoint: .leading, endPoint: .trailing
-            )
+            // Territory blocks: hard blue home / dark mid / hard red home.
+            // Stepped segments, not a gradient — pixel style.
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(.blue.opacity(0.32))
+                    .frame(width: stripWidth * 0.30)
+                Rectangle()
+                    .fill(.white.opacity(0.05))
+                    .frame(width: stripWidth * 0.40)
+                Rectangle()
+                    .fill(.red.opacity(0.32))
+                    .frame(width: stripWidth * 0.30)
+            }
             .frame(width: stripWidth, height: 10)
-            .clipShape(RoundedRectangle(cornerRadius: 3))
             .position(x: inset + stripWidth / 2, y: stripHeight - 5)
 
-            // Ground hairline.
+            // Ground line: chunky 2px pixel row.
             Rectangle()
-                .fill(.white.opacity(0.30))
-                .frame(width: stripWidth, height: 1)
+                .fill(.white.opacity(0.35))
+                .frame(width: stripWidth, height: 2)
                 .position(x: inset + stripWidth / 2, y: stripHeight - 2)
 
-            // Midfield tick.
+            // Midfield tick: 2px wide pixel post.
             Rectangle()
-                .fill(.white.opacity(0.45))
-                .frame(width: 1, height: 6)
+                .fill(.white.opacity(0.6))
+                .frame(width: 2, height: 6)
                 .position(x: inset + stripWidth / 2, y: stripHeight - 6)
 
-            // Viewport box (what the camera sees).
+            // Viewport box (what the camera sees): hard square, no rounding.
             ZStack {
-                RoundedRectangle(cornerRadius: 2).fill(.white.opacity(0.10))
-                RoundedRectangle(cornerRadius: 2).stroke(.white.opacity(0.65), lineWidth: 1)
+                Rectangle().fill(.white.opacity(0.08))
+                Rectangle().stroke(.white.opacity(0.7), lineWidth: 1)
             }
             .frame(width: viewportWidth, height: stripHeight - 8)
                 .position(x: inset + x(snap.cameraX), y: (stripHeight + 8) / 2 - 1)
                 .allowsHitTesting(false)
 
-            // Bases (rounded squares, glowing) + towers (dots, glowing, two per side).
-            minimapMark(worldX: snap.playerBaseX, size: 8, color: .blue, square: true)
+            // Bases (8px squares) + towers (5px squares, two per side).
+            minimapMark(worldX: snap.playerBaseX, size: 8, color: .blue)
             ForEach(snap.playerTowerXs, id: \.self) { tx in
-                minimapMark(worldX: tx, size: 5, color: .blue, square: false)
+                minimapMark(worldX: tx, size: 5, color: .blue)
             }
             ForEach(snap.enemyTowerXs, id: \.self) { tx in
-                minimapMark(worldX: tx, size: 5, color: .red, square: false)
+                minimapMark(worldX: tx, size: 5, color: .red)
             }
-            minimapMark(worldX: snap.enemyBaseX, size: 8, color: .red, square: true)
+            minimapMark(worldX: snap.enemyBaseX, size: 8, color: .red)
 
-            // Unit dots: player army (cyan) + enemy marchers (pink-red).
+            // Unit pixels: player army (cyan) + enemy marchers (pink-red).
+            // Hard 3px squares with a dark separator so packs read as
+            // individual pixels instead of one glowing blob.
             ForEach(snap.allyXs.indices, id: \.self) { i in
-                Circle()
+                Rectangle()
                     .fill(.cyan)
-                    .frame(width: 4, height: 4)
-                    .shadow(color: .cyan.opacity(0.8), radius: 2)
+                    .frame(width: 3, height: 3)
+                    .overlay(Rectangle().stroke(.black.opacity(0.6), lineWidth: 0.5))
                     .position(x: inset + x(snap.allyXs[i]), y: stripHeight - 11)
             }
             ForEach(snap.enemyXs.indices, id: \.self) { i in
-                Circle()
+                Rectangle()
                     .fill(Color(red: 1, green: 0.35, blue: 0.4))
-                    .frame(width: 4, height: 4)
-                    .shadow(color: .red.opacity(0.8), radius: 2)
+                    .frame(width: 3, height: 3)
+                    .overlay(Rectangle().stroke(.black.opacity(0.6), lineWidth: 0.5))
                     .position(x: inset + x(snap.enemyXs[i]), y: stripHeight - 11)
             }
 
-            // Hero diamond on top, outlined so it reads over dots.
-            Image(systemName: "diamond.fill")
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.9), radius: 1)
-                .position(x: inset + x(snap.heroX), y: stripHeight - 11)
+            // Hero pixel-diamond: white square rotated 45° on a black
+            // backing pixel so it reads over unit pixels.
+            ZStack {
+                Rectangle()
+                    .fill(.black.opacity(0.9))
+                    .frame(width: 9, height: 9)
+                Rectangle()
+                    .fill(.white)
+                    .frame(width: 6, height: 6)
+            }
+            .rotationEffect(.degrees(45))
+            .position(x: inset + x(snap.heroX), y: stripHeight - 11)
         }
         .frame(width: stripWidth + 14, height: stripHeight + 8)
     }
 
-    private func minimapMark(worldX: CGFloat, size: CGFloat, color: Color, square: Bool) -> some View {
-        Group {
-            if square {
-                RoundedRectangle(cornerRadius: 1.5).fill(color)
-            } else {
-                Circle().fill(color)
-            }
-        }
-        .frame(width: size, height: size)
-        .shadow(color: color.opacity(0.8), radius: 2)
-        .position(x: inset + x(worldX), y: stripHeight - 7)
+    private func minimapMark(worldX: CGFloat, size: CGFloat, color: Color) -> some View {
+        Rectangle()
+            .fill(color)
+            .frame(width: size, height: size)
+            .overlay(Rectangle().stroke(.black.opacity(0.55), lineWidth: 1))
+            .position(x: inset + x(worldX), y: stripHeight - 7)
     }
 }

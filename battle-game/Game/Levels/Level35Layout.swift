@@ -16,7 +16,7 @@ import CoreGraphics
 /// turns the screws over the Obsidian Gate (L34): marches out fastest yet,
 /// pops pairs most often, the field cap holds at the 50-unit ceiling,
 /// elites stay at their densest cadence across the board (jets every 5th,
-/// mechs every 3rd, gunships every 2nd, trucks every 2nd, saucers every 2nd,
+/// mechs every 3rd, gunships every 2nd, trucks every 4th, saucers every 2nd,
 /// Immortals every 3rd, Phoenix every 4th, Vespers every 5th), bonus Brutes
 /// + Mechs stack up across the 18-wave push, and enemy HP scales another 5%
 /// (×4.3224, +5% over L34). Six Gnashers still crawl out as bonus summons
@@ -59,8 +59,8 @@ extension Balance {
         extraGnasherSummons: [4, 12, 20, 28, 36, 44],
         pineDensity: 0,
         towerFanCount: 3,
-        truckEvery: 2,
-        truckCount: 2,
+        truckEvery: 4,
+        truckCount: 1,
         /// The Immortals hold the Core — one walker at a time,
         /// every third summon (the densest cadence, held from L31).
         immortalEvery: 3,

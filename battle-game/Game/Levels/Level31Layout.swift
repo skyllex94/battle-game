@@ -17,7 +17,7 @@ import CoreGraphics
 /// turns the screws over Blackroot Vale (L30): marches out faster, pops
 /// pairs more often, the field cap holds at the 48-unit ceiling, elites
 /// come denser across the board (jets every 5th, mechs every 3rd,
-/// gunships every 2nd, trucks every 2nd, saucers every 2nd, Immortals
+/// gunships every 2nd, trucks every 4th, saucers every 2nd, Immortals
 /// every 3rd, Phoenix every 4th), bonus Brutes + Mechs stack up across the
 /// 16-wave push, and enemy HP scales another 5% (×3.5561, +5% over L30).
 /// Five Gnashers still crawl out as bonus summons across the push; clear
@@ -55,8 +55,8 @@ extension Balance {
         extraGnasherSummons: [4, 12, 20, 28, 36],
         pineDensity: 0,
         towerFanCount: 3,
-        truckEvery: 2,
-        truckCount: 2,
+        truckEvery: 4,
+        truckCount: 1,
         /// The Immortals press the gate — one walker at a time,
         /// every third summon (the densest cadence yet).
         immortalEvery: 3,

@@ -15,7 +15,7 @@ import CoreGraphics
 /// same 13200pt lane). The gate turns the screws over Rimevault (L26):
 /// marches out faster, pops pairs more often, the field cap rises to the
 /// 42-unit ceiling, elites come denser across the board (jets every 7th,
-/// mechs every 3rd, gunships every 2nd, trucks every 2nd, saucers every
+/// mechs every 3rd, gunships every 2nd, trucks every 4th, saucers every
 /// 3rd, Immortals every 5th), bonus Brutes + Mechs stack up across the
 /// 15-wave push, and enemy HP scales another 5% (×2.9256, +5% over L26).
 /// Level 27 debut: the Gnasher — evolved Skitter stock remade by the
@@ -56,8 +56,8 @@ extension Balance {
         extraGnasherSummons: [5, 13, 21, 29, 37],
         pineDensity: 0,
         towerFanCount: 3,
-        truckEvery: 2,
-        truckCount: 2,
+        truckEvery: 4,
+        truckCount: 1,
         /// The Immortals hold the abyss edge — one walker at a time,
         /// every fifth summon (the densest cadence of the ice region).
         immortalEvery: 5,

@@ -17,7 +17,7 @@ import CoreGraphics
 /// The gate turns the screws over Ashen March (L29): marches out faster,
 /// pops pairs more often, the field cap rises to the 48-unit ceiling,
 /// elites come denser across the board (jets every 5th, mechs every 3rd,
-/// gunships every 2nd, trucks every 2nd, saucers every 2nd, Immortals
+/// gunships every 2nd, trucks every 4th, saucers every 2nd, Immortals
 /// every 3rd), bonus Brutes + Mechs stack up across the 16-wave push, and
 /// enemy HP scales another 5% (×3.3868, +5% over L29). Five Gnashers still
 /// crawl out as bonus summons across the push; clear them at range or eat
@@ -55,8 +55,8 @@ extension Balance {
         extraGnasherSummons: [4, 12, 20, 28, 36],
         pineDensity: 0,
         towerFanCount: 3,
-        truckEvery: 2,
-        truckCount: 2,
+        truckEvery: 4,
+        truckCount: 1,
         /// The Immortals press the vale — one walker at a time,
         /// every third summon (the densest cadence yet).
         immortalEvery: 3,

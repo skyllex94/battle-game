@@ -17,6 +17,10 @@ struct HeroArmoryView: View {
     /// Upgrade purchase awaiting confirmation. Lives at the top level
     /// so the modal covers the whole screen.
     @State private var pendingBuy: PendingBuy?
+    /// Live backdrop switch: the animated Canvas only starts ticking once
+    /// the push transition is done — a static gradient covers the flight
+    /// in so opening never hitches mid-slide.
+    @State private var fxReady = false
     @ObservedObject private var wallet = WalletStore.shared
 
     private var unlockedCount: Int { HeroRoster.unlockedHeroes.count }
@@ -31,15 +35,25 @@ struct HeroArmoryView: View {
             let wide = geo.size.width > 700
             let tight = geo.size.height < 430
             ZStack {
-                // Cryo-bay ready room: teal pod wall, glowing capsules, slow
-                // scan band, blinking status lights, floor grid. One Canvas.
-                TimelineView(.animation(minimumInterval: 1 / 8)) { tl in
-                    Canvas { ctx, size in
-                        HeroBayBackdrop.draw(ctx: &ctx, size: size,
-                                             t: tl.date.timeIntervalSinceReferenceDate)
+                // Static teal cover during the push; the live cryo-bay
+                // Canvas (pod wall, capsules, scan band, floor grid) fades
+                // in once the transition lands.
+                LinearGradient(colors: [Color(red: 0.03, green: 0.10, blue: 0.11),
+                                        Color.black],
+                               startPoint: .top, endPoint: .bottom)
+                    .ignoresSafeArea()
+                if fxReady {
+                    // Cryo-bay ready room: teal pod wall, glowing capsules, slow
+                    // scan band, blinking status lights, floor grid. One Canvas.
+                    TimelineView(.animation(minimumInterval: 1 / 8)) { tl in
+                        Canvas { ctx, size in
+                            HeroBayBackdrop.draw(ctx: &ctx, size: size,
+                                                 t: tl.date.timeIntervalSinceReferenceDate)
+                        }
                     }
+                    .ignoresSafeArea()
+                    .transition(.opacity)
                 }
-                .ignoresSafeArea()
 
                 VStack(spacing: tight ? 6 : 8) {
                     ArmoryHeader(unlockedCount: unlockedCount,
@@ -155,8 +169,17 @@ struct HeroArmoryView: View {
                     .transition(.opacity)
                 }
             }
+            .animation(.easeOut(duration: 0.25), value: fxReady)
         }
         .toolbar(.hidden, for: .navigationBar)
+        .task {
+            // Let the push transition land before the live backdrop (and
+            // its 8fps full-screen redraws) starts — the static cover
+            // carries the flight in.
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            guard !Task.isCancelled else { return }
+            fxReady = true
+        }
     }
 
     /// Roster tap: unlocked heroes deploy on the spot and the choosing

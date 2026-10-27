@@ -12,7 +12,7 @@ import CoreGraphics
 /// The gate turns the screws over Frozen Narrows (L25): marches out
 /// faster, pops pairs more often, the field cap holds at the 40-unit
 /// ceiling, elites come denser across the board (jets every 8th, mechs
-/// every 3rd, trucks every 3rd, saucers every 4th, Immortals every 6th),
+/// every 3rd, trucks every 4th, saucers every 4th, Immortals every 6th),
 /// bonus Brutes + Mechs stack up across the 14-wave push, and enemy HP
 /// scales another 5% (×2.7863, +5% over L25). The 5-tower line holds
 /// (fifth emplacements at player 4950 / enemy 8250, same 13200pt lane).
@@ -48,8 +48,8 @@ extension Balance {
         extraMechSummons: [4, 9, 14, 19, 24, 29, 34, 39],
         pineDensity: 0,
         towerFanCount: 3,
-        truckEvery: 3,
-        truckCount: 2,
+        truckEvery: 4,
+        truckCount: 1,
         /// The Immortals hold the vault — one walker at a time,
         /// every sixth summon (tighter than the Narrows' seventh).
         immortalEvery: 6,

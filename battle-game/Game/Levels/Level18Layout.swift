@@ -45,6 +45,6 @@ extension Balance {
         pineDensity: 0.9,
         towerFanCount: 3,
         truckEvery: 5,
-        truckCount: 2
+        truckCount: 1
     )
 }

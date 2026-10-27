@@ -8,7 +8,7 @@ import CoreGraphics
 /// (broken curtain walls, dug-in gun pits, stake barricades, their
 /// banners); the mid-ground range is left bare.
 ///
-/// The gate stays as heavy as Cinderpeak's — Missile Trucks in pairs,
+/// The gate stays as heavy as Cinderpeak's — single Missile Trucks,
 /// Gunships every fourth wave, Brutes every other summon, Mech walkers
 /// filling every remaining rank slot one at a time, with no skitters at
 /// all (their slots roll out as brutes and walkers instead), with bonus
@@ -55,6 +55,6 @@ extension Balance {
         pineDensity: 0.9,
         towerFanCount: 3,
         truckEvery: 5,
-        truckCount: 2
+        truckCount: 1
     )
 }

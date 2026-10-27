@@ -33,8 +33,8 @@ struct MinimapSnapshot: Equatable {
     // Unit dots: player army (blue) + enemy marchers (red).
     var allyXs: [CGFloat] = []
     var enemyXs: [CGFloat] = []
-    // Active hero-gun ammo readout (mag/reserve, e.g. 12/90).
-    var ammoText: String = "–/–"
+    // Active hero-gun ammo readout (mag count only, e.g. 12).
+    var ammoText: String = "–"
     var ammoMag: Int = 0
     var reloading: Bool = false
     // Victory channel: enemy HQ down + the winning time (seconds).

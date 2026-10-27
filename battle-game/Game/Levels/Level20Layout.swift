@@ -47,7 +47,7 @@ extension Balance {
         pineDensity: 0.9,
         towerFanCount: 3,
         truckEvery: 5,
-        truckCount: 2,
+        truckCount: 1,
         /// The storm king is gone, but his Immortals garrison Ironhold —
         /// one walker at a time, every eighth summon.
         immortalEvery: 8

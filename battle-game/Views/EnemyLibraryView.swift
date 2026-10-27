@@ -100,21 +100,11 @@ private struct EnemyDossierCard: View {
         HStack(spacing: 10) {
             portrait
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(kind.displayName.uppercased())
-                        .font(.system(size: 13, weight: .black, design: .monospaced))
-                        .tracking(1)
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    Spacer(minLength: 2)
-                    Text(kind.roleLabel)
-                        .font(.system(size: 7, weight: .black, design: .monospaced))
-                        .tracking(1)
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 5).padding(.vertical, 2)
-                        .background(.cyan)
-                }
+                Text(kind.displayName.uppercased())
+                    .font(.system(size: 13, weight: .black, design: .monospaced))
+                    .tracking(1)
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
                 Text(kind.threatBlurb)
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.72))

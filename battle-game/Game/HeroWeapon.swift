@@ -356,11 +356,11 @@ enum HeroWeapon: Int, CaseIterable {
         }
     }
 
-    /// The Blaster fires from an endless reserve: the mag still drains and
-    /// reloads exactly like other guns, but the reserve never depletes
+    /// Every gun fires from an endless reserve: the mag still drains and
+    /// reloads exactly like before, but the reserve never depletes
     /// (reloads always fill to full, no drought, no REL-lockout).
     var hasInfiniteAmmo: Bool {
-        self == .blaster
+        true
     }
 
     // MARK: - Projectile structure (rockets, grenades, orbs, weaves)

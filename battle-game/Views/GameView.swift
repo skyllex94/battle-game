@@ -877,7 +877,7 @@ struct GameView: View {
                         resetWinState()
                         startDiamondCountUp(total: winClearDiamonds + winLeftoverDiamonds)
                     }
-                    SoundEngine.shared.stopBattleMusic()
+                    SoundEngine.shared.stopAllBattleAudio()
                     SoundEngine.shared.victory()
                 }
             } else if !minimap.won {
@@ -894,7 +894,7 @@ struct GameView: View {
                     showMenu = false
                     showWin = false
                     scene.isPaused = true
-                    SoundEngine.shared.stopBattleMusic()
+                    SoundEngine.shared.stopAllBattleAudio()
                 }
             } else if !minimap.lost {
                 defeatDetectedAt = nil
@@ -927,7 +927,10 @@ struct GameView: View {
             }
         }
         .onDisappear {
-            SoundEngine.shared.stopBattleMusic()
+            // Leaving the level (quit, map, continue, pop): hard-stop
+            // music + every SFX tail so nothing leaks into the menu or
+            // the next scene.
+            SoundEngine.shared.stopAllBattleAudio()
             // Hand the global layout back to the menu/briefing dioramas.
             Balance.battleOwnsLayout = false
         }
@@ -1679,39 +1682,55 @@ struct GameView: View {
         HStack(alignment: .center, spacing: 6) {
             // Weapon switch: tap to rotate through the LOADOUT slots.
             // Single-gun loadouts show a static chip: nothing to switch to.
+            // Pixel-cut panel with the gun name + mag count — wide enough
+            // that 2-digit mags never reflow the bar.
             Button { weapon = scene.cycleWeapon() } label: {
-                HStack(spacing: 5) {
-                    // Little square with the actual pixel gun of the active
-                    // weapon — oversized so it breaks out of the frame.
+                HStack(spacing: 8) {
+                    // Pixel gun cell: dark backdrop + hard border, gun sprite
+                    // oversized so it breaks out of the frame.
                     ZStack {
                         Rectangle()
-                            .fill(.cyan.opacity(0.14))
-                            .frame(width: 28, height: 28)
+                            .fill(.black.opacity(0.55))
+                            .frame(width: 34, height: 30)
                             .overlay(Rectangle().stroke(.cyan.opacity(0.5), lineWidth: 1))
                         Image(uiImage: PixelHeroArt.gunImage(weapon))
                             .interpolation(.none)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .frame(width: 38, height: 21)
+                            .frame(width: 42, height: 23)
                             .offset(x: 3, y: -5)
                             .allowsHitTesting(false)
                     }
-                    .frame(width: 28, height: 28)
-                    .padding(.trailing, 6)
-                    Text(minimap.ammoText)
-                        .monospacedDigit()
-                        .fixedSize(horizontal: true, vertical: false)
-                        .foregroundStyle(minimap.ammoMag == 0 ? .red
-                            : minimap.reloading ? .gray : .white.opacity(0.85))
-                    if LoadoutStore.loadout.count > 1 {
-                        Image(systemName: "arrow.2.circlepath")
-                            .foregroundStyle(.white.opacity(0.55))
+                    .frame(width: 34, height: 30)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(weapon.name.uppercased())
+                            .font(.system(size: 8, weight: .black, design: .monospaced))
+                            .tracking(1)
+                            .foregroundStyle(.cyan.opacity(0.85))
+                            .lineLimit(1)
+                        HStack(spacing: 4) {
+                            Text(minimap.ammoText)
+                                .monospacedDigit()
+                                .frame(width: 32, alignment: .leading)
+                                .lineLimit(1)
+                                .foregroundStyle(minimap.reloading || minimap.ammoMag == 0 ? .red
+                                    : .white.opacity(0.9))
+                            Text("MAG")
+                                .font(.system(size: 8, weight: .black, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.4))
+                            if LoadoutStore.loadout.count > 1 {
+                                Image(systemName: "arrow.2.circlepath")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.white.opacity(0.55))
+                            }
+                        }
                     }
                 }
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                .padding(.horizontal, 8).padding(.vertical, 6)
-                .background(.cyan.opacity(0.12))
-                .overlay(Rectangle().stroke(.cyan.opacity(0.45), lineWidth: 1))
+                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .frame(minWidth: 122, alignment: .leading)
+                .background(ShopPixelShape(cut: 5).fill(.cyan.opacity(0.12)))
+                .overlay(ShopPixelShape(cut: 5).stroke(.cyan.opacity(0.45), lineWidth: 1))
             }
             .disabled(LoadoutStore.loadout.count < 2)
 

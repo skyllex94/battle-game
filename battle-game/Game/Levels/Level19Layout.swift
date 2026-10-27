@@ -49,7 +49,7 @@ extension Balance {
         pineDensity: 0.9,
         towerFanCount: 3,
         truckEvery: 5,
-        truckCount: 2,
+        truckCount: 1,
         /// Level 19 debut: the storm king's own bodyguard marches out —
         /// one Immortal at a time, every ninth summon.
         immortalEvery: 9

@@ -15,7 +15,7 @@ import CoreGraphics
 /// same 13200pt lane). The gate turns the screws over Umbral Outskirts
 /// (L28): marches out faster, pops pairs more often, the field cap rises
 /// to the 46-unit ceiling, elites come denser across the board (jets every
-/// 5th, mechs every 3rd, gunships every 2nd, trucks every 2nd, saucers
+/// 5th, mechs every 3rd, gunships every 2nd, trucks every 4th, saucers
 /// every 2nd, Immortals every 3rd), bonus Brutes + Mechs stack up across
 /// the 15-wave push, and enemy HP scales another 5% (×3.2255, +5% over L28).
 /// Level 29 fields no new enemy — instead it unlocks the Tempest, a
@@ -61,8 +61,8 @@ extension Balance {
         extraGnasherSummons: [4, 12, 20, 28, 36],
         pineDensity: 0,
         towerFanCount: 3,
-        truckEvery: 2,
-        truckCount: 2,
+        truckEvery: 4,
+        truckCount: 1,
         /// The Immortals press the march — one walker at a time,
         /// every third summon (the densest cadence yet).
         immortalEvery: 3,

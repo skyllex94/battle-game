@@ -48,7 +48,7 @@ extension Balance {
         pineDensity: 0,
         towerFanCount: 3,
         truckEvery: 4,
-        truckCount: 2,
+        truckCount: 1,
         /// The Immortals hold the narrows — one walker at a time,
         /// every seventh summon (tighter than the Crag's eighth).
         immortalEvery: 7,

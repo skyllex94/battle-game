@@ -87,7 +87,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .ranger: return "Ranger"
         case .truck: return "Truck"
         case .bombard: return "Bombard"
-        case .tank: return "Tank"
+        case .tank: return "Panzer"
         case .gunship: return "Gunship"
         case .storm: return "Storm"
         case .tempest: return "Tempest"
@@ -256,7 +256,7 @@ enum ArmyKind: Int, CaseIterable, Identifiable {
         case .gunship: return "Dual-rotor gunship. High hover, 3-round gun bursts."
         case .storm: return "Rocket tank. Tracked pod turret, 4 wavy missiles."
         case .tempest: return "Arc drone. Longest reach, spins up the widest blast."
-        case .revrent: return "Carrier ship. 5 living interceptors, rebuild in 5s."
+        case .revrent: return "Carrier ship. 5 living interceptors, rebuild in 10s."
         }
     }
 
@@ -304,6 +304,13 @@ final class AllyNode: SKSpriteNode {
     var maxHP: CGFloat
     var fireCooldown: TimeInterval = 0
     var alive: Bool { hp > 0 }
+    /// Per-unit hold-range divergence: multiplies `kind.shootRange` to get
+    /// this unit's personal stop-and-shoot distance. Same-kind squads (e.g.
+    /// 5 tanks) no longer halt on the exact same X — some hold a little
+    /// before, some push a little past — while staying on the same Y lane.
+    var rangeFactor: CGFloat = 1
+    /// Personal stop-and-shoot distance for this unit.
+    var holdRange: CGFloat { kind.shootRange * rangeFactor }
 
     private var marchPhase: TimeInterval = 0
     private var hpBarRoot = SKNode()
@@ -341,7 +348,7 @@ final class AllyNode: SKSpriteNode {
     /// back into the ring when the sky is clear.
     var interceptorOrbitPhase: TimeInterval = 0
     /// Per-slot rebuild countdowns (5 slots). 0 = slot ready/occupied;
-    /// >0 = droid dead, counting down to the 5s rebuild.
+    /// >0 = droid dead, counting down to the 10s rebuild.
     var interceptorBuildTimers: [TimeInterval] = []
     var facing: CGFloat { xScale >= 0 ? 1 : -1 }
     /// Local dock offset for one ring slot (same orbit the old child
@@ -372,6 +379,9 @@ final class AllyNode: SKSpriteNode {
         case .revrent: size = CGSize(width: 168, height: 96)
         }
         super.init(texture: nil, color: .clear, size: size)
+        // Personal hold range: ±12% around the kind baseline so same-kind
+        // squads stagger along X instead of stacking on one stop line.
+        rangeFactor = CGFloat.random(in: 0.88...1.12)
         if kind == .revrent {
             interceptorBuildTimers = Array(repeating: 0, count: Balance.revrentDroneCount)
         }

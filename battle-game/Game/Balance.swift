@@ -643,6 +643,47 @@ enum Balance {
     static var phoenixEvery: Int { active.phoenixEvery }
     /// Every Nth summon is a Vesper herald (0 = never).
     static var vesperEvery: Int { active.vesperEvery }
+
+    // MARK: - Wave escalation (light opening → harder late battle)
+    /// Ticks 1...waveScoutEnd release raider scouts only — every level
+    /// opens light. ...waveSkirmishEnd add the skirmishers
+    /// (reaver/skitter/jet); ...waveArmorEnd add armor (brute/mech);
+    /// later ticks open the heavies (heli/trucks/immortal/saucer/
+    /// phoenix/vesper/gnasher) plus the bonus extras. Absolute ticks so
+    /// every level opens the same way; short early battles simply never
+    /// reach tiers they don't field.
+    static let waveScoutEnd = 3
+    static let waveSkirmishEnd = 7
+    static let waveArmorEnd = 11
+
+    /// Escalation tier of a summon tick (0 scouts → 3 heavies).
+    static func waveTier(forTick tick: Int) -> Int {
+        if tick <= waveScoutEnd { return 0 }
+        if tick <= waveSkirmishEnd { return 1 }
+        if tick <= waveArmorEnd { return 2 }
+        return 3
+    }
+
+    /// Earliest tier a kind may march in: lights open, armor mid-battle,
+    /// heavies late. Ineligible picks fall through to the next cadence.
+    static func waveTier(for kind: EnemyKind) -> Int {
+        switch kind {
+        case .raider: return 0
+        case .reaver, .skitter, .jet: return 1
+        case .brute, .mech: return 2
+        default: return 3
+        }
+    }
+
+    /// Pair-pressure ramp multiplying the layout's doubleChance: no gate
+    /// doubles while scouts march alone, thinned pairs mid-battle, full
+    /// layout pressure once the heavies are out.
+    static func doubleChanceMultiplier(forTick tick: Int) -> Double {
+        if tick < 6 { return 0 }
+        if tick < 14 { return 0.35 }
+        if tick < 24 { return 0.65 }
+        return 1.0
+    }
     static let firstSummonDelay: Double = 5.0
     /// Raider (the classic marcher — Levels 1+). Base 40; Level 5+ scales
     /// via the layout's enemyHPScale (L5 = ×1.05, L6 = ×1.1025).
@@ -947,11 +988,11 @@ enum Balance {
     static let bombardSightRange: CGFloat = 940
     static let bombardBlast: CGFloat = 92
     static let bombardGravity: CGFloat = 980
-    // Tank: Level 17 main-battle tank. Tracked chassis with a top turret
-    // that fires one missile in a dead-straight line — no arc, no weave.
-    // Costs 600 and rolls out with 30% more life than the Gun-Truck.
-    static let tankCost: Int = 600
-    static let tankHP: CGFloat = truckHP * 1.3
+    // Panzer: Level 17 main-battle tank. Tracked chassis with a top
+    // turret that fires one missile in a dead-straight line — no arc, no
+    // weave. Costs 450 and rolls out with 300 hull.
+    static let tankCost: Int = 450
+    static let tankHP: CGFloat = 300
     static let tankSpeed: CGFloat = 84
     static let tankDamage: CGFloat = 52
     static let tankFireCooldown: Double = 1.9
@@ -963,7 +1004,7 @@ enum Balance {
     // Gunship: Level 22 dual-rotor heavy attack helicopter — the player's
     // first flying army unit. Larger tandem-rotor frame that hovers high
     // above the lane and fires a 3-round burst from its chin turret.
-    static let gunshipCost: Int = 700
+    static let gunshipCost: Int = 500
     static let gunshipHP: CGFloat = 340
     static let gunshipSpeed: CGFloat = 155
     static let gunshipDamage: CGFloat = 22
@@ -975,9 +1016,9 @@ enum Balance {
     static let gunshipBurstGap: Double = 0.09
     static let gunshipBoltSpeed: CGFloat = 720
     // Storm: Level 26 rocket-artillery tank. Tracked pod-turret chassis
-    // that fires a 4-round volley of small wavy missiles — the top
-    // army card: priciest, sturdy, slow, and the widest volley.
-    static let stormCost: Int = 800
+    // that fires a 4-round volley of small wavy missiles — sturdy, slow,
+    // and the widest volley.
+    static let stormCost: Int = 500
     static let stormHP: CGFloat = 380
     static let stormSpeed: CGFloat = 70
     static let stormDamage: CGFloat = 26
@@ -996,7 +1037,7 @@ enum Balance {
     /// gunship, spinning up each shot over a long charge before loosing
     /// one slow heavy arc-bolt. Longest reach and widest splash of any
     /// army card; the price is patience — the cycle is the slowest too.
-    static let tempestCost: Int = 950
+    static let tempestCost: Int = 800
     static let tempestHP: CGFloat = 320
     static let tempestSpeed: CGFloat = 130
     static let tempestDamage: CGFloat = 170
@@ -1038,7 +1079,7 @@ enum Balance {
     static let revrentInterceptorRange: CGFloat = 520
     static let revrentInterceptorSight: CGFloat = 800
     static let revrentInterceptorSpeed: CGFloat = 280
-    static let revrentBuildTime: Double = 5.0
+    static let revrentBuildTime: Double = 10.0
     /// How far ahead of the carrier the deployed screen flies (pts).
     static let revrentScreenAhead: CGFloat = 130
 

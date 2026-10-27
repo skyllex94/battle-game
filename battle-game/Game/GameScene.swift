@@ -36,16 +36,14 @@ final class GameScene: SKScene {
     var heroWeapon: HeroWeapon = .blaster
     /// Gun the attempt starts (and restarts) with — the level-screen pick.
     private var startingWeapon: HeroWeapon = .blaster
-    // MARK: - Gun ammo (mag + reserve per gun, indexed by HeroWeapon.rawValue)
+    // MARK: - Gun ammo (mag per gun; every gun has an endless reserve,
+    // MARK: so the mag still drains + reloads, but never runs dry)
     private var mags: [Int] = HeroWeapon.allCases.map { $0.magSize }
-    private var reserves: [Int] = HeroWeapon.allCases.map { $0.startReserve }
     /// Gun currently reloading (background reloads keep running), if any.
     private var reloadingWeapon: HeroWeapon?
     private var reloadEndsAt: TimeInterval = -1
     /// Halfway mark of the active reload: fires the mag-seat clack once.
     private var reloadMidAt: TimeInterval = -1
-    /// Desperation trickle for fully-starved guns (mag 0 + reserve 0).
-    private var regenAccumulator: TimeInterval = 0
 
     /// Switches to the next LOADOUT hero gun (slot order, wraps around).
     /// Called by the HUD weapon button; the swapped gun fires instantly.
@@ -65,13 +63,12 @@ final class GameScene: SKScene {
     }
 
     /// Begins a reload for one gun. One reload at a time; no-op when the mag
-    /// is already full, the reserve is dry, or another gun is reloading.
-    /// Infinite-reserve guns (Blaster) always have stock to draw on.
+    /// is already full or another gun is reloading. Every gun draws from
+    /// an endless reserve, so reloads always fill to full.
     @discardableResult
     private func startReload(gun: HeroWeapon) -> Bool {
         guard reloadingWeapon == nil,
-              mags[gun.rawValue] < gun.magSize,
-              gun.hasInfiniteAmmo || reserves[gun.rawValue] > 0 else { return false }
+              mags[gun.rawValue] < gun.magSize else { return false }
         reloadingWeapon = gun
         reloadEndsAt = sceneTime + gun.reloadTime
         reloadMidAt = sceneTime + gun.reloadTime / 2
@@ -124,7 +121,7 @@ final class GameScene: SKScene {
     private var allies: [AllyNode] = []
     /// Revrent interceptors: independent flying droids owned by carriers.
     /// They have their own HP, deploy ahead of the hull to shoot, dock
-    /// back when clear, and rebuild 5s after dying.
+    /// back when clear, and rebuild 10s after dying.
     private var interceptors: [RevrentInterceptorNode] = []
     /// Per-unit deploy cooldowns (seconds left; pricier units wait longer).
     private var summonCooldowns: [ArmyKind: TimeInterval] = [:]
@@ -144,8 +141,9 @@ final class GameScene: SKScene {
     /// heal per run; rearmed every attempt, not every respawn.
     private var heroPackArmed: Bool = false
     // MARK: - Bomber support strike (Level 25+ HUD ability)
-    /// Recharge left (0 = a strike is ready).
-    private var bomberCooldownLeft: Double = 0
+    /// Recharge left (0 = a strike is ready). Levels open on a full
+    /// cooldown — the first strike must be earned, never free.
+    private var bomberCooldownLeft: Double = Balance.bomberCooldown
     /// Targeting mode: the next right-half touch picks the strike zone
     /// instead of aiming the hero's gun.
     private var bomberTargeting = false
@@ -246,8 +244,25 @@ final class GameScene: SKScene {
     /// what snapped the camera to the hero).
     override var isPaused: Bool {
         didSet {
+            // Single choke point for every pause source (pause menu, win /
+            // defeat cards, intel / grant / hero modals): freeze music
+            // mid-bar + cut all SFX tails so nothing drones under a menu,
+            // resume the loop on unpause. Win/defeat then stop the loop
+            // outright before their stingers via GameView.
+            if isPaused {
+                SoundEngine.shared.pauseBattleAudio()
+            } else {
+                SoundEngine.shared.resumeBattleAudio()
+            }
             if !isPaused { lastUpdate = 0 }
         }
+    }
+
+    /// Scene is leaving the screen (quit to map, continue to briefing):
+    /// hard-stop everything so no tail leaks into the menu / next scene.
+    override func willMove(from view: SKView) {
+        SoundEngine.shared.stopAllBattleAudio()
+        super.willMove(from: view)
     }
 
     /// Reads hero upgrade tiers into battle stats. Full restores refill HP
@@ -317,11 +332,16 @@ final class GameScene: SKScene {
         frameCount = 0
         heroWeapon = startingWeapon
         mags = HeroWeapon.allCases.map { $0.magSize }
-        reserves = HeroWeapon.allCases.map { $0.startReserve }
         reloadingWeapon = nil
         reloadEndsAt = -1
         reloadMidAt = -1
-        regenAccumulator = 0
+        // The strike opens on a full cooldown — never ready at spawn.
+        bomberCooldownLeft = Balance.bomberCooldown
+        bomberTargeting = false
+        bomberTouch = nil
+        bomberReticle?.removeFromParent()
+        bomberReticle = nil
+        bomberRun = nil
         buildSky()
         buildFar()
         buildMid()
@@ -815,8 +835,6 @@ final class GameScene: SKScene {
 
     private func updateShooting(dt: TimeInterval) {
         guard aimTouch != nil, hero.alive else { return }
-        // Bone-dry gun (mag 0 + reserve 0): hand a loaded gun over first.
-        autoSwitchWhenDry()
         // This gun is mid-reload, or the mag is dry (reload kicks in via
         // updateReload): hold fire until rounds are back.
         guard reloadingWeapon != heroWeapon,
@@ -827,46 +845,19 @@ final class GameScene: SKScene {
         fireBullet()
     }
 
-    /// Auto-switch: when the active gun is bone-dry (mag 0 + reserve 0 —
-    /// Blaster never qualifies), swaps to the next LOADED loadout gun in
-    /// slot order with wrap. A swapped-in gun with an empty mag starts
-    /// reloading on the spot. Returns false when nothing else is loaded
-    /// (the desperation trickle feeds the guns instead).
+    /// Auto-switch: legacy no-op kept for call-site compat. Every gun now
+    /// draws from an endless reserve, so no gun can ever run bone-dry.
     @discardableResult
     private func autoSwitchWhenDry() -> Bool {
-        let i = heroWeapon.rawValue
-        guard !heroWeapon.hasInfiniteAmmo,
-              mags[i] == 0, reserves[i] == 0 else { return false }
-        let slotted = LoadoutStore.loadout
-        guard slotted.count > 1,
-              let idx = slotted.firstIndex(of: heroWeapon) else { return false }
-        for step in 1...slotted.count {
-            let gun = slotted[(idx + step) % slotted.count]
-            if gun.hasInfiniteAmmo || mags[gun.rawValue] > 0 || reserves[gun.rawValue] > 0 {
-                heroWeapon = gun
-                hero?.setWeapon(gun)
-                fireCooldown = 0
-                if mags[gun.rawValue] == 0 { startReload(gun: gun) }
-                SoundEngine.shared.weaponSwitch()
-                return true
-            }
-        }
-        return false
+        false
     }
 
-    /// Reload sim: finishes the active reload, auto-reloads the dry active
-    /// gun, and trickles reserve rounds to fully-starved guns so no gun can
-    /// stay bricked forever (desperation mode, capped low).
+    /// Reload sim: finishes the active reload to a full mag and
+    /// auto-reloads the dry active gun. Endless reserve — no stock to track.
     private func updateReload(dt: TimeInterval) {
-        // Finish the active reload. Infinite-reserve guns refill to full
-        // without spending stock; everyone else draws from the reserve.
+        // Finish the active reload: always refills to full.
         if let gun = reloadingWeapon, sceneTime >= reloadEndsAt {
-            let need = gun.magSize - mags[gun.rawValue]
-            let take = gun.hasInfiniteAmmo ? need : min(need, reserves[gun.rawValue])
-            mags[gun.rawValue] += take
-            if !gun.hasInfiniteAmmo {
-                reserves[gun.rawValue] -= take
-            }
+            mags[gun.rawValue] = gun.magSize
             reloadingWeapon = nil
             reloadMidAt = -1
             SoundEngine.shared.reloadDone()
@@ -878,20 +869,8 @@ final class GameScene: SKScene {
         }
         // The dry active gun reloads on its own, even when not aiming.
         if reloadingWeapon == nil,
-           mags[heroWeapon.rawValue] == 0,
-           reserves[heroWeapon.rawValue] > 0 {
+           mags[heroWeapon.rawValue] == 0 {
             startReload(gun: heroWeapon)
-        }
-        // Desperation trickle: +1 reserve every 2s per starved gun, capped.
-        regenAccumulator += dt
-        if regenAccumulator >= 2.0 {
-            regenAccumulator = 0
-            for gun in HeroWeapon.allCases
-            where mags[gun.rawValue] == 0
-                && reserves[gun.rawValue] == 0
-                && reloadingWeapon != gun {
-                reserves[gun.rawValue] = min(reserves[gun.rawValue] + 1, 6)
-            }
         }
     }
 
@@ -1128,8 +1107,14 @@ final class GameScene: SKScene {
                 fireBaseFan(from: bases[i], at: target)
             }
             guard bases[i].team == .enemy else { continue }
-            // Summon marchers toward the player base, capped. Levels with a
-            // doubleChance sometimes pop a PAIR out of the gate together.
+            // Summon marchers toward the player base, capped, in escalating
+            // waves: raider scouts open (tier 0), skirmishers join
+            // (tier 1: reaver/skitter/jet), then armor (tier 2:
+            // brute/mech), then the heavies (tier 3: heli, trucks,
+            // immortal, saucer, phoenix, vesper, gnasher + bonus extras).
+            // A cadence whose tier hasn't opened yet falls through to the
+            // next one, so early ticks read visibly lighter and the gate
+            // keeps turning the screws as the battle runs on.
             // Priority order on a shared summon number: Heli Gunship (heliEvery),
             // then the Vesper herald (vesperEvery, Level 34+),
             // then the Phoenix strike-fighter (phoenixEvery, Level 30+),
@@ -1148,46 +1133,64 @@ final class GameScene: SKScene {
                     summonEnemy(from: bases[i], slot: 0, kind: Balance.playgroundUnit)
                     continue
                 }
+                // Wave tier for this tick (computed once: both pair slots
+                // of a doubled tick march the same wave).
+                let wave = Balance.waveTier(forTick: summonCount + 1)
+                // Pair pressure ramps with the battle: lone scouts first,
+                // thinned pairs mid-battle, full layout pressure late.
                 var batch = 1
-                if Double.random(in: 0..<1) < Balance.summonDoubleChance { batch = 2 }
+                let pairChance = Balance.summonDoubleChance
+                    * Balance.doubleChanceMultiplier(forTick: summonCount + 1)
+                if Double.random(in: 0..<1) < pairChance { batch = 2 }
                 var slot = 0
                 while batch > 0, enemies.count < Balance.maxEnemies {
                     summonCount += 1
                     let kind: EnemyKind
-                    if Balance.truckEvery > 0, summonCount % Balance.truckEvery == 0 {
+                    if Balance.truckEvery > 0, summonCount % Balance.truckEvery == 0,
+                       wave >= Balance.waveTier(for: .missileTruck) {
                         // Missile-truck wave: the launcher roll out instead
                         // of the normal unit.
                         kind = .missileTruck
                     } else if Balance.immortalEvery > 0,
                               summonCount % Balance.immortalEvery == 0,
+                              wave >= Balance.waveTier(for: .immortal),
                               !enemies.contains(where: { $0.alive && $0.kind == .immortal }) {
                         // Immortal wave: the phase walker rolls out — but
                         // only ever one at a time.
                         kind = .immortal
-                    } else if Balance.heliEvery > 0, summonCount % Balance.heliEvery == 0 {
+                    } else if Balance.heliEvery > 0, summonCount % Balance.heliEvery == 0,
+                              wave >= Balance.waveTier(for: .heli) {
                         kind = .heli
-                    } else if Balance.vesperEvery > 0, summonCount % Balance.vesperEvery == 0 {
+                    } else if Balance.vesperEvery > 0, summonCount % Balance.vesperEvery == 0,
+                              wave >= Balance.waveTier(for: .vesper) {
                         // Vesper wave: the violet herald drifts in — checked
                         // ahead of the phoenix cadence so the debut cadence
                         // is never swallowed by it.
                         kind = .vesper
-                    } else if Balance.phoenixEvery > 0, summonCount % Balance.phoenixEvery == 0 {
+                    } else if Balance.phoenixEvery > 0, summonCount % Balance.phoenixEvery == 0,
+                              wave >= Balance.waveTier(for: .phoenix) {
                         // Phoenix wave: the red interceptor dives in — checked
                         // ahead of the saucer cadence so the debut cadence is
                         // never swallowed by it.
                         kind = .phoenix
-                    } else if Balance.saucerEvery > 0, summonCount % Balance.saucerEvery == 0 {
+                    } else if Balance.saucerEvery > 0, summonCount % Balance.saucerEvery == 0,
+                              wave >= Balance.waveTier(for: .saucer) {
                         kind = .saucer
-                    } else if Balance.bruteEvery > 0, summonCount % Balance.bruteEvery == 0 {
+                    } else if Balance.bruteEvery > 0, summonCount % Balance.bruteEvery == 0,
+                              wave >= Balance.waveTier(for: .brute) {
                         kind = .brute
-                    } else if Balance.reaverEvery > 0, summonCount % Balance.reaverEvery == 0 {
+                    } else if Balance.reaverEvery > 0, summonCount % Balance.reaverEvery == 0,
+                              wave >= Balance.waveTier(for: .reaver) {
                         kind = .reaver
                     } else if Balance.mechEvery > 0, summonCount % Balance.mechEvery == 0,
+                              wave >= Balance.waveTier(for: .mech),
                               !enemies.contains(where: { $0.alive && $0.kind == .mech }) {
                         kind = .mech
-                    } else if Balance.skitterEvery > 0, summonCount % Balance.skitterEvery == 0 {
+                    } else if Balance.skitterEvery > 0, summonCount % Balance.skitterEvery == 0,
+                              wave >= Balance.waveTier(for: .skitter) {
                         kind = .skitter
-                    } else if Balance.jetEvery > 0, summonCount % Balance.jetEvery == 0 {
+                    } else if Balance.jetEvery > 0, summonCount % Balance.jetEvery == 0,
+                              wave >= Balance.waveTier(for: .jet) {
                         kind = .jet
                     } else {
                         kind = .raider
@@ -1209,9 +1212,11 @@ final class GameScene: SKScene {
                         }
                         slot += Balance.truckCount - 1
                     }
-                    // Rank-and-file raiders march in twos: double the basic
-                    // marcher pressure without changing elite cadence.
-                    if kind == .raider, enemies.count < Balance.maxEnemies {
+                    // Rank-and-file raiders march in twos once the scouts
+                    // are out (tier 1+): double the basic marcher pressure
+                    // without changing elite cadence. The opening ticks
+                    // stay lone scouts.
+                    if kind == .raider, wave >= 1, enemies.count < Balance.maxEnemies {
                         summonEnemy(from: bases[i], slot: slot, kind: .raider)
                         slot += 1
                     }
@@ -1244,22 +1249,26 @@ final class GameScene: SKScene {
                         slot += Balance.jetPairSize - 1
                     }
                     // Level-specific bonus: an extra Brute marches out on
-                    // top of this wave's normal batch.
-                    if Balance.extraBruteSummons.contains(summonCount),
+                    // top of this wave's normal batch — only once armor
+                    // waves have opened, so early bonuses wait their turn.
+                    if wave >= Balance.waveTier(for: .brute),
+                       Balance.extraBruteSummons.contains(summonCount),
                        enemies.count < Balance.maxEnemies {
                         summonEnemy(from: bases[i], slot: slot, kind: .brute)
                         slot += 1
                     }
                     // Level-specific bonus: an extra Mech walker rolls out
-                    // on top of this wave's normal batch.
-                    if Balance.extraMechSummons.contains(summonCount),
+                    // on top of this wave's normal batch (armor waves+).
+                    if wave >= Balance.waveTier(for: .mech),
+                       Balance.extraMechSummons.contains(summonCount),
                        enemies.count < Balance.maxEnemies {
                         summonEnemy(from: bases[i], slot: slot, kind: .mech)
                         slot += 1
                     }
                     // Level-specific bonus: an extra Gnasher crawls out on
-                    // top of this wave's normal batch (Pale Abyss, L27).
-                    if Balance.extraGnasherSummons.contains(summonCount),
+                    // top of this wave's normal batch (heavy waves+).
+                    if wave >= Balance.waveTier(for: .gnasher),
+                       Balance.extraGnasherSummons.contains(summonCount),
                        enemies.count < Balance.maxEnemies {
                         summonEnemy(from: bases[i], slot: slot, kind: .gnasher)
                         slot += 1
@@ -1549,7 +1558,7 @@ final class GameScene: SKScene {
             // them push inside structures without ever swinging. Shooters
             // keep the true distance so their stop line stays put.
             let rangeDist = e.kind.isMelee ? abs(aim.x - e.position.x) : dist
-            if rangeDist > e.shootRange {
+            if rangeDist > e.holdRange {
                 // Closing burst: once per life, when the opposing army is
                 // close, the reaver kicks up dust and dashes the last stretch.
                 if e.kind.isMelee, !e.burstUsed, dist < Balance.reaverBurstRange {
@@ -1617,7 +1626,7 @@ final class GameScene: SKScene {
     /// Heavy single-target damage with an impact burst on the victim.
     private func meleeStrike(from e: EnemyNode) {
         let dmg = e.meleeDamage
-        let reach = e.shootRange + 30
+        let reach = e.holdRange + 30
         // Closest body in axe reach (ties go to the hero).
         var strikeHero = false
         var strikeAlly: AllyNode?
@@ -1650,7 +1659,7 @@ final class GameScene: SKScene {
         }
         // Player tower in axe reach (towers are ~60pt half-width).
         if let tower = nearestTower(team: .player, toX: e.position.x),
-           abs(tower.node.position.x - e.position.x) <= e.shootRange + 60,
+           abs(tower.node.position.x - e.position.x) <= e.holdRange + 60,
            let idx = towers.firstIndex(where: { $0.node === tower.node }) {
             damageTower(at: idx, amount: dmg)
             meleeImpact(at: CGPoint(x: tower.node.position.x,
@@ -1659,7 +1668,7 @@ final class GameScene: SKScene {
         }
         // Player HQ in axe reach (HQ is ~130pt half-width).
         if let base = bases.first(where: { $0.team == .player }), base.alive,
-           abs(base.node.position.x - e.position.x) <= e.shootRange + 130,
+           abs(base.node.position.x - e.position.x) <= e.holdRange + 130,
            let idx = bases.firstIndex(where: { $0.node === base.node }) {
             damageBase(at: idx, amount: dmg)
             meleeImpact(at: CGPoint(x: base.node.position.x,
@@ -2093,7 +2102,7 @@ final class GameScene: SKScene {
             if a.kind == .revrent {
                 let inRange: Bool = {
                     guard let t = target else { return false }
-                    return hypot(t.x - a.position.x, t.y - a.position.y) <= a.kind.shootRange
+                    return hypot(t.x - a.position.x, t.y - a.position.y) <= a.holdRange
                 }()
                 updateRevrentCarrier(a, dt: dt, hasTarget: target != nil, inRange: inRange)
             }
@@ -2130,7 +2139,7 @@ final class GameScene: SKScene {
             let dist = hypot(aim.x - a.position.x, aim.y - a.position.y)
             a.face(aim.x - a.position.x)
             a.aimAt(CGVector(dx: aim.x - a.position.x, dy: aim.y - a.position.y))
-            if dist > a.kind.shootRange {
+            if dist > a.holdRange {
                 let dir: CGFloat = aim.x > a.position.x ? 1 : -1
                 a.position.x = min(Balance.levelWidth - 40,
                                    a.position.x + dir * a.kind.speed * CGFloat(dt))
@@ -2368,7 +2377,7 @@ final class GameScene: SKScene {
     /// screen out once the carrier itself is in firing range, recall it
     /// when no enemy is in sight anymore.
     private func updateRevrentCarrier(_ a: AllyNode, dt: TimeInterval, hasTarget: Bool, inRange: Bool) {
-        // Dead droids rebuild one per slot after 5s, launching from the hull.
+        // Dead droids rebuild one per slot after 10s, launching from the hull.
         for slot in 0..<a.interceptorBuildTimers.count {
             guard a.interceptorBuildTimers[slot] > 0 else { continue }
             a.interceptorBuildTimers[slot] -= dt
@@ -2538,7 +2547,7 @@ final class GameScene: SKScene {
         world.addChild(flash)
     }
 
-    /// Shared interceptor damage: drains HP, bursts + starts the 5s
+    /// Shared interceptor damage: drains HP, bursts + starts the 10s
     /// rebuild on death. Removal happens in updateInterceptors' sweep.
     private func damageInterceptor(_ d: RevrentInterceptorNode, amount: CGFloat) {
         guard d.alive else { return }
@@ -3438,11 +3447,6 @@ final class GameScene: SKScene {
         e.refreshHPBar()
         if !e.alive {
             money += e.reward
-            if fromHero {
-                let i = heroWeapon.rawValue
-                reserves[i] = min(reserves[i] + heroWeapon.killAmmo,
-                                  heroWeapon.startReserve * 2)
-            }
             maybeSpawnDrop(at: e.position)
             if e.kind == .gnasher {
                 // Volatile rusher dies bursting: pale blast splashes the
@@ -3743,12 +3747,12 @@ final class GameScene: SKScene {
         )
     }
 
-    // MARK: - Gun ammo readout (shown as 12/90 on the HUD gun button)
+    // MARK: - Gun ammo readout (mag count only — every gun is endless).
+    // While reloading the box shows a fixed-width "REL" so the HUD never
+    // reflows between counts and the reload state.
     private var ammoDisplayText: String {
-        let i = heroWeapon.rawValue
-        let stock = heroWeapon.hasInfiniteAmmo ? "∞" : "\(reserves[i])"
-        if reloadingWeapon == heroWeapon { return "REL \(mags[i])/\(stock)" }
-        return "\(mags[i])/\(stock)"
+        if reloadingWeapon == heroWeapon { return "REL" }
+        return "\(mags[heroWeapon.rawValue])"
     }
 
     // MARK: - Drops (dead enemies randomly leave ammo/health for the hero)
@@ -3762,19 +3766,16 @@ final class GameScene: SKScene {
     private var drops: [Drop] = []
 
     /// Rolls a drop at the dead enemy's spot. The overall chance never
-    /// changes (Balance.dropChance); money just joins the table.
-    /// Full-HP heroes split ammo/money; otherwise health/ammo/money thirds.
+    /// changes (Balance.dropChance). Every gun runs an endless reserve,
+    /// so the table is health/money only — no ammo crates.
+    /// Full-HP heroes get money; otherwise health/money halves.
     private func maybeSpawnDrop(at pos: CGPoint) {
         guard Double.random(in: 0..<1) < Balance.dropChance else { return }
         let kind: DropKind
         if heroHP >= heroMaxHP {
-            kind = Bool.random() ? .ammo : .money
+            kind = .money
         } else {
-            switch Int.random(in: 0..<3) {
-            case 0: kind = .health
-            case 1: kind = .ammo
-            default: kind = .money
-            }
+            kind = Bool.random() ? .health : .money
         }
         let node = makeDropNode(kind: kind)
         node.position = CGPoint(
@@ -3846,12 +3847,14 @@ final class GameScene: SKScene {
                       color: SKColor(red: 0.3, green: 1.0, blue: 0.5, alpha: 1),
                       at: d.node.position)
         case .ammo:
-            for gun in HeroWeapon.allCases {
-                let i = gun.rawValue
-                reserves[i] = min(reserves[i] + gun.killAmmo * Balance.dropAmmoMultiplier,
-                                  gun.startReserve * 2)
+            // Legacy ammo crates (pre-endless-reserve saves): top up the
+            // active mag instead of touching a reserve that no longer exists.
+            mags[heroWeapon.rawValue] = heroWeapon.magSize
+            if reloadingWeapon == heroWeapon {
+                reloadingWeapon = nil
+                reloadMidAt = -1
             }
-            floatText("+AMMO",
+            floatText("+MAG",
                       color: SKColor(red: 1.0, green: 0.85, blue: 0.3, alpha: 1),
                       at: d.node.position)
         case .money:

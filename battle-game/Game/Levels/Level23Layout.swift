@@ -48,7 +48,7 @@ extension Balance {
         pineDensity: 0,
         towerFanCount: 3,
         truckEvery: 5,
-        truckCount: 2,
+        truckCount: 1,
         /// The Immortals garrison the Causeway — one walker at a time,
         /// every eighth summon.
         immortalEvery: 8,

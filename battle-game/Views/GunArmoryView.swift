@@ -13,6 +13,10 @@ struct GunArmoryView: View {
     @State private var guns: [HeroWeapon] = LoadoutStore.loadout
     @State private var activeSlot: Int = 0
     @State private var deniedRaw: Int?
+    /// Live backdrop switch: the animated Canvas only starts ticking once
+    /// the push transition is done — a static gradient covers the flight
+    /// in so opening never hitches mid-slide.
+    @State private var fxReady = false
     @ObservedObject private var wallet = WalletStore.shared
 
     private var unlockedCount: Int { GunLocker.unlockedGuns.count }
@@ -23,16 +27,26 @@ struct GunArmoryView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                // Gun-shop interior: riveted steel wall, warm work lamp with
-                // a faint flicker, hazard stripe along the wall/floor seam,
-                // giant crosshair watermark, drifting embers. One Canvas.
-                TimelineView(.animation(minimumInterval: 1 / 8)) { tl in
-                    Canvas { ctx, size in
-                        ArmoryBackdrop.draw(ctx: &ctx, size: size,
-                                            t: tl.date.timeIntervalSinceReferenceDate)
+                // Static steel cover during the push; the live gun-shop
+                // Canvas (riveted wall, work lamp, hazard stripe,
+                // crosshair, embers) fades in once the transition lands.
+                LinearGradient(colors: [Color(red: 0.09, green: 0.08, blue: 0.07),
+                                        Color.black],
+                               startPoint: .top, endPoint: .bottom)
+                    .ignoresSafeArea()
+                if fxReady {
+                    // Gun-shop interior: riveted steel wall, warm work lamp with
+                    // a faint flicker, hazard stripe along the wall/floor seam,
+                    // giant crosshair watermark, drifting embers. One Canvas.
+                    TimelineView(.animation(minimumInterval: 1 / 8)) { tl in
+                        Canvas { ctx, size in
+                            ArmoryBackdrop.draw(ctx: &ctx, size: size,
+                                                t: tl.date.timeIntervalSinceReferenceDate)
+                        }
                     }
+                    .ignoresSafeArea()
+                    .transition(.opacity)
                 }
-                .ignoresSafeArea()
 
                 VStack(alignment: .leading, spacing: 10) {
                     SlimTopBar(unlocked: unlockedCount,
@@ -87,8 +101,17 @@ struct GunArmoryView: View {
                 .padding(.top, 12)
                 .padding(.bottom, 20)
             }
+            .animation(.easeOut(duration: 0.25), value: fxReady)
         }
         .toolbar(.hidden, for: .navigationBar)
+        .task {
+            // Let the push transition land before the live backdrop (and
+            // its 8fps full-screen redraws) starts — the static cover
+            // carries the flight in.
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            guard !Task.isCancelled else { return }
+            fxReady = true
+        }
     }
 
     /// Rack tap: unlocked guns fill the active slot (already-slotted guns
@@ -374,9 +397,9 @@ private struct ShowcaseCard: View {
                     .tracking(2)
                     .foregroundStyle(.yellow)
                 Spacer()
-                Text(gun.hasInfiniteAmmo ? "∞ AMMO" : "\(gun.magSize) SHELLS")
+                Text("\(gun.magSize) / MAG · ∞")
                     .font(.system(size: 10, weight: .black, design: .monospaced))
-                    .foregroundStyle(gun.hasInfiniteAmmo ? .cyan : .white.opacity(0.6))
+                    .foregroundStyle(.cyan)
             }
             ZStack {
                 // Lamp pool on the bench.
@@ -612,9 +635,9 @@ private struct GunTileFooter: View {
                     .disabled(!affordable)
                 }
             } else {
-                Text(gun.hasInfiniteAmmo ? "∞ AMMO" : "\(gun.magSize) SHELLS")
+                Text("\(gun.magSize) / MAG · ∞")
                     .font(.system(size: 9, weight: .black, design: .monospaced))
-                    .foregroundStyle(gun.hasInfiniteAmmo ? .cyan : .white.opacity(0.55))
+                    .foregroundStyle(.cyan)
                 Spacer()
             }
         }

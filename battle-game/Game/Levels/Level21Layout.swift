@@ -46,7 +46,7 @@ extension Balance {
         pineDensity: 0,
         towerFanCount: 3,
         truckEvery: 5,
-        truckCount: 2,
+        truckCount: 1,
         /// Tightened from L20's every-8th to every-7th summon — and if an
         /// Immortal is still standing on wave 14, `mechEvery: 7` rolls out
         /// a Mech walker pair in its place.

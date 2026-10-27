@@ -12,7 +12,7 @@ import CoreGraphics
 /// 13200pt lane). The gate turns the screws over Pale Abyss (L27):
 /// marches out faster, pops pairs more often, the field cap rises to the
 /// 44-unit ceiling, elites come denser across the board (jets every 6th,
-/// mechs every 3rd, gunships every 2nd, trucks every 2nd, saucers every
+/// mechs every 3rd, gunships every 2nd, trucks every 4th, saucers every
 /// 2nd, Immortals every 4th), bonus Brutes + Mechs stack up across the
 /// 15-wave push, and enemy HP scales another 5% (×3.0719, +5% over L27).
 /// The Gnashers stalk out of the ash on the same cadence as the abyss.
@@ -49,8 +49,8 @@ extension Balance {
         extraGnasherSummons: [4, 12, 20, 28, 36],
         pineDensity: 0,
         towerFanCount: 3,
-        truckEvery: 2,
-        truckCount: 2,
+        truckEvery: 4,
+        truckCount: 1,
         /// The Immortals hold the outer dark — one walker at a time,
         /// every fourth summon (the densest cadence yet).
         immortalEvery: 4,

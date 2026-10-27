@@ -356,6 +356,13 @@ final class EnemyNode: SKSpriteNode {
     var boltDamage: CGFloat
     var meleeDamage: CGFloat
     var reward: Int
+    /// Per-unit hold-range divergence: multiplies `shootRange` to get this
+    /// unit's personal stop-and-shoot (or stop-and-chop) distance. Same-kind
+    /// packs no longer halt on the exact same X — some hold a little
+    /// before, some push a little past — while staying on the same Y lane.
+    var rangeFactor: CGFloat = 1
+    /// Personal stop distance for this unit (shooters + melee alike).
+    var holdRange: CGFloat { shootRange * rangeFactor }
     /// Closing-burst state (reavers): fires once per life inside burst
     /// range, then dashes at burst speed while the timer runs down.
     var burstUsed: Bool = false
@@ -412,6 +419,12 @@ final class EnemyNode: SKSpriteNode {
         self.boltDamage = kind.boltDamage
         self.meleeDamage = kind.meleeDamage
         self.reward = kind.reward
+        // Personal hold range: ±12% for shooters so squads stagger along X
+        // instead of stacking on one stop line; melee gets a wider ±25%
+        // since their short base reach would otherwise barely separate.
+        self.rangeFactor = kind.isMelee
+            ? CGFloat.random(in: 0.75...1.25)
+            : CGFloat.random(in: 0.88...1.12)
         self.frames = UnitPixelArt.frames(for: {
             switch kind {
             case .raider: return UnitPixelArt.Kind.enemy

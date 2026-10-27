@@ -74,6 +74,18 @@ struct BattlePrepView: View {
                 bgScene = MainMenuBattleScene(size: CGSize(width: 1334, height: 750),
                                               levelId: level.id)
             }
+            // Pre-warm armory art off the transition path: once the prep
+            // screen has settled, build every hero portrait + gun icon so
+            // the first opens of the hero/weapon bays have zero generation
+            // cost mid-push.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                for hero in HeroRoster.heroes {
+                    _ = HeroPixelArt.portraitImage(for: hero.pixelKind)
+                }
+                for gun in HeroWeapon.allCases {
+                    _ = PixelHeroArt.gunImage(gun)
+                }
+            }
         }
     }
 
@@ -417,7 +429,7 @@ private struct PrepGunCard: View {
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
-                    Text(gun.hasInfiniteAmmo ? "∞ AMMO" : "\(gun.magSize) SHELLS / MAG")
+                    Text("\(gun.magSize) / MAG · ∞")
                         .font(.system(size: 8, weight: .black, design: .monospaced))
                         .tracking(1)
                         .foregroundStyle(.cyan)
@@ -425,7 +437,7 @@ private struct PrepGunCard: View {
                     Spacer(minLength: 2)
                     StatPips(label: "DMG", value: Int(gun.damage), maxValue: 60,
                              color: .red, compact: true)
-                    StatPips(label: "AMMO", value: gun.hasInfiniteAmmo ? 6 : min(gun.magSize, 12),
+                    StatPips(label: "AMMO", value: min(max(1, Int((Double(gun.magSize) / 50.0 * 12).rounded())), 12),
                              maxValue: 12, color: .cyan, compact: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -485,11 +497,10 @@ private struct PrepIntelCard: View {
 
     private var count: Int { kinds.count }
 
-    private var openLabel: String {
-        switch content {
-        case .enemies: return "OPEN HOSTILE INDEX"
-        case .army: return "OPEN ARMY INDEX"
-        }
+    /// Compact square-box columns that wrap onto the next line when the
+    /// roster outgrows the row.
+    private var boxColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: 34), spacing: 4)]
     }
 
     var body: some View {
@@ -517,9 +528,7 @@ private struct PrepIntelCard: View {
                     .tracking(1)
                     .foregroundStyle(.white.opacity(0.55))
 
-                Spacer(minLength: 2)
-
-                HStack(spacing: 4) {
+                LazyVGrid(columns: boxColumns, spacing: 4) {
                     ForEach(0..<count, id: \.self) { i in
                         // Enemy art is authored facing +x; battle hostiles
                         // march left, so mirror their previews to match.
@@ -528,32 +537,23 @@ private struct PrepIntelCard: View {
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .scaleEffect(x: kinds[i].1 ? -1 : 1, y: 1)
-                            .padding(2)
+                            .padding(3)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .aspectRatio(1, contentMode: .fit)
                             .background(.black.opacity(0.55))
-                            .overlay(Rectangle().stroke(tint.opacity(0.18), lineWidth: 1))
+                            .clipShape(ShopPixelShape(cut: 4))
+                            .overlay(ShopPixelShape(cut: 4).stroke(tint.opacity(0.5), lineWidth: 1.5))
                     }
-                }
-                .frame(height: 46)
-
-                Spacer(minLength: 2)
-
-                HStack(spacing: 4) {
-                    Text(openLabel)
-                        .font(.system(size: 7, weight: .black, design: .monospaced))
-                        .tracking(1)
-                        .foregroundStyle(.white.opacity(0.45))
-                    Spacer(minLength: 2)
-                    PrepChevron(color: tint)
                 }
             }
             .padding(9)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(.black.opacity(0.55))
             .clipShape(ShopPixelShape(cut: 10))
             .overlay(ShopPixelShape(cut: 10).stroke(tint.opacity(0.45), lineWidth: 2))
             .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .simultaneousGesture(TapGesture().onEnded {
             SoundEngine.shared.uiTap()
         })
@@ -595,27 +595,6 @@ private struct PrepChangeChip: View {
         .clipShape(ShopPixelShape(cut: 5))
         .overlay(ShopPixelShape(cut: 5).stroke(color.opacity(0.7), lineWidth: 1.5))
         .contentShape(Rectangle())
-    }
-}
-
-private struct PrepChevron: View {
-    let color: Color
-
-    var body: some View {
-        HStack(spacing: 1.5) {
-            VStack(spacing: 1.5) {
-                ForEach(0..<5, id: \.self) { _ in
-                    color.frame(width: 5, height: 5)
-                }
-            }
-            VStack(spacing: 1.5) {
-                Color.clear.frame(width: 5, height: 5)
-                Color.clear.frame(width: 5, height: 5)
-                color.frame(width: 5, height: 5)
-                Color.clear.frame(width: 5, height: 5)
-                Color.clear.frame(width: 5, height: 5)
-            }
-        }
     }
 }
 

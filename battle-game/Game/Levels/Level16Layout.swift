@@ -6,7 +6,7 @@ import CoreGraphics
 /// out, leaving more bare scree and open rock on the shelf.
 ///
 /// The gate is the hard part. The enemy field is stacked with heavy
-/// units — Missile Trucks roll out in pairs, Heli Gunships fly almost
+/// units — single Missile Trucks roll out, Heli Gunships fly almost
 /// every fourth wave, Brutes every third, Mech walkers every seventh
 /// (in twos), and five waves get an extra Brute and four get an extra
 /// Mech on top of the normal batch. The gate also pops pairs more
@@ -33,7 +33,7 @@ extension Balance {
         doubleChance: 0.55,
         maxEnemies: 30,
         // The heavy roster: Brutes every 3rd wave, Gunships every 4th,
-        // Missile Trucks every 5th (in twos), Mech walkers every 7th
+        // Missile Trucks every 5th (singly), Mech walkers every 7th
         // (in twos). Skitters keep the gaps between them busy.
         bruteEvery: 3,
         reaverEvery: 0,
@@ -55,8 +55,8 @@ extension Balance {
         // more bare rock, far fewer pines.
         pineDensity: 0.9,
         towerFanCount: 3,
-        // Missile-truck waves: two launchers every 5th wave.
+        // Missile-truck waves: a single launcher every 5th wave.
         truckEvery: 5,
-        truckCount: 2
+        truckCount: 1
     )
 }

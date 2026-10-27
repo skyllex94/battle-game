@@ -89,9 +89,19 @@ final class SoundEngine {
     func missileLaunch(at x: CGFloat) {
         play(.missileLaunch, volume: 0.62, at: x)
         // The whistle trails the blast by a beat — the round clearing the
-        // rail and running off into the distance.
+        // rail and running off into the distance. Cancelled by pause/stop
+        // (epoch bump) so it can't leak into a paused menu or the next
+        // scene after the level exits.
+        lock.lock()
+        let epoch = audioEpoch
+        lock.unlock()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) { [weak self] in
-            self?.play(.missileWhistle, volume: 0.34, at: x)
+            guard let self else { return }
+            self.lock.lock()
+            let current = self.audioEpoch
+            self.lock.unlock()
+            if current != epoch { return }
+            self.play(.missileWhistle, volume: 0.34, at: x)
         }
     }
     /// Missile detonation on contact: a punchy mid-weight blast.
@@ -168,17 +178,29 @@ final class SoundEngine {
     private var musicNode: AVAudioPlayerNode?
     private var musicLoop: AVAudioPCMBuffer?
     private var musicOn = false
+    /// True while the battle loop is paused (node.pause) instead of
+    /// stopped — resume continues mid-bar instead of rescheduling.
+    private var musicPaused = false
+    /// Bumped on every pause/stop so delayed one-shots (missile whistle)
+    /// scheduled before the transition never fire into a paused menu or a
+    /// departed level.
+    private var audioEpoch = 0
 
     /// Starts the battle loop (idempotent while playing). Safe to call on
     /// every level start: a stopped node gets its loop buffer re-scheduled
     /// (`stop()` clears a node's queue, so replaying without rescheduling
-    /// would be silence — that's what broke restarts).
+    /// would be silence — that's what broke restarts). Also resumes a
+    /// paused loop instead of rescheduling it.
     func startBattleMusic() {
         guard musicEnabled else { return }
         lock.lock()
         let on = musicOn
+        let paused = musicPaused
         lock.unlock()
-        if on { return }
+        if on {
+            if paused { resumeBattleMusic() }
+            return
+        }
         ensureStarted()
         lock.lock()
         if musicNode == nil {
@@ -201,6 +223,7 @@ final class SoundEngine {
         }
         lock.lock()
         musicOn = true
+        musicPaused = false
         lock.unlock()
     }
 
@@ -209,6 +232,79 @@ final class SoundEngine {
         defer { lock.unlock() }
         musicNode?.stop()
         musicOn = false
+        musicPaused = false
+    }
+
+    /// Pauses the battle loop mid-bar (position preserved for resume).
+    /// No-op unless the loop is currently playing.
+    func pauseBattleMusic() {
+        lock.lock()
+        let node = musicNode
+        let on = musicOn
+        let paused = musicPaused
+        lock.unlock()
+        guard on, !paused else { return }
+        node?.pause()
+        lock.lock()
+        musicPaused = true
+        lock.unlock()
+    }
+
+    /// Resumes a paused battle loop. No-op unless paused.
+    func resumeBattleMusic() {
+        lock.lock()
+        let node = musicNode
+        let on = musicOn
+        let paused = musicPaused
+        lock.unlock()
+        guard on, paused, let node else { return }
+        node.play()
+        lock.lock()
+        musicPaused = false
+        lock.unlock()
+    }
+
+    /// Cuts every in-flight SFX one-shot and cancels pending delayed
+    /// tails (missile whistle). Music is untouched — pair with
+    /// pause/stopBattleMusic for the full freeze.
+    func stopBattleSFX() {
+        lock.lock()
+        audioEpoch += 1
+        let nodes = players
+        lock.unlock()
+        for node in nodes { node.stop() }
+    }
+
+    /// Full pause freeze for menus, intel cards, win/defeat cards: music
+    /// pauses mid-bar, every SFX tail is cut, delayed tails cancelled.
+    /// UI taps still play after this (menus stay clicky) — they schedule
+    /// fresh on the cleared pool.
+    func pauseBattleAudio() {
+        pauseBattleMusic()
+        stopBattleSFX()
+    }
+
+    /// Undo of pauseBattleAudio: resumes the loop if it was paused.
+    /// SFX one-shots stay cut (they were momentary by design).
+    func resumeBattleAudio() {
+        resumeBattleMusic()
+    }
+
+    /// Hard stop when leaving the level (quit, map, continue, disappear):
+    /// music stopped + every SFX tail cut + delayed tails cancelled so
+    /// nothing leaks into the menu or the next scene.
+    func stopAllBattleAudio() {
+        lock.lock()
+        audioEpoch += 1
+        let nodes = players
+        let music = musicNode
+        lock.unlock()
+        music?.stop()
+        for node in nodes { node.stop() }
+        lock.lock()
+        musicOn = false
+        musicPaused = false
+        lock.unlock()
     }
 
     /// Poll-friendly toggle sync (the scene calls this ~1/sec): starts the

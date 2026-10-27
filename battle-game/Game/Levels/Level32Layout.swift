@@ -15,7 +15,7 @@ import CoreGraphics
 /// screws over Cinder Gate (L31): marches out faster, pops pairs more
 /// often, the field cap rises to the 50-unit ceiling, elites stay dense
 /// across the board (jets every 5th, mechs every 3rd, gunships every 2nd,
-/// trucks every 2nd, saucers every 2nd, Immortals every 3rd, Phoenix every
+/// trucks every 4th, saucers every 2nd, Immortals every 3rd, Phoenix every
 /// 4th), bonus Brutes + Mechs stack up across the 16-wave push, and enemy
 /// HP scales another 5% (×3.7339, +5% over L31). Five Gnashers still crawl
 /// out as bonus summons across the push; clear them at range or eat the
@@ -53,8 +53,8 @@ extension Balance {
         extraGnasherSummons: [4, 12, 20, 28, 36],
         pineDensity: 0,
         towerFanCount: 3,
-        truckEvery: 2,
-        truckCount: 2,
+        truckEvery: 4,
+        truckCount: 1,
         /// The Immortals press the rift — one walker at a time,
         /// every third summon (the densest cadence, held from L31).
         immortalEvery: 3,

@@ -7,6 +7,7 @@ import Foundation
 enum Route: Hashable {
     case map
     case cutscene
+    case endscene
     case settings
     case about
     case detail(levelId: Int)

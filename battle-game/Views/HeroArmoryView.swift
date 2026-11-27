@@ -21,6 +21,10 @@ struct HeroArmoryView: View {
     /// the push transition is done — a static gradient covers the flight
     /// in so opening never hitches mid-slide.
     @State private var fxReady = false
+    /// Level-detail style load: the push carries cheap black, content
+    /// builds after it lands, then fades into existence.
+    @State private var contentReady = false
+    @State private var contentOpacity = 0.0
     @ObservedObject private var wallet = WalletStore.shared
 
     private var unlockedCount: Int { HeroRoster.unlockedHeroes.count }
@@ -35,26 +39,26 @@ struct HeroArmoryView: View {
             let wide = geo.size.width > 700
             let tight = geo.size.height < 430
             ZStack {
-                // Static teal cover during the push; the live cryo-bay
-                // Canvas (pod wall, capsules, scan band, floor grid) fades
-                // in once the transition lands.
-                LinearGradient(colors: [Color(red: 0.03, green: 0.10, blue: 0.11),
-                                        Color.black],
-                               startPoint: .top, endPoint: .bottom)
-                    .ignoresSafeArea()
-                if fxReady {
-                    // Cryo-bay ready room: teal pod wall, glowing capsules, slow
-                    // scan band, blinking status lights, floor grid. One Canvas.
-                    TimelineView(.animation(minimumInterval: 1 / 8)) { tl in
-                        Canvas { ctx, size in
-                            HeroBayBackdrop.draw(ctx: &ctx, size: size,
-                                                 t: tl.date.timeIntervalSinceReferenceDate)
+                ZStack {
+                    LinearGradient(colors: [Color(red: 0.03, green: 0.10, blue: 0.11),
+                                            Color.black],
+                                   startPoint: .top, endPoint: .bottom)
+                        .ignoresSafeArea()
+                    if fxReady {
+                        TimelineView(.animation(minimumInterval: 1 / 10)) { tl in
+                            Canvas { ctx, size in
+                                HeroBayBackdrop.draw(ctx: &ctx, size: size,
+                                                     t: tl.date.timeIntervalSinceReferenceDate)
+                            }
                         }
+                        .ignoresSafeArea()
+                        .transition(.opacity)
                     }
-                    .ignoresSafeArea()
-                    .transition(.opacity)
                 }
+                .animation(.easeOut(duration: 0.6), value: fxReady)
 
+                Group {
+                    if contentReady {
                 VStack(spacing: tight ? 6 : 8) {
                     ArmoryHeader(unlockedCount: unlockedCount,
                                  diamonds: wallet.diamonds) {
@@ -168,15 +172,26 @@ struct HeroArmoryView: View {
                     }
                     .transition(.opacity)
                 }
+                    }
+                }
+                .opacity(contentOpacity)
+                if !contentReady {
+                    BayLoaderView(tint: .blue, label: "LOADING")
+                }
             }
-            .animation(.easeOut(duration: 0.25), value: fxReady)
         }
+        .background(Color.black.ignoresSafeArea(edges: .all))
         .toolbar(.hidden, for: .navigationBar)
         .task {
-            // Let the push transition land before the live backdrop (and
-            // its 8fps full-screen redraws) starts — the static cover
-            // carries the flight in.
-            try? await Task.sleep(nanoseconds: 450_000_000)
+            // Level-detail style: the push carries a cheap black cover,
+            // content builds after it lands, then fades into existence.
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled else { return }
+            contentReady = true
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: 0.45)) { contentOpacity = 1 }
+            try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled else { return }
             fxReady = true
         }
@@ -380,7 +395,7 @@ private struct UpgradeColumn: View {
         let spd = Int(HeroUpgrades.speedValue(heroId: hero.id))
         let sh = Int(HeroUpgrades.shieldMax(heroId: hero.id))
         let dmg = Int(HeroUpgrades.damageBonus(heroId: hero.id))
-        return "HP \(hp) · SPD \(spd) · SH \(sh) · DMG +\(dmg)"
+        return "HP \(hp) · SPD \(spd) · DMG +\(dmg) · SH \(sh)"
     }
 
     var body: some View {
@@ -1049,7 +1064,7 @@ private struct ShowcaseColumn: View {
             .overlay(shape.stroke(.cyan.opacity(0.5), lineWidth: 2))
 
             // Dossier group: big name + blurb, then the four combat stats
-            // stacked tall — HP over SPD over SHIELD over DAMAGE.
+            // stacked tall — HP over SPD over DAMAGE over SHIELD.
             VStack(alignment: .leading, spacing: 5) {
                 Text(hero.displayName.uppercased())
                     .font(.system(size: tight ? 19 : 22, weight: .black, design: .monospaced))
@@ -1075,15 +1090,15 @@ private struct ShowcaseColumn: View {
                                value: "\(Int(HeroUpgrades.speedValue(heroId: hero.id)))",
                                lit: pips(Int(HeroUpgrades.speedValue(heroId: hero.id)), 23),
                                color: .cyan)
+                DossierStatRow(icon: .damage, label: "DAMAGE",
+                               value: "+\(Int(HeroUpgrades.damageBonus(heroId: hero.id)))",
+                               lit: pips(Int(HeroUpgrades.damageBonus(heroId: hero.id)), 30),
+                               color: .orange)
                 DossierStatRow(icon: shieldIcon(HeroUpgrades.tier(heroId: hero.id, track: .shield)),
                                label: "SHIELD",
                                value: "\(Int(HeroUpgrades.shieldMax(heroId: hero.id)))",
                                lit: HeroUpgrades.tier(heroId: hero.id, track: .shield) * 2,
                                color: .cyan)
-                DossierStatRow(icon: .damage, label: "DAMAGE",
-                               value: "+\(Int(HeroUpgrades.damageBonus(heroId: hero.id)))",
-                               lit: pips(Int(HeroUpgrades.damageBonus(heroId: hero.id)), 30),
-                               color: .orange)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -1131,7 +1146,7 @@ private struct ShowcaseColumn: View {
 }
 
 /// One large dossier stat line: pixel icon + label on the left, chunky
-/// pips + big live value on the right. HP over SPD over SHIELD over DMG.
+/// pips + big live value on the right. HP over SPD over DMG over SHIELD.
 private struct DossierStatRow: View {
     let icon: AddonIconKind
     let label: String
@@ -1439,6 +1454,39 @@ struct ShopPixelShape: Shape {
         p.addLine(to: CGPoint(x: rect.minX, y: rect.minY + cut))
         p.closeSubpath()
         return p
+    }
+}
+
+/// Shared bay loader: six marching pixel pips over a tracked LOADING
+/// tag. Deliberately trivial (a few rects at 12fps) so it stays smooth
+/// while the heavy bay content builds behind it.
+struct BayLoaderView: View {
+    var tint: Color = .cyan
+    var label: String = "LOADING"
+
+    var body: some View {
+        VStack(spacing: 10) {
+            TimelineView(.animation(minimumInterval: 1 / 12)) { tl in
+                Canvas { ctx, size in
+                    let n = 6
+                    let w: CGFloat = 12, gap: CGFloat = 6
+                    let total = CGFloat(n) * w + CGFloat(n - 1) * gap
+                    var x = (size.width - total) / 2
+                    let y = (size.height - w) / 2
+                    let step = Int(tl.date.timeIntervalSinceReferenceDate * 9) % n
+                    for i in 0..<n {
+                        ctx.fill(Path(CGRect(x: x, y: y, width: w, height: w)),
+                                 with: .color(i == step ? tint : .white.opacity(0.14)))
+                        x += w + gap
+                    }
+                }
+            }
+            .frame(width: 120, height: 14)
+            Text(label)
+                .font(.system(size: 10, weight: .black, design: .monospaced))
+                .tracking(3)
+                .foregroundStyle(tint.opacity(0.85))
+        }
     }
 }
 

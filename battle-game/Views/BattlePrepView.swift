@@ -70,6 +70,7 @@ struct BattlePrepView: View {
             // Armories persist their picks; re-read them on every return.
             selectedHero = HeroRoster.selectedHero
             selectedGun = GunLocker.selectedGun
+            bgScene?.isPaused = false
             if bgScene?.levelId != level.id {
                 bgScene = MainMenuBattleScene(size: CGSize(width: 1334, height: 750),
                                               levelId: level.id)
@@ -78,7 +79,7 @@ struct BattlePrepView: View {
             // screen has settled, build every hero portrait + gun icon so
             // the first opens of the hero/weapon bays have zero generation
             // cost mid-push.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            DispatchQueue.main.async {
                 for hero in HeroRoster.heroes {
                     _ = HeroPixelArt.portraitImage(for: hero.pixelKind)
                 }
@@ -86,6 +87,9 @@ struct BattlePrepView: View {
                     _ = PixelHeroArt.gunImage(gun)
                 }
             }
+        }
+        .onDisappear {
+            bgScene?.isPaused = true
         }
     }
 
@@ -242,7 +246,10 @@ struct BattlePrepView: View {
                     PrepHeroCard(hero: selectedHero, tight: tight)
                 }
                 .buttonStyle(.plain)
-                .simultaneousGesture(TapGesture().onEnded { SoundEngine.shared.uiTap() })
+                .simultaneousGesture(TapGesture().onEnded {
+                    bgScene?.isPaused = true
+                    SoundEngine.shared.uiTap()
+                })
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 NavigationLink {
@@ -251,14 +258,17 @@ struct BattlePrepView: View {
                     PrepGunCard(gun: selectedGun, tight: tight)
                 }
                 .buttonStyle(.plain)
-                .simultaneousGesture(TapGesture().onEnded { SoundEngine.shared.uiTap() })
+                .simultaneousGesture(TapGesture().onEnded {
+                    bgScene?.isPaused = true
+                    SoundEngine.shared.uiTap()
+                })
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             HStack(spacing: 8) {
-                PrepIntelCard(content: .army)
+                PrepIntelCard(content: .army, onTap: { bgScene?.isPaused = true })
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                PrepIntelCard(content: .enemies)
+                PrepIntelCard(content: .enemies, onTap: { bgScene?.isPaused = true })
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -316,7 +326,6 @@ struct BattlePrepView: View {
             path.append(Route.game(levelId: level.id, heroId: selectedHero.id))
         } label: {
             HStack(spacing: 9) {
-                PrepPixelIcon(glyph: .shield, color: .white, size: tight ? 19 : 23)
                 Text("START BATTLE")
                     .font(.system(size: tight ? 13 : 15, weight: .black, design: .monospaced))
                     .tracking(1.5)
@@ -457,6 +466,7 @@ private struct PrepIntelCard: View {
     enum Content { case enemies, army }
 
     let content: Content
+    var onTap: () -> Void = { }
 
     private var title: String {
         switch content {
@@ -555,6 +565,7 @@ private struct PrepIntelCard: View {
         }
         .buttonStyle(.plain)
         .simultaneousGesture(TapGesture().onEnded {
+            onTap()
             SoundEngine.shared.uiTap()
         })
     }

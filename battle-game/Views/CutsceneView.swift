@@ -1764,6 +1764,22 @@ private enum CutsceneArt {
             gull.addLine(to: CGPoint(x: bx + 6, y: by - flap))
             ctx.stroke(gull, with: .color(Color.black.opacity(0.6)), lineWidth: 2)
         }
+        // Relief formation: three more freighters gliding in high.
+        for i in 0..<3 {
+            let span = w + 200
+            let fx3 = CGFloat((t * 26 + Double(i) * 190).truncatingRemainder(dividingBy: Double(span))) - 100
+            let fy = h * 0.10 + CGFloat(i) * 16
+            for j in 0..<4 {
+                px(ctx: &ctx, x: fx3 - CGFloat(j) * 8 - 10, y: fy, w: 6, h: 1,
+                   color: Color.white.opacity(0.25 - CGFloat(j) * 0.05))
+            }
+            px(ctx: &ctx, x: fx3 - 5, y: fy - 2, w: 12, h: 4,
+               color: Color(red: 0.60, green: 0.64, blue: 0.72))
+            px(ctx: &ctx, x: fx3 + 7, y: fy - 1, w: 3, h: 2, color: .yellow.opacity(0.9))
+            if Int(t * 2 + Double(i)) % 2 == 0 {
+                px(ctx: &ctx, x: fx3 - 1, y: fy - 6, w: 3, h: 3, color: .red.opacity(0.9))
+            }
+        }
 
         // Far ridge, grounded, catching first light on its crest.
         ridge(ctx: &ctx, width: w, baseline: h * 0.56, phase: 1.9, amp: h * 0.06, step: 18,
@@ -1824,6 +1840,41 @@ private enum CutsceneArt {
             px(ctx: &ctx, x: tx + 15, y: wallY - 50 + wave, w: 9, h: 16, color: .cyan.opacity(0.7))
             px(ctx: &ctx, x: tx + 6, y: wallY - 47, w: 6, h: 5, color: .white)
         }
+        // Comms tower: mast, crossbars, spinning dish, blinking tip.
+        let commX = gateX - 170
+        px(ctx: &ctx, x: commX - 2, y: wallY - 72, w: 4, h: 72,
+           color: Color(red: 0.35, green: 0.36, blue: 0.44))
+        px(ctx: &ctx, x: commX - 10, y: wallY - 56, w: 20, h: 3,
+           color: Color(red: 0.35, green: 0.36, blue: 0.44))
+        px(ctx: &ctx, x: commX - 8, y: wallY - 40, w: 16, h: 3,
+           color: Color(red: 0.35, green: 0.36, blue: 0.44))
+        let dishA = Double(t * 2.2)
+        let dishTip = CGPoint(x: commX + CGFloat(cos(dishA)) * 12,
+                              y: wallY - 72 + CGFloat(sin(dishA)) * 4)
+        var dishArm = Path()
+        dishArm.move(to: CGPoint(x: commX - CGFloat(cos(dishA)) * 12,
+                                 y: wallY - 72 - CGFloat(sin(dishA)) * 4))
+        dishArm.addLine(to: dishTip)
+        ctx.stroke(dishArm, with: .color(.cyan.opacity(0.8)), lineWidth: 2)
+        if Int(t * 1.5) % 2 == 0 {
+            px(ctx: &ctx, x: commX - 3, y: wallY - 80, w: 6, h: 6, color: .red)
+        }
+        // Pennant row rippling along the wall top.
+        var penX: CGFloat = 10
+        var penI = 0
+        while penX < w - 10 {
+            let penWave = CGFloat(sin(t * 3 + Double(penI)) * 1.5)
+            let penC: Color = penI % 2 == 0 ? .cyan : .white
+            px(ctx: &ctx, x: penX, y: wallY - 14, w: 2, h: 10,
+               color: Color(red: 0.40, green: 0.42, blue: 0.50))
+            px(ctx: &ctx, x: penX + 2, y: wallY - 14, w: 8, h: 6 + penWave * 0, color: penC.opacity(0.85))
+            penX += 42; penI += 1
+        }
+        // Field howitzers flanking the gate, thumping shells skyward.
+        for (i, hx) in [gateX - 58, gateX + 58].enumerated() {
+            drawHowitzer(ctx: &ctx, at: CGPoint(x: hx, y: wallY + 34), t: t,
+                         phase: Double(i) * 2.0)
+        }
 
         // Resupply pads: one dropship down, one on final approach.
         for (i, padX) in [w * 0.13, w * 0.87].enumerated() {
@@ -1844,6 +1895,18 @@ private enum CutsceneArt {
         px(ctx: &ctx, x: w * 0.13 + 46, y: gy + 60, w: 13, h: 11, color: crateC)
         px(ctx: &ctx, x: w * 0.13 + 37, y: gy + 47, w: 13, h: 11, color: crateC)
         px(ctx: &ctx, x: w * 0.13 + 30, y: gy + 58, w: 15, h: 2, color: Color.white.opacity(0.3))
+        // Fuel drums + hose running to the freighter.
+        for (i, dx2) in [w * 0.13 - 52, w * 0.13 - 42, w * 0.13 - 52, w * 0.13 - 42].enumerated() {
+            let dy = gy + 56 + CGFloat((i / 2) * 12)
+            px(ctx: &ctx, x: dx2, y: dy, w: 8, h: 11,
+               color: Color(red: 0.50, green: 0.28, blue: 0.14))
+            px(ctx: &ctx, x: dx2, y: dy + 4, w: 8, h: 2, color: Color.black.opacity(0.5))
+        }
+        var hoseX = w * 0.13 - 44
+        while hoseX < w * 0.13 - 14 {
+            px(ctx: &ctx, x: hoseX, y: gy + 64, w: 6, h: 2, color: Color.black.opacity(0.6))
+            hoseX += 9
+        }
         // Inbound ship: one descent, then it holds over the east pad.
         let descend = 1 - pow(1 - min(1, elapsed / 8), 3)
         let inY = h * 0.14 + descend * (gy + 30 - h * 0.14)
@@ -1868,11 +1931,24 @@ private enum CutsceneArt {
                             phase: Double(k * 2 + row * 3))
             }
         }
-        // Armor rolling with them.
-        for i in 0..<2 {
+        // Armor rolling with them: three tanks + supply trucks in convoy.
+        for i in 0..<3 {
             let span = w + 240
-            let tx = CGFloat((t * 20 + Double(i) * 420).truncatingRemainder(dividingBy: Double(span))) - 120
-            drawTank(ctx: &ctx, at: CGPoint(x: tx, y: gy + 150 + CGFloat(i) * 22), t: t, seed: i)
+            let tx = CGFloat((t * 20 + Double(i) * 300).truncatingRemainder(dividingBy: Double(span))) - 120
+            drawTank(ctx: &ctx, at: CGPoint(x: tx, y: gy + 150 + CGFloat(i) * 20), t: t, seed: i)
+            if Int(t * 5 + Double(i) * 2) % 4 == 0 {
+                ctx.fill(Path(CGRect(x: tx - 30, y: gy + 152 + CGFloat(i) * 20, width: 7, height: 5)),
+                         with: .color(Color(red: 0.6, green: 0.45, blue: 0.3).opacity(0.4)))
+            }
+        }
+        for i in 0..<2 {
+            let span = w + 200
+            let tx = CGFloat((t * 30 + Double(i) * 480).truncatingRemainder(dividingBy: Double(span))) - 100
+            drawTruck(ctx: &ctx, at: CGPoint(x: tx, y: gy + 138 + CGFloat(i) * 52), t: t, seed: i + 5)
+            if Int(t * 5 + Double(i) * 3) % 4 == 0 {
+                ctx.fill(Path(CGRect(x: tx - 34, y: gy + 140 + CGFloat(i) * 52, width: 8, height: 5)),
+                         with: .color(Color(red: 0.6, green: 0.45, blue: 0.3).opacity(0.4)))
+            }
         }
 
         // Foreground ridge with first green shoots of regrowth.
@@ -1893,7 +1969,9 @@ private enum CutsceneArt {
     }
 
     /// One marching soldier: helmet, visor, rifle, alternating stride + dust.
-    private static func drawSoldier(ctx: inout GraphicsContext, at p: CGPoint, t: Double, phase: Double) {
+    /// dir flips the figure: 1 marches right, -1 marches left.
+    private static func drawSoldier(ctx: inout GraphicsContext, at p: CGPoint, t: Double,
+                                    phase: Double, dir: CGFloat = 1) {
         let step = Int(t * 6 + phase) % 2 == 0
         let bob: CGFloat = step ? 0 : -1
         let armor = Color(red: 0.45, green: 0.52, blue: 0.60)
@@ -1904,12 +1982,12 @@ private enum CutsceneArt {
         // Torso + helmet + visor.
         px(ctx: &ctx, x: p.x - 3, y: p.y - 10 + bob, w: 6, h: 6, color: armor)
         px(ctx: &ctx, x: p.x - 3, y: p.y - 14 + bob, w: 6, h: 4, color: dark)
-        px(ctx: &ctx, x: p.x + 1, y: p.y - 13 + bob, w: 3, h: 2, color: .cyan)
+        px(ctx: &ctx, x: p.x + (dir > 0 ? 1 : -4), y: p.y - 13 + bob, w: 3, h: 2, color: .cyan)
         // Rifle forward.
-        px(ctx: &ctx, x: p.x + 3, y: p.y - 9 + bob, w: 8, h: 2, color: dark)
+        px(ctx: &ctx, x: p.x + (dir > 0 ? 3 : -11), y: p.y - 9 + bob, w: 8, h: 2, color: dark)
         // Dust kicked up every few strides.
         if Int(t * 3 + phase) % 3 == 0 {
-            ctx.fill(Path(CGRect(x: p.x - 6, y: p.y - 3, width: 4, height: 3)),
+            ctx.fill(Path(CGRect(x: p.x - dir * 6 - 2, y: p.y - 3, width: 4, height: 3)),
                      with: .color(Color(red: 0.6, green: 0.45, blue: 0.3).opacity(0.5)))
         }
     }
@@ -1944,6 +2022,77 @@ private enum CutsceneArt {
         }
         if Int(t * 1.5 + Double(seed)) % 2 == 0 {
             px(ctx: &ctx, x: p.x - 4, y: p.y - 19, w: 4, h: 4, color: .cyan.opacity(0.9))
+        }
+    }
+
+    /// Supply truck: canvas-covered cargo bed, cab, rolling wheels, headlight.
+    private static func drawTruck(ctx: inout GraphicsContext, at p: CGPoint, t: Double, seed: Int) {
+        let hull = Color(red: 0.40, green: 0.42, blue: 0.38)
+        let canvas = Color(red: 0.45, green: 0.44, blue: 0.34)
+        let dark = Color(red: 0.20, green: 0.20, blue: 0.24)
+        // Cargo bed with canvas ribs + crate outlines.
+        px(ctx: &ctx, x: p.x - 34, y: p.y - 16, w: 34, h: 14, color: canvas)
+        for k in 0..<4 {
+            px(ctx: &ctx, x: p.x - 32 + CGFloat(k) * 9, y: p.y - 16, w: 2, h: 14, color: dark.opacity(0.6))
+        }
+        px(ctx: &ctx, x: p.x - 34, y: p.y - 16, w: 34, h: 2, color: Color.white.opacity(0.25))
+        // Cab + windshield.
+        px(ctx: &ctx, x: p.x, y: p.y - 13, w: 13, h: 11, color: hull)
+        px(ctx: &ctx, x: p.x + 6, y: p.y - 11, w: 6, h: 4, color: .cyan.opacity(0.85))
+        // Wheels with rolling hubs.
+        let roll = Int(t * 9 + Double(seed)) % 2 == 0
+        for wx in [p.x - 26, p.x - 12, p.x + 6] {
+            px(ctx: &ctx, x: wx, y: p.y - 2, w: 8, h: 8, color: .black)
+            px(ctx: &ctx, x: wx + 1, y: p.y + (roll ? 0 : 3), w: 6, h: 2, color: Color.gray)
+        }
+        // Headlight beam.
+        var beam = Path()
+        beam.move(to: CGPoint(x: p.x + 13, y: p.y - 8))
+        beam.addLine(to: CGPoint(x: p.x + 40, y: p.y - 2))
+        beam.addLine(to: CGPoint(x: p.x + 40, y: p.y - 12))
+        beam.closeSubpath()
+        ctx.fill(beam, with: .color(Color.yellow.opacity(0.15)))
+        px(ctx: &ctx, x: p.x + 13, y: p.y - 9, w: 3, h: 3, color: .yellow.opacity(0.9))
+        // Exhaust shimmer.
+        if Int(t * 4 + Double(seed)) % 2 == 0 {
+            ctx.fill(Path(CGRect(x: p.x - 38, y: p.y - 10, width: 5, height: 4)),
+                     with: .color(Color.gray.opacity(0.5)))
+        }
+    }
+
+    /// Field howitzer thumping shells skyward on a steady cycle.
+    private static func drawHowitzer(ctx: inout GraphicsContext, at p: CGPoint, t: Double, phase: Double) {
+        let steel = Color(red: 0.35, green: 0.37, blue: 0.42)
+        let dark = Color(red: 0.20, green: 0.21, blue: 0.26)
+        // Split trails + wheels + shield.
+        var legL = Path()
+        legL.move(to: CGPoint(x: p.x, y: p.y)); legL.addLine(to: CGPoint(x: p.x - 16, y: p.y + 8))
+        var legR = Path()
+        legR.move(to: CGPoint(x: p.x, y: p.y)); legR.addLine(to: CGPoint(x: p.x + 16, y: p.y + 8))
+        ctx.stroke(legL, with: .color(steel), lineWidth: 3)
+        ctx.stroke(legR, with: .color(steel), lineWidth: 3)
+        px(ctx: &ctx, x: p.x - 12, y: p.y + 2, w: 7, h: 7, color: .black)
+        px(ctx: &ctx, x: p.x + 5, y: p.y + 2, w: 7, h: 7, color: .black)
+        px(ctx: &ctx, x: p.x - 6, y: p.y - 10, w: 12, h: 10, color: steel)
+        // Barrel angled skyward.
+        var barrel = Path()
+        barrel.move(to: CGPoint(x: p.x, y: p.y - 4))
+        barrel.addLine(to: CGPoint(x: p.x + 20, y: p.y - 30))
+        ctx.stroke(barrel, with: .color(dark), lineWidth: 4)
+        // Fire cycle: flash, shell arcing off, lingering smoke.
+        let cyc = (t * 0.5 + phase).truncatingRemainder(dividingBy: 4)
+        if cyc < 0.35 {
+            let k = cyc / 0.35
+            px(ctx: &ctx, x: p.x + 16, y: p.y - 34, w: 10, h: 8,
+               color: Color(red: 1, green: 0.8, blue: 0.4, opacity: 1 - k))
+            let shx = p.x + 20 + k * 90
+            let shy = p.y - 30 - k * 130
+            ctx.fill(Path(CGRect(x: shx, y: shy, width: 4, height: 4)),
+                     with: .color(Color.white.opacity(0.9 * (1 - k * 0.5))))
+        } else if cyc < 1.6 {
+            let k = (cyc - 0.35) / 1.25
+            ctx.fill(Path(CGRect(x: p.x + 14, y: p.y - 36 - k * 14, width: 12, height: 8)),
+                     with: .color(Color.gray.opacity(0.4 * (1 - k))))
         }
     }
 

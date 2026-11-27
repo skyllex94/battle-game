@@ -17,6 +17,8 @@ struct GunArmoryView: View {
     /// the push transition is done — a static gradient covers the flight
     /// in so opening never hitches mid-slide.
     @State private var fxReady = false
+    @State private var contentReady = false
+    @State private var contentOpacity = 0.0
     @ObservedObject private var wallet = WalletStore.shared
 
     private var unlockedCount: Int { GunLocker.unlockedGuns.count }
@@ -27,9 +29,7 @@ struct GunArmoryView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                // Static steel cover during the push; the live gun-shop
-                // Canvas (riveted wall, work lamp, hazard stripe,
-                // crosshair, embers) fades in once the transition lands.
+                ZStack {
                 LinearGradient(colors: [Color(red: 0.09, green: 0.08, blue: 0.07),
                                         Color.black],
                                startPoint: .top, endPoint: .bottom)
@@ -47,7 +47,11 @@ struct GunArmoryView: View {
                     .ignoresSafeArea()
                     .transition(.opacity)
                 }
+                }
+                .animation(.easeOut(duration: 0.6), value: fxReady)
 
+                Group {
+                    if contentReady {
                 VStack(alignment: .leading, spacing: 10) {
                     SlimTopBar(unlocked: unlockedCount,
                                total: HeroWeapon.allCases.count,
@@ -100,15 +104,26 @@ struct GunArmoryView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
                 .padding(.bottom, 20)
+                    }
+                }
+                .opacity(contentOpacity)
+                if !contentReady {
+                    BayLoaderView(tint: .blue, label: "LOADING")
+                }
             }
-            .animation(.easeOut(duration: 0.25), value: fxReady)
         }
+        .background(Color.black.ignoresSafeArea(edges: .all))
         .toolbar(.hidden, for: .navigationBar)
         .task {
-            // Let the push transition land before the live backdrop (and
-            // its 8fps full-screen redraws) starts — the static cover
-            // carries the flight in.
-            try? await Task.sleep(nanoseconds: 450_000_000)
+            // Level-detail style: cheap black cover carries the push,
+            // content builds after it lands, then fades into existence.
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled else { return }
+            contentReady = true
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: 0.45)) { contentOpacity = 1 }
+            try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled else { return }
             fxReady = true
         }

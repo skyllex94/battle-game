@@ -6,6 +6,8 @@ import UIKit // UIImage army portraits
 /// cost, recharge time and baseline combat stats. Reached from BattlePrep.
 struct ArmyLibraryView: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var contentReady = false
+    @State private var contentOpacity = 0.0
 
     private var available: Int {
         ArmyKind.allCases.filter { CampaignData.unlockedLevel >= $0.unlockLevel }.count
@@ -17,6 +19,9 @@ struct ArmyLibraryView: View {
             let columns = Array(repeating: GridItem(.flexible(), spacing: 10),
                                 count: wide ? 2 : 1)
             ZStack {
+                Color.black.ignoresSafeArea(edges: .all)
+                Group {
+                    if contentReady {
                 ArmyLibraryBackdrop()
 
                 VStack(spacing: 10) {
@@ -33,10 +38,25 @@ struct ArmyLibraryView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
+                    }
+                }
+                .opacity(contentOpacity)
+                if !contentReady {
+                    BayLoaderView(tint: .blue, label: "LOADING")
+                }
             }
         }
+        .background(Color.black.ignoresSafeArea(edges: .all))
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .task {
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled else { return }
+            contentReady = true
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: 0.45)) { contentOpacity = 1 }
+        }
     }
 
     private var topBar: some View {

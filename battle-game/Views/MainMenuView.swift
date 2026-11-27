@@ -47,20 +47,22 @@ struct MainMenuView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack(spacing: 6) {
                                 Rectangle().fill(.cyan).frame(width: 8, height: 8)
-                                Text("TWILIGHT FRONT // SECTOR 01")
+                                Text("BATTLE OF EMRA // SECTOR 01")
                                     .font(.system(size: 11, weight: .black, design: .monospaced))
                                     .tracking(2)
                                     .foregroundStyle(.cyan)
                             }
-                            Text("INVADER")
+                            Text("BATTLE")
                                 .font(.system(size: 52, weight: .black, design: .monospaced))
                                 .foregroundStyle(.white)
                                 .shadow(color: .cyan.opacity(0.6), radius: 12)
-                            Text("PUSH")
+                            Text("OF EMRA")
                                 .font(.system(size: 52, weight: .black, design: .monospaced))
                                 .foregroundStyle(.yellow)
                                 .shadow(color: .red.opacity(0.6), radius: 12)
                                 .offset(y: -12)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
                             // Pixel divider: line — diamond — line.
                             HStack(spacing: 6) {
                                 Rectangle().fill(.cyan.opacity(0.6)).frame(width: 52, height: 2)
@@ -108,6 +110,13 @@ struct MainMenuView: View {
                             }
                             Button {
                                 SoundEngine.shared.uiTap()
+                                path.append(Route.endscene)
+                            } label: {
+                                PixelCommandButton(title: "END SCENE", systemIcon: "flag.checkered",
+                                                   style: .ghost)
+                            }
+                            Button {
+                                SoundEngine.shared.uiTap()
                                 path.append(Route.settings)
                             } label: {
                                 PixelCommandButton(title: "SETTINGS", systemIcon: "gearshape.fill",
@@ -122,7 +131,7 @@ struct MainMenuView: View {
                             }
                             HStack(spacing: 6) {
                                 Rectangle().fill(.white.opacity(0.25)).frame(width: 30, height: 2)
-                                Text("v1.0 • TWILIGHT BUILD")
+                                Text("v1.0 • BATTLE OF EMRA")
                                     .font(.system(size: 9, weight: .bold, design: .monospaced))
                                     .tracking(1)
                                     .foregroundStyle(.white.opacity(0.45))
@@ -149,6 +158,8 @@ struct MainMenuView: View {
                     LevelMapView(path: $path)
                 case .cutscene:
                     CutsceneView()
+                case .endscene:
+                    EndCutsceneView()
                 case .settings:
                     SettingsView()
                 case .about:

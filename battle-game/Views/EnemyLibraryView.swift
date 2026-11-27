@@ -6,6 +6,8 @@ import UIKit // UIImage enemy portraits
 /// threat read and baseline combat stats. Reached from BattlePrep.
 struct EnemyLibraryView: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var contentReady = false
+    @State private var contentOpacity = 0.0
 
     private var encountered: Int {
         EnemyKind.allCases.filter { $0.unlockLevel <= CampaignData.unlockedLevel }.count
@@ -17,6 +19,9 @@ struct EnemyLibraryView: View {
             let columns = Array(repeating: GridItem(.flexible(), spacing: 10),
                                 count: wide ? 3 : 2)
             ZStack {
+                Color.black.ignoresSafeArea(edges: .all)
+                Group {
+                    if contentReady {
                 EnemyLibraryBackdrop()
 
                 VStack(spacing: 10) {
@@ -33,10 +38,25 @@ struct EnemyLibraryView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
+                    }
+                }
+                .opacity(contentOpacity)
+                if !contentReady {
+                    BayLoaderView(tint: .blue, label: "LOADING")
+                }
             }
         }
+        .background(Color.black.ignoresSafeArea(edges: .all))
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .task {
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled else { return }
+            contentReady = true
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: 0.45)) { contentOpacity = 1 }
+        }
     }
 
     private var topBar: some View {

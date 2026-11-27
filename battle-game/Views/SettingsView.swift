@@ -79,7 +79,7 @@ struct SettingsView: View {
                     .tracking(4)
                     .foregroundStyle(.white)
                     .shadow(color: .cyan.opacity(0.6), radius: 10)
-                Text("SYSTEM CONFIGURATION // TWILIGHT FRONT")
+                Text("SYSTEM CONFIGURATION // BATTLE OF EMRA")
                     .font(.system(size: 9, weight: .bold, design: .monospaced))
                     .tracking(1.5)
                     .foregroundStyle(.cyan.opacity(0.8))

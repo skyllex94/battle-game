@@ -66,7 +66,7 @@ struct AboutView: View {
                     .tracking(4)
                     .foregroundStyle(.white)
                     .shadow(color: .cyan.opacity(0.6), radius: 10)
-                Text("TWILIGHT FRONT // ZION STUDIOS")
+                Text("BATTLE OF EMRA // ZION STUDIOS")
                     .font(.system(size: 9, weight: .bold, design: .monospaced))
                     .tracking(1.5)
                     .foregroundStyle(.cyan.opacity(0.8))
@@ -185,7 +185,7 @@ struct AboutView: View {
         AboutPanel(title: "VERSION", tag: "BUILD", icon: .disk, accent: .white) {
             VStack(spacing: 10) {
                 HStack {
-                    Text("TWILIGHT BUILD")
+                    Text("EMRA BUILD")
                         .font(.system(size: 11, weight: .black, design: .monospaced))
                         .tracking(1.2)
                         .foregroundStyle(.white.opacity(0.9))
